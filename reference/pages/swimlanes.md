@@ -1,0 +1,514 @@
+<!-- Source: https://mermaid.js.org/syntax/swimlanes.html -->
+<!-- License: MIT (Mermaid documentation) -->
+
+# Swimlanes
+
+> Offline mirror for NerdGram1337. Upstream: [https://mermaid.js.org/syntax/swimlanes.html](https://mermaid.js.org/syntax/swimlanes.html)
+
+# Swimlanes Diagram (v11.16.0+) [​](#swimlanes-diagram-v11-16-0)
+
+WARNING
+
+Swimlane diagrams are in beta. Diagrams start with the `swimlane-beta` keyword, and the syntax may still change in a backwards-incompatible way before it is declared stable.
+
+A swimlane diagram shows a process divided by responsibility. Each lane represents an actor, team, system, or phase, and the nodes inside the lane show the work that happens there. Arrows show the order of work and the handoffs between lanes.
+
+Use swimlane diagrams when the most important question is not only "what happens next?" but also "who owns this step?" They are useful for approval flows, support processes, delivery workflows, and any process where work crosses teams or systems.
+
+## Default theme and look (v12.0.0+) [​](#default-theme-and-look-v12-0-0)
+
+Swimlane diagrams use the `redux-color` theme and the `neo` look by default. Not every diagram type does — see [Per-diagram defaults](https://mermaid.js.org/config/theming.html#per-diagram-defaults) for the list and for the order in which Mermaid decides.
+
+The same diagram, drawn both ways:
+
+### With the defaults [​](#with-the-defaults)
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta LR
+  subgraph Customer
+    Browse[Browse catalogue]
+    Pay[Pay]
+  end
+  subgraph Warehouse
+    Pick[Pick items]
+    Ship[Ship order]
+  end
+  subgraph Finance
+    Invoice[Raise invoice]
+  end
+  Browse --> Pay
+  Pay --> Pick
+  Pick --> Ship
+  Pay --> Invoice
+```
+
+Ctrl + Enter|Run ▶
+
+### The previous appearance [​](#the-previous-appearance)
+
+Both are only defaults, so anything you set yourself wins. Naming the previous theme and look in a diagram's front matter draws it the way Mermaid did before:
+
+##### Code:
+
+mermaid
+
+```
+---
+config:
+  theme: default
+  look: classic
+---
+swimlane-beta LR
+  subgraph Customer
+    Browse[Browse catalogue]
+    Pay[Pay]
+  end
+  subgraph Warehouse
+    Pick[Pick items]
+    Ship[Ship order]
+  end
+  subgraph Finance
+    Invoice[Raise invoice]
+  end
+  Browse --> Pay
+  Pay --> Pick
+  Pick --> Ship
+  Pay --> Invoice
+```
+
+Ctrl + Enter|Run ▶
+
+Passing the same two keys to `mermaid.initialize()` does it for every diagram on the page, and scoping them to one diagram type — `mermaid.initialize({ swimlane: { theme: 'default', look: 'classic' } })` — does it for that type alone.
+
+## Basic Example [​](#basic-example)
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta LR
+  subgraph Customer
+    request[Request service]
+    receive[Receive update]
+  end
+
+  subgraph Support
+    triage[Triage request]
+    answer[Send answer]
+  end
+
+  subgraph Engineering
+    investigate[Investigate issue]
+    fix[Prepare fix]
+  end
+
+  request --> triage
+  triage -->|Known issue| answer
+  triage -->|Needs code change| investigate
+  investigate --> fix --> answer
+  answer --> receive
+```
+
+Ctrl + Enter|Run ▶
+
+## Syntax [​](#syntax)
+
+A swimlane diagram starts with the `swimlane-beta` keyword. You can optionally add a direction after the keyword.
+
+```
+swimlane-beta
+```
+
+```
+swimlane-beta LR
+```
+
+The supported directions are:
+
+Direction
+
+Meaning
+
+`TB`
+
+Top to bottom
+
+`TD`
+
+Top down, same as `TB`
+
+`BT`
+
+Bottom to top
+
+`LR`
+
+Left to right
+
+`RL`
+
+Right to left
+
+If no direction is set, the diagram uses `TB`.
+
+### Lanes [​](#lanes)
+
+Use `subgraph` to create a lane. In a swimlane diagram, top-level subgraphs are rendered as swimlanes. A lane ends with `end`.
+
+A node belongs to one lane. If two lanes list the same node, it stays in the first lane and is not drawn in the second. The second lane is then removed, because it would be an empty band, but only when the shared node was the reason: the lane lost a member to an earlier lane, it has no nodes left, and no edge points at it. A lane you left empty yourself stays. A subgraph nested inside a lane is drawn as a plain box, not as a lane, and a node in it belongs to the lane around it. Both cases are reported as warnings in the log. Warnings only show when `logLevel` is `warn` or lower, and the default is `fatal`, so set it with `mermaid.initialize({ logLevel: 'warn' })` to see them.
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta
+  subgraph Sales
+    lead[Qualify lead]
+    quote[Prepare quote]
+  end
+```
+
+Ctrl + Enter|Run ▶
+
+You can give a lane an internal id and a display label. This is useful when the label contains spaces or when you want a stable id for styling.
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta LR
+  subgraph sales [Sales team]
+    lead[Qualify lead]
+    quote[Prepare quote]
+  end
+
+  subgraph finance [Finance team]
+    review[Review terms]
+    approve[Approve quote]
+  end
+
+  lead --> quote --> review --> approve
+```
+
+Ctrl + Enter|Run ▶
+
+### Nodes [​](#nodes)
+
+Nodes use flowchart-style shape syntax. The id is written first, and the label is written inside the shape.
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta LR
+  subgraph Intake
+    start([Start])
+    task[Do work]
+    fix[Fix issues]
+  end
+
+  subgraph Review
+    decision{Ready?}
+  end
+
+  subgraph Complete
+    done((Done))
+  end
+
+  start --> task --> decision
+  decision -->|Yes| done
+  decision -->|No| fix
+  fix --> task
+```
+
+Ctrl + Enter|Run ▶
+
+The most common node forms are:
+
+Syntax
+
+Shape
+
+Common use
+
+`id[Text]`
+
+Rectangle
+
+Task or activity
+
+`id(Text)`
+
+Rounded rectangle
+
+Step or event
+
+`id([Text])`
+
+Stadium
+
+Start or end
+
+`id{Text}`
+
+Decision
+
+Branching question
+
+`id((Text))`
+
+Circle
+
+Connector or marker
+
+For the complete shape catalog, icons, images, markdown strings, classes, and styling options, see [Flowchart syntax](https://mermaid.js.org/flowchart.html).
+
+### Edges [​](#edges)
+
+Edges also use flowchart-style syntax. They can connect nodes in the same lane or across lanes.
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta LR
+  subgraph Buyer
+    choose[Choose product]
+    pay[Pay invoice]
+  end
+
+  subgraph Store
+    reserve[Reserve stock]
+    ship[Ship product]
+  end
+
+  choose --> reserve
+  reserve -->|Invoice ready| pay
+  pay --> ship
+```
+
+Ctrl + Enter|Run ▶
+
+Common edge forms:
+
+Syntax
+
+Meaning
+
+`A --> B`
+
+Arrow
+
+`A --- B`
+
+Line without arrowhead
+
+`A -->|Label| B`
+
+Arrow with label
+
+`A -.-> B`
+
+Dotted arrow
+
+`A ==> B`
+
+Thick arrow
+
+For the full edge syntax, including multi-directional arrows and minimum link length, see [Flowchart syntax](https://mermaid.js.org/flowchart.html#links-between-nodes).
+
+### Accessibility [​](#accessibility)
+
+Use `accTitle` and `accDescr` to provide an accessible title and description.
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta LR
+  accTitle: Support escalation
+  accDescr: A request starts with the customer, is triaged by support, and may be escalated to engineering.
+
+  subgraph Customer
+    request[Open request]
+  end
+
+  subgraph Support
+    triage[Triage]
+  end
+
+  subgraph Engineering
+    resolve[Resolve]
+  end
+
+  request --> triage --> resolve
+```
+
+Ctrl + Enter|Run ▶
+
+## Good Practices [​](#good-practices)
+
+### Make Each Lane Mean One Kind of Ownership [​](#make-each-lane-mean-one-kind-of-ownership)
+
+Choose lanes that answer "who owns this step?" Avoid mixing teams, phases, and statuses in the same diagram unless that distinction is the point of the diagram.
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta LR
+  subgraph Customer
+    submit[Submit order]
+    confirm[Confirm delivery]
+  end
+
+  subgraph Store
+    check[Check order]
+    pack[Pack items]
+  end
+
+  subgraph Carrier
+    collect[Collect package]
+    deliver[Deliver package]
+  end
+
+  submit --> check --> pack --> collect --> deliver --> confirm
+```
+
+Ctrl + Enter|Run ▶
+
+### Label Cross-Lane Handoffs [​](#label-cross-lane-handoffs)
+
+A cross-lane arrow is where responsibility changes. Label the arrow when the handoff depends on a document, decision, message, or condition.
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta LR
+  subgraph Applicant
+    apply[Submit application]
+    sign[Sign agreement]
+  end
+
+  subgraph Reviewer
+    screen[Screen application]
+    decide{Approved?}
+  end
+
+  subgraph System
+    create[Create account]
+    notify[Send welcome email]
+  end
+
+  apply -->|Application received| screen
+  screen --> decide
+  decide -->|Approved| create --> notify --> sign
+  decide -->|Needs changes| apply
+```
+
+Ctrl + Enter|Run ▶
+
+### Keep Long Processes Readable [​](#keep-long-processes-readable)
+
+Split a large process into several diagrams when the lanes or handoffs stop fitting in one view. A useful swimlane diagram is usually readable without tracing every arrow twice.
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta TB
+  subgraph Intake
+    collect[Collect request]
+    validate[Validate details]
+  end
+
+  subgraph Review
+    review[Review request]
+    decide{Ready?}
+  end
+
+  subgraph Delivery
+    schedule[Schedule work]
+    complete[Complete work]
+  end
+
+  collect --> validate --> review --> decide
+  decide -->|Yes| schedule --> complete
+  decide -->|No| collect
+```
+
+Ctrl + Enter|Run ▶
+
+### Use Stable Ids [​](#use-stable-ids)
+
+Use short, meaningful ids for nodes and lanes. The label can change without breaking links, styles, or later references.
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta LR
+  subgraph ops [Operations]
+    intake[Receive request]
+    plan[Plan work]
+  end
+
+  subgraph legal [Legal]
+    review[Review contract]
+  end
+
+  intake --> plan --> review
+
+  classDef attention fill:#fff2cc,stroke:#d6a500,color:#111;
+  class review attention;
+```
+
+Ctrl + Enter|Run ▶
+
+### Put Decisions Where They Are Made [​](#put-decisions-where-they-are-made)
+
+Place a decision node in the lane that owns the decision. Then route the outcomes to the lanes that act on the result.
+
+##### Code:
+
+mermaid
+
+```
+swimlane-beta LR
+  subgraph Support
+    classify{Can support solve it?}
+    respond[Respond to customer]
+  end
+
+  subgraph Product
+    prioritize[Prioritize fix]
+  end
+
+  subgraph Engineering
+    implement[Implement fix]
+  end
+
+  classify -->|Yes| respond
+  classify -->|No| prioritize --> implement --> respond
+```
+
+Ctrl + Enter|Run ▶
+
+## When to Use Another Diagram [​](#when-to-use-another-diagram)
+
+Use a regular [flowchart](https://mermaid.js.org/flowchart.html) when ownership is not important and you only need to show sequence or branching. Use a [sequence diagram](https://mermaid.js.org/sequenceDiagram.html) when the focus is messages over time between participants. Use a [state diagram](https://mermaid.js.org/stateDiagram.html) when the focus is how one thing changes state.

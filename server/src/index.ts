@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as store from "./fsStore.js";
 import { ensureDataRoot, REPO_ROOT } from "./paths.js";
+import * as syntaxReference from "./syntaxReference.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);
@@ -172,6 +173,58 @@ app.post("/api/favorites/toggle", async (req, res) => {
     }
     const result = await store.toggleFavorite(itemPath);
     res.json(result);
+  } catch (err) {
+    const { status, message } = httpError(err);
+    res.status(status).json({ error: message });
+  }
+});
+
+app.get("/api/reference", async (_req, res) => {
+  try {
+    await syntaxReference.ensureReferenceDirs();
+    const data = await syntaxReference.listReference();
+    res.json(data);
+  } catch (err) {
+    const { status, message } = httpError(err);
+    res.status(status).json({ error: message });
+  }
+});
+
+app.get("/api/reference/page", async (req, res) => {
+  try {
+    const id = String(req.query.id || "");
+    if (!id) {
+      res.status(400).json({ error: "id is required" });
+      return;
+    }
+    const page = await syntaxReference.getReferencePage(id);
+    res.json(page);
+  } catch (err) {
+    const { status, message } = httpError(err);
+    res.status(status).json({ error: message });
+  }
+});
+
+app.put("/api/reference/override", async (req, res) => {
+  try {
+    const id = String(req.body?.id || "");
+    const text = String(req.body?.text ?? "");
+    if (!id) {
+      res.status(400).json({ error: "id is required" });
+      return;
+    }
+    const result = await syntaxReference.setOverride(id, text);
+    res.json(result);
+  } catch (err) {
+    const { status, message } = httpError(err);
+    res.status(status).json({ error: message });
+  }
+});
+
+app.post("/api/reference/sync", async (_req, res) => {
+  try {
+    const manifest = await syntaxReference.syncReference();
+    res.json({ manifest, pages: manifest.pages });
   } catch (err) {
     const { status, message } = httpError(err);
     res.status(status).json({ error: message });

@@ -1,0 +1,254 @@
+{
+  "lastSyncedAt": "2026-11-12T16:54:43.049Z",
+  "attribution": "Content mirrored from the Mermaid documentation (MIT License). Source: https://mermaid.js.org/",
+  "license": "MIT",
+  "sources": [
+    "https://mermaid.js.org/intro/syntax-reference.html",
+    "https://mermaid.js.org/syntax/flowchart.html",
+    "https://mermaid.js.org/syntax/sequenceDiagram.html",
+    "https://mermaid.js.org/syntax/classDiagram.html",
+    "https://mermaid.js.org/syntax/stateDiagram.html",
+    "https://mermaid.js.org/syntax/entityRelationshipDiagram.html",
+    "https://mermaid.js.org/syntax/userJourney.html",
+    "https://mermaid.js.org/syntax/gantt.html",
+    "https://mermaid.js.org/syntax/pie.html",
+    "https://mermaid.js.org/syntax/quadrantChart.html",
+    "https://mermaid.js.org/syntax/requirementDiagram.html",
+    "https://mermaid.js.org/syntax/gitgraph.html",
+    "https://mermaid.js.org/syntax/c4.html",
+    "https://mermaid.js.org/syntax/mindmap.html",
+    "https://mermaid.js.org/syntax/timeline.html",
+    "https://mermaid.js.org/syntax/zenuml.html",
+    "https://mermaid.js.org/syntax/sankey.html",
+    "https://mermaid.js.org/syntax/xyChart.html",
+    "https://mermaid.js.org/syntax/block.html",
+    "https://mermaid.js.org/syntax/packet.html",
+    "https://mermaid.js.org/syntax/kanban.html",
+    "https://mermaid.js.org/syntax/architecture.html",
+    "https://mermaid.js.org/syntax/radar.html",
+    "https://mermaid.js.org/syntax/treemap.html",
+    "https://mermaid.js.org/syntax/treeView.html",
+    "https://mermaid.js.org/syntax/ishikawa.html",
+    "https://mermaid.js.org/syntax/venn.html",
+    "https://mermaid.js.org/syntax/wardley.html",
+    "https://mermaid.js.org/syntax/railroad.html",
+    "https://mermaid.js.org/syntax/swimlanes.html",
+    "https://mermaid.js.org/syntax/usecase.html",
+    "https://mermaid.js.org/syntax/cynefin.html",
+    "https://mermaid.js.org/syntax/eventmodeling.html",
+    "https://mermaid.js.org/syntax/agentflow.html",
+    "https://mermaid.js.org/syntax/all-examples.html"
+  ],
+  "pages": [
+    {
+      "id": "syntax-reference",
+      "title": "Diagram Syntax Reference",
+      "sourceUrl": "https://mermaid.js.org/intro/syntax-reference.html",
+      "filename": "syntax-reference.md"
+    },
+    {
+      "id": "flowchart",
+      "title": "Flowchart",
+      "sourceUrl": "https://mermaid.js.org/syntax/flowchart.html",
+      "filename": "flowchart.md"
+    },
+    {
+      "id": "sequenceDiagram",
+      "title": "Sequence Diagram",
+      "sourceUrl": "https://mermaid.js.org/syntax/sequenceDiagram.html",
+      "filename": "sequenceDiagram.md"
+    },
+    {
+      "id": "classDiagram",
+      "title": "Class Diagram",
+      "sourceUrl": "https://mermaid.js.org/syntax/classDiagram.html",
+      "filename": "classDiagram.md"
+    },
+    {
+      "id": "stateDiagram",
+      "title": "State Diagram",
+      "sourceUrl": "https://mermaid.js.org/syntax/stateDiagram.html",
+      "filename": "stateDiagram.md"
+    },
+    {
+      "id": "entityRelationshipDiagram",
+      "title": "Entity Relationship Diagram",
+      "sourceUrl": "https://mermaid.js.org/syntax/entityRelationshipDiagram.html",
+      "filename": "entityRelationshipDiagram.md"
+    },
+    {
+      "id": "userJourney",
+      "title": "User Journey",
+      "sourceUrl": "https://mermaid.js.org/syntax/userJourney.html",
+      "filename": "userJourney.md"
+    },
+    {
+      "id": "gantt",
+      "title": "Gantt",
+      "sourceUrl": "https://mermaid.js.org/syntax/gantt.html",
+      "filename": "gantt.md"
+    },
+    {
+      "id": "pie",
+      "title": "Pie Chart",
+      "sourceUrl": "https://mermaid.js.org/syntax/pie.html",
+      "filename": "pie.md"
+    },
+    {
+      "id": "quadrantChart",
+      "title": "Quadrant Chart",
+      "sourceUrl": "https://mermaid.js.org/syntax/quadrantChart.html",
+      "filename": "quadrantChart.md"
+    },
+    {
+      "id": "requirementDiagram",
+      "title": "Requirement Diagram",
+      "sourceUrl": "https://mermaid.js.org/syntax/requirementDiagram.html",
+      "filename": "requirementDiagram.md"
+    },
+    {
+      "id": "gitgraph",
+      "title": "Git Graph",
+      "sourceUrl": "https://mermaid.js.org/syntax/gitgraph.html",
+      "filename": "gitgraph.md"
+    },
+    {
+      "id": "c4",
+      "title": "C4 Diagram",
+      "sourceUrl": "https://mermaid.js.org/syntax/c4.html",
+      "filename": "c4.md"
+    },
+    {
+      "id": "mindmap",
+      "title": "Mindmap",
+      "sourceUrl": "https://mermaid.js.org/syntax/mindmap.html",
+      "filename": "mindmap.md"
+    },
+    {
+      "id": "timeline",
+      "title": "Timeline",
+      "sourceUrl": "https://mermaid.js.org/syntax/timeline.html",
+      "filename": "timeline.md"
+    },
+    {
+      "id": "zenuml",
+      "title": "ZenUML",
+      "sourceUrl": "https://mermaid.js.org/syntax/zenuml.html",
+      "filename": "zenuml.md"
+    },
+    {
+      "id": "sankey",
+      "title": "Sankey",
+      "sourceUrl": "https://mermaid.js.org/syntax/sankey.html",
+      "filename": "sankey.md"
+    },
+    {
+      "id": "xyChart",
+      "title": "XY Chart",
+      "sourceUrl": "https://mermaid.js.org/syntax/xyChart.html",
+      "filename": "xyChart.md"
+    },
+    {
+      "id": "block",
+      "title": "Block Diagram",
+      "sourceUrl": "https://mermaid.js.org/syntax/block.html",
+      "filename": "block.md"
+    },
+    {
+      "id": "packet",
+      "title": "Packet",
+      "sourceUrl": "https://mermaid.js.org/syntax/packet.html",
+      "filename": "packet.md"
+    },
+    {
+      "id": "kanban",
+      "title": "Kanban",
+      "sourceUrl": "https://mermaid.js.org/syntax/kanban.html",
+      "filename": "kanban.md"
+    },
+    {
+      "id": "architecture",
+      "title": "Architecture",
+      "sourceUrl": "https://mermaid.js.org/syntax/architecture.html",
+      "filename": "architecture.md"
+    },
+    {
+      "id": "radar",
+      "title": "Radar",
+      "sourceUrl": "https://mermaid.js.org/syntax/radar.html",
+      "filename": "radar.md"
+    },
+    {
+      "id": "treemap",
+      "title": "Treemap",
+      "sourceUrl": "https://mermaid.js.org/syntax/treemap.html",
+      "filename": "treemap.md"
+    },
+    {
+      "id": "treeView",
+      "title": "Tree View",
+      "sourceUrl": "https://mermaid.js.org/syntax/treeView.html",
+      "filename": "treeView.md"
+    },
+    {
+      "id": "ishikawa",
+      "title": "Ishikawa",
+      "sourceUrl": "https://mermaid.js.org/syntax/ishikawa.html",
+      "filename": "ishikawa.md"
+    },
+    {
+      "id": "venn",
+      "title": "Venn",
+      "sourceUrl": "https://mermaid.js.org/syntax/venn.html",
+      "filename": "venn.md"
+    },
+    {
+      "id": "wardley",
+      "title": "Wardley",
+      "sourceUrl": "https://mermaid.js.org/syntax/wardley.html",
+      "filename": "wardley.md"
+    },
+    {
+      "id": "railroad",
+      "title": "Railroad",
+      "sourceUrl": "https://mermaid.js.org/syntax/railroad.html",
+      "filename": "railroad.md"
+    },
+    {
+      "id": "swimlanes",
+      "title": "Swimlanes",
+      "sourceUrl": "https://mermaid.js.org/syntax/swimlanes.html",
+      "filename": "swimlanes.md"
+    },
+    {
+      "id": "usecase",
+      "title": "Use Case",
+      "sourceUrl": "https://mermaid.js.org/syntax/usecase.html",
+      "filename": "usecase.md"
+    },
+    {
+      "id": "cynefin",
+      "title": "Cynefin",
+      "sourceUrl": "https://mermaid.js.org/syntax/cynefin.html",
+      "filename": "cynefin.md"
+    },
+    {
+      "id": "eventmodeling",
+      "title": "Event Modeling",
+      "sourceUrl": "https://mermaid.js.org/syntax/eventmodeling.html",
+      "filename": "eventmodeling.md"
+    },
+    {
+      "id": "agentflow",
+      "title": "Agent Flow",
+      "sourceUrl": "https://mermaid.js.org/syntax/agentflow.html",
+      "filename": "agentflow.md"
+    },
+    {
+      "id": "all-examples",
+      "title": "All Examples",
+      "sourceUrl": "https://mermaid.js.org/syntax/all-examples.html",
+      "filename": "all-examples.md"
+    }
+  ]
+}

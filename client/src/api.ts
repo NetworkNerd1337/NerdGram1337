@@ -59,4 +59,59 @@ export const api = {
         body: JSON.stringify({ path }),
       },
     ),
+  referenceList: () =>
+    request<{
+      manifest: {
+        lastSyncedAt: string | null;
+        attribution: string;
+        license: string;
+        sources: string[];
+        pages: {
+          id: string;
+          title: string;
+          sourceUrl: string;
+          filename: string;
+        }[];
+      };
+      pages: {
+        id: string;
+        title: string;
+        sourceUrl: string;
+        filename: string;
+      }[];
+    }>("/api/reference"),
+  referencePage: (id: string) =>
+    request<{
+      id: string;
+      title: string;
+      sourceUrl: string;
+      content: string;
+      override: string;
+    }>(`/api/reference/page?id=${encodeURIComponent(id)}`),
+  referenceOverride: (id: string, text: string) =>
+    request<{ override: string }>("/api/reference/override", {
+      method: "PUT",
+      body: JSON.stringify({ id, text }),
+    }),
+  referenceSync: () =>
+    request<{
+      manifest: {
+        lastSyncedAt: string | null;
+        attribution: string;
+        license: string;
+        sources: string[];
+        pages: {
+          id: string;
+          title: string;
+          sourceUrl: string;
+          filename: string;
+        }[];
+      };
+      pages: {
+        id: string;
+        title: string;
+        sourceUrl: string;
+        filename: string;
+      }[];
+    }>("/api/reference/sync", { method: "POST" }),
 };

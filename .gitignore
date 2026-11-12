@@ -14,3 +14,5 @@ diagrams/**/*
 !diagrams/NetworkMap.mmd
 !diagrams/Examples/
 !diagrams/Examples/**
+reference.staging/
+reference.bak/

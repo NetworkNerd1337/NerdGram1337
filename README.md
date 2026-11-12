@@ -353,7 +353,36 @@ npm run dev
 
 Use the same variable with `npm start` when you run production mode. Set it in the terminal first, then start the server, so that process inherits it.
 
-Favorites metadata is stored in `diagrams/.meta/favorites.json` (or `<your data dir>/.meta/favorites.json` when `NERDGRAM_DATA_DIR` is set). The `.meta` folder is created when the app reads favorites. `favorites.json` is written when you favorite or unfavorite a diagram. The in-app folder tree hides `.meta`.
+Favorites metadata is stored in `diagrams/.meta/favorites.json` (or `<your data dir>/.meta/favorites.json` when `NERDGRAM_DATA_DIR` is set). The `.meta` folder is created when the app reads favorites. `favorites.json` is written when you favorite or unfavorite a diagram. Local syntax-reference annotations are stored in `diagrams/.meta/syntax-overrides.json`. The in-app folder tree hides `.meta`.
+
+## Offline Mermaid syntax reference library
+
+NerdGram1337 ships a local mirror of the Mermaid diagram syntax docs so you can look up syntax with no internet connection.
+
+### Open it
+
+In the sidebar, use **Open Syntax Reference Library**, or the same link in the editor top bar. That opens `/reference`: a searchable table of contents and the full offline pages.
+
+### What is stored where
+
+- Bundled mirror: `reference/manifest.json` and `reference/pages/*.md` (checked into the repo so offline works before any sync).
+- Local annotations: `diagrams/.meta/syntax-overrides.json` (or under your `NERDGRAM_DATA_DIR`). These notes are per page and are never wiped by sync.
+
+### Sync from mermaid.js.org
+
+While online, click **Sync Syntax Reference** on the reference page (or run the CLI below). The server fetches [the Mermaid syntax reference](https://mermaid.js.org/intro/syntax-reference.html) and the linked `/syntax/*.html` diagram pages, rebuilds the mirror in a staging folder, then atomically replaces `reference/`.
+
+- **Full replace:** a successful sync replaces the entire page set and updates `lastSyncedAt` in the manifest.
+- **Failed sync:** if download or replace fails, the existing `reference/` copy is left untouched and the UI shows the error.
+- **Annotations survive:** overrides in `.meta/syntax-overrides.json` are not part of the replace and remain after sync.
+
+From the project root:
+
+```bash
+npm run sync:reference --prefix server
+```
+
+Mirrored content is from the Mermaid documentation (MIT License). Each page keeps attribution and a link back to its upstream source on [mermaid.js.org](https://mermaid.js.org/).
 
 ## Update to a newer version
 
@@ -420,6 +449,7 @@ The production build has not been created. From the project root run `npm run bu
 - Split code + live preview editor with autosave
 - Theme switcher for previews (dark, default, neutral, forest, base)
 - Export to SVG, PNG, and JPG
+- Offline Mermaid syntax reference library with sync from mermaid.js.org
 
 ## Project layout
 
@@ -427,6 +457,7 @@ The production build has not been created. From the project root run `npm run bu
 client/       React + Vite UI (dev server on port 5173)
 server/       Express filesystem API (port 8787)
 diagrams/     Default local workspace (*.mmd files)
+reference/    Offline Mermaid syntax dictionary (manifest + pages)
 screenshots/  UI captures checked into the repo
 package.json  Root scripts: install:all, dev, build, start
 ```

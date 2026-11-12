@@ -53,6 +53,13 @@ export function Sidebar({
         />
       </div>
 
+      <div className="nav-section">
+        <div className="nav-label">Reference</div>
+        <Link className="nav-link" to="/reference">
+          Open Syntax Reference Library
+        </Link>
+      </div>
+
       <div className="favorites-box">
         <strong>Favorites</strong>
         {favorites.length === 0 ? (

@@ -144,6 +144,9 @@ export function EditorPage() {
                   ? "Save failed"
                   : ""}
           </span>
+          <Link className="btn btn-ghost" to="/reference" style={{ color: "#e8eef5" }}>
+            Open Syntax Reference Library
+          </Link>
           <label className="export-label">
             Export as
             <select
