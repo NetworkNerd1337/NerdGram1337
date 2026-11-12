@@ -1,0 +1,16 @@
+node_modules/
+dist/
+client/dist/
+server/dist/
+.DS_Store
+*.log
+.env
+.env.local
+.vite/
+diagrams/.meta/
+diagrams/**/*
+!diagrams/.gitkeep
+!diagrams/Welcome.mmd
+!diagrams/NetworkMap.mmd
+!diagrams/Examples/
+!diagrams/Examples/**

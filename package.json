@@ -1,0 +1,15 @@
+{
+  "name": "nerdgram1337",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local-first Mermaid diagramming app by NetworkNerd1337",
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,magenta \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix client && npm run build --prefix server",
+    "start": "npm run start --prefix server",
+    "install:all": "npm install && npm install --prefix client && npm install --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

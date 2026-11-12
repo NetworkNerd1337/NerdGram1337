@@ -1,0 +1,6 @@
+flowchart LR
+  subgraph NerdGram1337
+    Paste[Paste Mermaid] --> Render[Live Preview]
+    Render --> Export[Export SVG PNG JPG]
+  end
+  Disk[(Local diagrams folder)] <--> Paste

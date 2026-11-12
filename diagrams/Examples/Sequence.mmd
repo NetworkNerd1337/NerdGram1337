@@ -1,0 +1,11 @@
+sequenceDiagram
+  participant User
+  participant NerdGram1337
+  participant Mermaid.js
+  participant Disk
+
+  User->>NerdGram1337: Paste Mermaid markdown
+  NerdGram1337->>Mermaid.js: Render diagram
+  Mermaid.js-->>NerdGram1337: SVG preview
+  User->>NerdGram1337: Save / Export
+  NerdGram1337->>Disk: Write .mmd / download image
