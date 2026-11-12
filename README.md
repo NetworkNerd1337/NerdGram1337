@@ -2,7 +2,7 @@
 
 Local-first Mermaid diagramming app by **NetworkNerd1337**.
 
-Paste Mermaid markdown, preview it live with [mermaid.js](https://mermaid.js.org/), manage diagrams as real files and folders on disk, and export **SVG**, **PNG**, or **JPG**. No accounts, no cloud sync, no AI generation, no paywalls.
+Paste Mermaid markdown, preview it live with [mermaid.js](https://mermaid.js.org/), manage diagrams as real files and folders on disk, and export **SVG**, **PNG**, **JPG**, or **PDF**. No accounts, no cloud sync, no AI generation, no paywalls.
 
 The app is two programs on your computer. The **client** is a React app that shows the dashboard, the paste page, and the split editor. The **server** is an Express API that reads and writes `.mmd` files in a folder on disk. In development they run side by side. A production build serves the built client and the API from one process.
 
@@ -448,7 +448,7 @@ The production build has not been created. From the project root run `npm run bu
 - Paste-only Mermaid create flow (`/new`)
 - Split code + live preview editor with autosave
 - Theme switcher for previews (dark, default, neutral, forest, base)
-- Export to SVG, PNG, and JPG
+- Export to SVG, PNG, JPG, and PDF (PDF is built client-side from the live SVG so the current theme is preserved)
 - Offline Mermaid syntax reference library with sync from mermaid.js.org
 
 ## Project layout

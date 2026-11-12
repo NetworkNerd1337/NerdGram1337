@@ -155,7 +155,12 @@ export function EditorPage() {
               onChange={(e) => {
                 const value = e.target.value as ExportFormat | "";
                 e.target.value = "";
-                if (value === "svg" || value === "png" || value === "jpg") {
+                if (
+                  value === "svg" ||
+                  value === "png" ||
+                  value === "jpg" ||
+                  value === "pdf"
+                ) {
                   void handleExport(value);
                 }
               }}
@@ -166,6 +171,7 @@ export function EditorPage() {
               <option value="svg">SVG</option>
               <option value="png">PNG</option>
               <option value="jpg">JPG</option>
+              <option value="pdf">PDF</option>
             </select>
           </label>
         </div>
