@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../api";
 import { Brand } from "../components/Brand";
+import { MermaidCodeEditor } from "../components/MermaidCodeEditor";
 import { exportDiagram, type ExportFormat } from "../lib/exportDiagram";
 import {
   initMermaid,
@@ -201,12 +202,13 @@ export function EditorPage() {
               Auto-Update
             </label>
           </div>
-          <textarea
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            spellCheck={false}
-            aria-label="Mermaid source editor"
-          />
+          <div className="code-editor-wrap">
+            <MermaidCodeEditor
+              value={code}
+              onChange={setCode}
+              aria-label="Mermaid source editor"
+            />
+          </div>
           {!autoUpdate && (
             <div style={{ padding: "0.75rem 1rem" }}>
               <button

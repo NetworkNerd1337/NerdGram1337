@@ -447,6 +447,7 @@ The production build has not been created. From the project root run `npm run bu
 - Favorite diagrams, stored in `.meta/favorites.json` inside the data folder
 - Paste-only Mermaid create flow (`/new`)
 - Split code + live preview editor with autosave
+- Mermaid syntax highlighting, autocomplete (diagram types, keywords, arrows, snippets, existing node IDs), bracket matching, and inline parse-error diagnostics in the code pane
 - Theme switcher for previews (dark, default, neutral, forest, base)
 - Export to SVG, PNG, JPG, and PDF (PDF is built client-side from the live SVG so the current theme is preserved)
 - Offline Mermaid syntax reference library with sync from mermaid.js.org

@@ -19,6 +19,15 @@ export function setMermaidTheme(theme: MermaidTheme) {
   initMermaid(theme);
 }
 
+export async function parseMermaid(code: string): Promise<void> {
+  if (!initialized) initMermaid();
+  const trimmed = code.trim();
+  if (!trimmed) {
+    throw new Error("Paste Mermaid markdown to render a diagram.");
+  }
+  await mermaid.parse(trimmed);
+}
+
 export async function renderMermaid(
   code: string,
   theme: MermaidTheme = "neutral",
