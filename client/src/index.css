@@ -1724,6 +1724,93 @@ a {
   font-size: 0.85rem;
 }
 
+.template-main {
+  padding: 1.1rem 1.25rem 2.5rem;
+}
+
+.template-intro {
+  margin: 0 0 0.9rem;
+  max-width: 46rem;
+  color: var(--ink-soft);
+}
+
+.template-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+  margin-bottom: 1rem;
+}
+
+.template-toolbar .search-box {
+  flex: 1 1 16rem;
+}
+
+.template-select {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.template-select select,
+.paste-fields input {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  color: var(--ink);
+  padding: 0.45rem 0.6rem;
+}
+
+.template-select select {
+  min-width: 9rem;
+}
+
+.template-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin: 0.35rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+}
+
+.template-dialog-note {
+  margin: 0 0 0.75rem;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.template-folder-label {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.modal.modal-wide {
+  width: min(560px, 100%);
+}
+
+.paste-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.paste-fields label,
+.paste-label {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+}
+
+.paste-fields input {
+  width: 100%;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .presentation-bar,
   .presentation-title,

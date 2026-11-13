@@ -10,7 +10,8 @@ import { Document, isMap, isSeq, parseDocument } from "yaml";
  *
  * Import this module for later work instead of parsing headers again:
  * `thumbnailCacheKey` (#10), `diagramSearchRank` (#13), and the `title` /
- * `theme` fields (#18 presentation, #17 templates).
+ * `theme` fields (#18 presentation, #17 templates). Template category lives
+ * under `nerdgram` with description, notes, and tags.
  */
 
 /** Themes registered by mermaid 12.3 (`themes_default`). */
@@ -90,6 +91,8 @@ export type DiagramPatch = {
   description?: string | null;
   notes?: string | null;
   tags?: string[] | null;
+  /** Gallery grouping. Stored under `nerdgram`, which Mermaid ignores. */
+  category?: string | null;
   theme?: string | null;
   look?: string | null;
   layout?: string | null;
@@ -117,6 +120,7 @@ export type DiagramDocument = {
   description: string;
   notes: string;
   tags: string[];
+  category: string;
   theme: string | null;
   look: string | null;
   layout: string | null;
@@ -345,6 +349,7 @@ function emptyDocument(): DiagramDocument {
     description: "",
     notes: "",
     tags: [],
+    category: "",
     theme: null,
     look: null,
     layout: null,
@@ -486,6 +491,7 @@ export function parseDiagram(source: string): DiagramDocument {
     description: asString(nerdgram.description) ?? "",
     notes: asString(nerdgram.notes) ?? "",
     tags: asTags(nerdgram.tags),
+    category: (asString(nerdgram.category) ?? "").trim(),
     displayMode: asString(data.displayMode),
     ...config,
   };
@@ -642,6 +648,7 @@ function applyToDocument(doc: Document, patch: DiagramPatch): void {
     const tags = (patch.tags ?? []).map((tag) => tag.trim()).filter((tag, index, all) => tag && all.indexOf(tag) === index);
     setOrClear(doc, [NERDGRAM, "tags"], tags);
   }
+  if ("category" in patch) setOrClear(doc, [NERDGRAM, "category"], patch.category?.trim() ?? null);
   if ("theme" in patch) setOrClear(doc, ["config", "theme"], patch.theme?.trim() ?? null);
   if ("look" in patch) setOrClear(doc, ["config", "look"], patch.look?.trim() ?? null);
   if ("layout" in patch) setOrClear(doc, ["config", "layout"], patch.layout?.trim() ?? null);

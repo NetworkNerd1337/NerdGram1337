@@ -1,0 +1,21 @@
+---
+title: Firewall rule policy
+config:
+  theme: neutral
+nerdgram:
+  description: Allow established traffic, allow HTTP and HTTPS from a LAN to one DMZ host, and deny the rest.
+  tags:
+    - firewall
+    - policy
+    - security
+  category: Security
+---
+flowchart TD
+    pkt["Packet in"] --> est{Established or related}
+    est -->|Yes| allow1[Allow]
+    est -->|No| src{From the LAN}
+    lan["192.0.2.0/24"] --> src
+    src -->|No| deny1[Deny]
+    src -->|Yes| web{HTTP or HTTPS}
+    web -->|Yes| allow2["Allow dmz-web 198.51.100.10"]
+    web -->|No| deny2[Deny and log]

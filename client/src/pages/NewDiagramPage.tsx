@@ -3,7 +3,9 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { Brand } from "../components/Brand";
 import { CommandsButton } from "../components/CommandPalette";
+import { FolderPicker } from "../components/FolderPicker";
 import { useCommandHost } from "../components/commandPaletteContext";
+import { useWorkspace } from "../hooks/useWorkspace";
 import { ensureMmd, joinPath } from "../lib/paths";
 
 const PLACEHOLDER = `%% Paste your Mermaid code
@@ -15,6 +17,7 @@ flowchart LR
 
 export function NewDiagramPage() {
   const navigate = useNavigate();
+  const { tree } = useWorkspace();
   const [code, setCode] = useState("");
   const [name, setName] = useState("Untitled");
   const [folder, setFolder] = useState("");
@@ -72,49 +75,16 @@ export function NewDiagramPage() {
 
         {error && <div className="error-banner">{error}</div>}
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.2fr 1fr",
-            gap: "0.75rem",
-          }}
-        >
+        <div className="paste-fields">
           <div>
-            <label htmlFor="diagram-name" style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>
-              Diagram name
-            </label>
-            <input
-              id="diagram-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={{
-                width: "100%",
-                marginTop: "0.3rem",
-                border: "1px solid var(--line)",
-                borderRadius: 10,
-                padding: "0.6rem 0.75rem",
-                background: "var(--bg-elevated)",
-              }}
-            />
+            <label htmlFor="diagram-name">Diagram name</label>
+            <input id="diagram-name" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
           <div>
-            <label htmlFor="diagram-folder" style={{ fontSize: "0.85rem", color: "var(--ink-soft)" }}>
-              Folder (optional)
-            </label>
-            <input
-              id="diagram-folder"
-              value={folder}
-              onChange={(e) => setFolder(e.target.value)}
-              placeholder="e.g. Projects/Network"
-              style={{
-                width: "100%",
-                marginTop: "0.3rem",
-                border: "1px solid var(--line)",
-                borderRadius: 10,
-                padding: "0.6rem 0.75rem",
-                background: "var(--bg-elevated)",
-              }}
-            />
+            <span className="paste-label" id="diagram-folder-label">
+              Folder
+            </span>
+            <FolderPicker tree={tree} value={folder} onChange={setFolder} />
           </div>
         </div>
 
@@ -155,6 +125,9 @@ export function NewDiagramPage() {
         <div className="paste-actions">
           <Link className="btn btn-ghost" to="/">
             Back to dashboard
+          </Link>
+          <Link className="btn btn-ghost" to={`/templates?folder=${encodeURIComponent(folder)}`}>
+            Browse templates
           </Link>
           <button
             type="button"

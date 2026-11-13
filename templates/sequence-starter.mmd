@@ -1,0 +1,19 @@
+---
+title: Sequence starter
+config:
+  theme: default
+nerdgram:
+  description: A minimal sequence with a few participants and messages.
+  tags:
+    - sequence
+    - starter
+  category: Starter
+---
+sequenceDiagram
+    participant Client
+    participant Service
+    participant Store
+    Client->>Service: Request
+    Service->>Store: Read
+    Store-->>Service: Record
+    Service-->>Client: Response

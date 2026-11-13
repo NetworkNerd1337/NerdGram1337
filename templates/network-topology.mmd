@@ -1,0 +1,38 @@
+---
+title: Network topology
+config:
+  theme: forest
+nerdgram:
+  description: A campus access path from the internet through an edge firewall and core router into two VLANs.
+  tags:
+    - network
+    - topology
+    - vlan
+  category: Network
+---
+flowchart LR
+    subgraph wan [WAN]
+        inet["Internet"]
+    end
+    subgraph edge [Edge]
+        fw["fw-01"]
+    end
+    subgraph corebox [Core]
+        core["rtr-core"]
+    end
+    subgraph access [Access]
+        sw1["sw-access-1"]
+        sw2["sw-access-2"]
+    end
+    subgraph servers [Servers]
+        web["web-01 vlan-10"]
+    end
+    subgraph users [Users]
+        lan["vlan-20"]
+    end
+    inet -->|"203.0.113.1"| fw
+    fw -->|"198.51.100.1"| core
+    core --> sw1
+    core --> sw2
+    sw1 -->|"192.168.10.0/24"| web
+    sw2 -->|"192.168.20.0/24"| lan

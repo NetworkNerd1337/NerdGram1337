@@ -15,6 +15,10 @@ type FullscreenHost = HTMLElement & {
   webkitRequestFullscreen?: () => Promise<void> | void;
 };
 
+type FullscreenDocument = Document & {
+  webkitExitFullscreen?: () => Promise<void> | void;
+};
+
 export function currentFullscreen(): Element | null {
   if (typeof document === "undefined") return null;
   const legacy = document as Document & { webkitFullscreenElement?: Element | null };
@@ -64,8 +68,11 @@ export async function exitPresentationFullscreen(): Promise<void> {
   if (typeof document === "undefined") return;
   const element = document.getElementById(PRESENTATION_ROOT_ID);
   if (!element || currentFullscreen() !== element) return;
+  const host = document as FullscreenDocument;
+  const exit = host.exitFullscreen?.bind(host) ?? host.webkitExitFullscreen?.bind(host);
+  if (!exit) return;
   try {
-    await document.exitFullscreen();
+    await exit();
   } catch {
     // The browser may already have left fullscreen.
   }

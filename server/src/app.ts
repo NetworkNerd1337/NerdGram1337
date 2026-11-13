@@ -19,6 +19,7 @@ import {
 } from "./security.js";
 import * as search from "./search.js";
 import * as syntaxReference from "./syntaxReference.js";
+import * as templates from "./templates.js";
 import * as thumbnails from "./thumbnails.js";
 
 export type ListenPort = { port: number };
@@ -541,6 +542,36 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       }
       const lock = await locks.heartbeatLock(relative, token);
       res.json(lock);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.get("/api/templates", async (_req, res) => {
+    try {
+      const listed = await templates.listTemplates();
+      res.json({ templates: listed });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.get("/api/templates/:id", async (req, res) => {
+    try {
+      const template = await templates.readTemplate(String(req.params.id || ""));
+      res.json(template);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/templates/:id/use", async (req, res) => {
+    try {
+      const created = await templates.createDiagramFromTemplate(String(req.params.id || ""), {
+        name: req.body?.name,
+        folder: req.body?.folder,
+      });
+      res.status(201).json(created);
     } catch (err) {
       sendError(res, err);
     }

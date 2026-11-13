@@ -77,6 +77,20 @@ export type DiagramSearchResponse = {
   hits: DiagramSearchHit[];
 };
 
+export type TemplateSummary = {
+  id: string;
+  title: string;
+  description: string;
+  tags: string[];
+  category: string;
+  theme: string | null;
+  diagramType: string;
+  cacheKey: string;
+  malformed: boolean;
+  error: string | null;
+  source: string;
+};
+
 export type ThumbnailPayload = {
   hit: boolean;
   path: string;

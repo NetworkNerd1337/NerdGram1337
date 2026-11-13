@@ -3,6 +3,7 @@ import type {
   DiagramSearchResponse,
   FilePayload,
   FileWriteResult,
+  TemplateSummary,
   ThumbnailPayload,
   FolderListing,
   ImportFileResult,
@@ -248,6 +249,20 @@ export const api = {
       body: JSON.stringify({ path, token }),
       keepalive: init?.keepalive,
     }),
+  templates: () => request<{ templates: TemplateSummary[] }>("/api/templates"),
+  template: (id: string) =>
+    request<TemplateSummary>(`/api/templates/${encodeURIComponent(id)}`),
+  createFromTemplate: (id: string, body: { name?: string; folder?: string }) =>
+    request<FileWriteResult & { templateId: string }>(
+      `/api/templates/${encodeURIComponent(id)}/use`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: body.name ?? "",
+          folder: body.folder ?? "",
+        }),
+      },
+    ),
   referenceSync: () =>
     request<{
       manifest: {

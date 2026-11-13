@@ -1,0 +1,34 @@
+---
+title: Home lab
+config:
+  theme: neo
+nerdgram:
+  description: A home lab with an edge firewall, a hypervisor and two VMs, network storage, and an IoT segment.
+  tags:
+    - lab
+    - hypervisor
+    - nas
+  category: Lab
+---
+flowchart TB
+    subgraph edge [Edge]
+        inet["Internet 203.0.113.10"]
+        fw["fw-edge 192.168.1.1"]
+    end
+    subgraph compute [Hypervisor]
+        hv["hv-01 192.168.1.10"]
+        dns["vm-dns 192.168.1.11"]
+        apps["vm-apps 192.168.1.12"]
+    end
+    subgraph storage [Storage]
+        nas["nas-01 192.168.1.20"]
+    end
+    subgraph devices [IoT]
+        iot["iot-gw 192.168.50.1"]
+    end
+    inet --> fw
+    fw --> hv
+    hv --> dns
+    hv --> apps
+    hv --> nas
+    fw --> iot

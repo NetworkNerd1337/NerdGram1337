@@ -156,27 +156,132 @@ function ThumbnailBody({ path, mtimeMs, cacheKey }: MermaidThumbnailProps) {
 
   const message =
     shown.status === "failed" ? "Preview unavailable" : shown.status === "empty" ? "Empty diagram" : "";
-  const imageRef = useRef<HTMLImageElement>(null);
 
+  return (
+    <div className="card-thumb" ref={rootRef} aria-busy={shown.status === "pending"}>
+      {shown.svg ? <SanitizedSvg svg={shown.svg} /> : <span className="empty">{message}</span>}
+    </div>
+  );
+}
+
+function SanitizedSvg({ svg }: { svg: string }) {
+  const imageRef = useRef<HTMLImageElement>(null);
   useEffect(() => {
     const image = imageRef.current;
-    if (!image || !shown.svg) return;
-    const url = URL.createObjectURL(new Blob([shown.svg], { type: "image/svg+xml" }));
+    if (!image) return;
+    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
     image.src = url;
     return () => {
       URL.revokeObjectURL(url);
       image.removeAttribute("src");
     };
-  }, [shown.svg]);
+  }, [svg]);
+  return <img ref={imageRef} alt="" />;
+}
+
+function SourceThumbnailBody({
+  id,
+  source,
+  cacheKey,
+}: {
+  id: string;
+  source: string;
+  cacheKey: string;
+}) {
+  const cachePath = `\u0000template:${id}`;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(() => typeof IntersectionObserver === "undefined");
+  const [loaded, setLoaded] = useState<{
+    token: string;
+    svg: string | null;
+    status: Status;
+  } | null>(null);
+  const token = `${cachePath}\0${cacheKey}`;
+  const memory = lookupThumbnailRecord(cachePath, 0, cacheKey);
+  const shown =
+    loaded?.token === token
+      ? loaded
+      : {
+          token,
+          svg: memory?.status === "ready" ? memory.svg : null,
+          status: (memory ? memory.status : "pending") as Status,
+        };
+
+  useEffect(() => {
+    const node = rootRef.current;
+    if (!node || typeof IntersectionObserver === "undefined") return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setVisible(entries.some((entry) => entry.isIntersecting));
+      },
+      { rootMargin: "240px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
+    if (lookupThumbnailRecord(cachePath, 0, cacheKey)) return;
+    const controller = new AbortController();
+    let cancelled = false;
+    const requestToken = token;
+
+    void scheduleThumbnail(async () => {
+      if (cancelled || controller.signal.aborted) return;
+      if (!source.trim()) {
+        rememberThumbnail({ path: cachePath, cacheKey, mtimeMs: 0, svg: null, status: "empty" });
+        setLoaded({ token: requestToken, svg: null, status: "empty" });
+        return;
+      }
+      try {
+        const rendered = await renderMermaid(source);
+        if (cancelled) return;
+        rememberThumbnail({
+          path: cachePath,
+          cacheKey,
+          mtimeMs: 0,
+          svg: rendered.svg,
+          status: "ready",
+        });
+        setLoaded({ token: requestToken, svg: rendered.svg, status: "ready" });
+      } catch {
+        if (cancelled) return;
+        rememberThumbnail({ path: cachePath, cacheKey, mtimeMs: 0, svg: null, status: "failed" });
+        setLoaded({ token: requestToken, svg: null, status: "failed" });
+      }
+    }, controller.signal).catch(() => undefined);
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [visible, cachePath, cacheKey, source, token]);
+
+  const message =
+    shown.status === "failed" ? "Preview unavailable" : shown.status === "empty" ? "Empty diagram" : "";
 
   return (
     <div className="card-thumb" ref={rootRef} aria-busy={shown.status === "pending"}>
-      {shown.svg ? (
-        <img ref={imageRef} alt="" />
-      ) : (
-        <span className="empty">{message}</span>
-      )}
+      {shown.svg ? <SanitizedSvg svg={shown.svg} /> : <span className="empty">{message}</span>}
     </div>
+  );
+}
+
+/** Preview a bundled template from its source. The theme comes from the file. */
+export function SourceThumbnail({
+  id,
+  source,
+  cacheKey,
+}: {
+  id: string;
+  source: string;
+  cacheKey: string;
+}) {
+  return (
+    <ThumbnailBoundary>
+      <SourceThumbnailBody id={id} source={source} cacheKey={cacheKey} />
+    </ThumbnailBoundary>
   );
 }
 

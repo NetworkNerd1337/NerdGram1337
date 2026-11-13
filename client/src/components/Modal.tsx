@@ -4,6 +4,7 @@ type ModalProps = {
   title: string;
   children: ReactNode;
   confirmLabel?: string;
+  className?: string;
   onClose: () => void;
   onConfirm: () => void;
 };
@@ -12,6 +13,7 @@ export function Modal({
   title,
   children,
   confirmLabel = "Save",
+  className,
   onClose,
   onConfirm,
 }: ModalProps) {
@@ -23,7 +25,7 @@ export function Modal({
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <form
-        className="modal"
+        className={className ? `modal ${className}` : "modal"}
         onClick={(e) => e.stopPropagation()}
         onSubmit={handleSubmit}
       >

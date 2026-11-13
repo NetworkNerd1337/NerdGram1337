@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import { PresentationView } from "../components/PresentationView";
 import { useCommandHost } from "../components/commandPaletteContext";
+import { presentPollDecision } from "../lib/presentPoll";
 import type { FilePayload } from "../types";
-
-const POLL_MS = 2000;
 
 /**
  * Read-only presentation route. It loads through the existing file API and
@@ -38,25 +37,49 @@ export function PresentPage() {
   useEffect(() => {
     if (!filePath) return;
     let cancelled = false;
-    const load = async () => {
+    let timer = 0;
+    let failures = 0;
+
+    function schedule(delayMs: number) {
+      timer = window.setTimeout(() => {
+        void load();
+      }, delayMs);
+    }
+
+    async function load() {
       try {
         const next = await api.readFile(filePath);
         if (cancelled) return;
+        const decision = presentPollDecision({ ok: true, status: null, failures });
+        failures = decision.failures;
         setError((current) => (current?.path === filePath ? null : current));
         setFile((current) => (current?.path === next.path && current.hash === next.hash ? current : next));
+        schedule(decision.delayMs);
       } catch (err) {
         if (cancelled) return;
+        const decision = presentPollDecision({
+          ok: false,
+          status: err instanceof ApiError ? err.status : null,
+          failures,
+          errorMessage: err instanceof Error ? err.message : "Could not open this diagram",
+        });
+        failures = decision.failures;
         setError({
           path: filePath,
-          message: err instanceof Error ? err.message : "Could not open this diagram",
+          message: decision.message ?? "Could not open this diagram",
         });
+        if (decision.stop) {
+          setFile((current) => (current?.path === filePath ? null : current));
+          return;
+        }
+        schedule(decision.delayMs);
       }
-    };
+    }
+
     void load();
-    const timer = window.setInterval(() => void load(), POLL_MS);
     return () => {
       cancelled = true;
-      window.clearInterval(timer);
+      window.clearTimeout(timer);
     };
   }, [filePath]);
 

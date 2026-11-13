@@ -18,8 +18,11 @@ import { getMetaPath } from "./paths.js";
  *
  * Move, duplicate, and import (#9) should reuse `atomicWriteText`,
  * `evaluateWrite`, and `resolveAvailablePath` instead of calling
- * `fs.writeFile` on a diagram directly. A mirror of the data directory (#14)
- * will see these folders beside `favorites.json`.
+ * `fs.writeFile` on a diagram directly. Creating a diagram from a bundled
+ * template (#17) uses the same helpers. A mirror of the data directory (#14)
+ * will see these folders beside `favorites.json`. Bundled templates live
+ * outside this directory, in the repo `templates/` folder, and are not synced
+ * with it.
  */
 
 /** How many previous revisions to keep for each diagram. Newest are kept. */
