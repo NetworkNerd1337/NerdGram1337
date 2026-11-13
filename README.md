@@ -108,6 +108,8 @@ cd NerdGram1337
 
 A ZIP of the repository works too. GitHub names that folder `NerdGram1337-main`. Either way, the folder you `cd` into contains the `Dockerfile`.
 
+The Dockerfile uses BuildKit. The first line is `# syntax=docker/dockerfile:1`, and the `RUN` steps mount a cache with `--mount=type=cache`. Docker Engine 23 and newer, and current Docker Desktop, use BuildKit by default. `docker buildx version` should print a version. If this build stops on the syntax line or says `--mount` is unknown, prefix the command with `DOCKER_BUILDKIT=1`, or run `docker buildx build --load` with the same arguments. `docker buildx create --use` makes buildx the default builder when it is not already.
+
 ```bash
 docker build \
   --build-arg NERDGRAM_VERSION="$(node -p "require('./package.json').version")" \
@@ -120,10 +122,10 @@ docker build \
 Start it with the same `docker run` as step 3, and use `nerdgram1337:local` as the image name. With Compose, from the project root:
 
 ```bash
-docker compose up -d --build
+docker compose -f compose.yaml -f compose.build.yaml up -d --build
 ```
 
-Pass the commit when you have one: `NERDGRAM_COMMIT=$(git rev-parse HEAD) docker compose build`.
+That tags the image `nerdgram1337:local`. It does not label the local build with the published `vX.Y.Z` name. `docker compose pull` and `docker compose up -d`, without `compose.build.yaml`, still use the published tag in [`compose.yaml`](compose.yaml). Pass the commit when you have one: `NERDGRAM_COMMIT=$(git rev-parse HEAD) docker compose -f compose.yaml -f compose.build.yaml build`.
 
 Optional variables go on `docker run -e`, or in a `.env` file next to `compose.yaml` (that file is gitignored):
 
@@ -331,11 +333,11 @@ Description, notes, and tags live under `nerdgram:` because Mermaid has no field
 
 ### Diagram checks
 
-The code pane checks the diagram while you type. The check waits about **400 ms** after the last key so a large file does not lag. Mermaid's parser supplies the syntax error, including the line and column. The other checks are warnings. They do not block the preview or autosave. A warning is a gutter mark and a row in the problems list under the code. Click a row to jump to that line. The same checks are available to a future `nerdgram lint` command: `POST /api/lint` runs them on one diagram, and `GET /api/diagram-lint` runs them on the workspace.
+The code pane checks the diagram while you type. The check waits about **400 ms** after the last key so a large file does not lag. Mermaid's parser supplies the syntax error, including the line and column. The other checks are warnings. They do not block the preview or autosave. A warning is a gutter mark and a row in the problems list under the code. Click a row to jump to that line. `nerdgram lint` runs the same checks on a file, or on the workspace when you point it at a running server. A Mermaid syntax error is reported as an error, with the line and column, and the command exits non-zero. `POST /api/lint` and `POST /api/v1/lint` do the same for one diagram. `GET /api/diagram-lint` and `GET /api/v1/lint` run the checks on the workspace.
 
 The problems list can also offer a fix. **Rename** gives a duplicate id a new name. **Remove unused class** deletes a `classDef` nothing uses. **Create class** inserts a `classDef` for a name you already applied. **Jump to definition** moves the cursor to the first definition of a duplicate id. Each of those can be undone with Ctrl+Z (Cmd+Z on a Mac).
 
-Turn a warning off under **Diagram checks** on the GitHub sync page (`/settings`). The switches are saved in this browser. A diagram Mermaid cannot parse is always marked.
+Turn a warning off under **Diagram checks** on the settings page (`/settings#diagram-checks`). The sidebar links there on its own, next to GitHub sync and automation tokens. The switches are saved in this browser. A diagram Mermaid cannot parse is always marked.
 
 | Rule | What it warns about |
 | --- | --- |
@@ -507,7 +509,7 @@ The token is not returned to the browser, not written into the git remote URL or
 
 ### In-app updates
 
-The running version is the **About** line at the bottom of the sidebar and **About NerdGram1337** in the command palette. Both show the version and its code name, for example `v1.0.6 "Atlas"`. `GET /api/version` returns `name`, `version`, `codename`, `commit`, and `installKind`. `GET /api/health` returns those fields plus `"ok": true` and `dataDir`. `installKind` is `git`, `docker`, `zip`, or `unknown`. `commit` is a SHA when the build or the git checkout has one, and null otherwise. Docker never shells out to git to discover a commit. Set `NERDGRAM_COMMIT` at image build time when you want one. When a newer release is available, the banner and the release dialog show that release's code name. The version still comes from the tag. The code name comes from the major number of that tag.
+The running version is the **About** line at the bottom of the sidebar and **About NerdGram1337** in the command palette. Both show the version and its code name, for example `v1.1.0 "Atlas"`. `GET /api/version` returns `name`, `version`, `codename`, `commit`, and `installKind`. `GET /api/health` returns those fields plus `"ok": true` and `dataDir`. `installKind` is `git`, `docker`, `zip`, or `unknown`. `commit` is a SHA when the build or the git checkout has one, and null otherwise. Docker never shells out to git to discover a commit. Set `NERDGRAM_COMMIT` at image build time when you want one. When a newer release is available, the banner and the release dialog show that release's code name. The version still comes from the tag. The code name comes from the major number of that tag.
 
 The server asks GitHub, with no token, whether `NetworkNerd1337/NerdGram1337` has a newer full release. That request uses the public Releases API for the latest stable release. It does not offer a prerelease. It does not use the GitHub sync token or `NERDGRAM_GITHUB_TOKEN`, and it does not send telemetry. The answer is cached for about 24 hours in `<data>/.meta/updates.json`. If GitHub is offline, rate-limits the check, or has not published a release yet, the automatic check stays quiet. **Check for updates** in the command palette can say that GitHub could not be reached. It has no keyboard shortcut. How a checkout of `main` differs from a checkout of a release tag is under [Pin a version or move to another](#pin-a-version-or-move-to-another).
 
@@ -844,7 +846,7 @@ There is no **Update now** for a ZIP. About shows the hand steps.
 
 Releases are semantic versions: `vX.Y.Z`, three numbers with no prerelease suffix. `X` is the major line, `Y` is the maintenance line, and `Z` is the patch. The root `package.json` `version` is the version of the tree you have. A GitHub Release and its git tag use the same numbers with a leading `v`.
 
-This tree is v1.0.6, code name Atlas. v1.0.5 was the first release on this line, and that tag is already published. Each published tag has a GitHub Release and a container image. Both are listed on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases). Later 1.x.y releases stay Atlas.
+This tree is v1.1.0, code name Atlas. v1.0.5 was the first release on this line, and v1.0.6 was the patch after it. Each published tag has a GitHub Release and a container image. Both are listed on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases). Later 1.x.y releases stay Atlas. The image for this tree is `ghcr.io/networknerd1337/nerdgram1337:v1.1.0` once the `v1.1.0` tag is pushed.
 
 ### Version numbers and code names
 
@@ -855,7 +857,7 @@ Each major number has one code name for as long as that line is published. Maint
 | 1 | Atlas | v1.0.5 |
 | 2 | Meridian | v2.0.0 |
 
-v1.0.5 was the first release. Every later 1.x.y release is still Atlas. v1.0.6 is the current published Atlas tag. Meridian begins at v2.0.0 and is the name of every 2.x.y release after that.
+v1.0.5 was the first release. Every later 1.x.y release is still Atlas. v1.1.0 is the version of this tree. Meridian begins at v2.0.0 and is the name of every 2.x.y release after that.
 
 Which number moves:
 
@@ -867,7 +869,7 @@ The running app shows the version and the code name together. A 1.x.y build is A
 
 ### Where the version is shown
 
-- The bottom of the sidebar is **About** and the version with its code name, written `v1.0.6 "Atlas"`.
+- The bottom of the sidebar is **About** and the version with its code name, written `v1.1.0 "Atlas"`.
 - **About NerdGram1337** in the command palette opens the same panel: that same version line, commit when there is one, and the install kind (git clone, Docker, ZIP, or unknown).
 - `GET /api/version` returns `name`, `version`, `codename`, `commit`, and `installKind`.
 - `GET /api/health` returns those fields plus `"ok": true` and `dataDir`.
@@ -877,7 +879,7 @@ The running app shows the version and the code name together. A 1.x.y build is A
 
 ### Pin a version or move to another
 
-Install commands elsewhere in this file write the tag as `vX.Y.Z`. Substitute the release you want. `v1.0.6` is a published Atlas tag, and the full list is on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases). `:latest` is not a version. It is the newest full release the image workflow has pushed.
+Install commands elsewhere in this file write the tag as `vX.Y.Z`. Substitute the release you want. `v1.1.0` is the Atlas tag for this tree. The full list of tags that are already published is on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases). `:latest` is not a version. It is the newest full release the image workflow has pushed.
 
 **Docker, stay on one release.** Use the immutable tag `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z` in `docker run` and as the `image:` line in `compose.yaml`. `docker pull` of that tag gets that release again. Recreate the container on the same `nerdgram-data` volume when you change tags. The steps are [Update a Docker install](#update-a-docker-install). The workflow also pushes `sha-<commit>` for that build. Pin the `sha-` tag when you need that exact image rather than the version tag.
 
@@ -914,7 +916,7 @@ With the default settings the check asks GitHub for the latest full release and 
 This is the maintainer path. It is not part of installing the app. v1.0.5, code name Atlas, was the first release and is already tagged. A later release keeps the code name for the major and moves `Y` or `Z`. Do not invent a second numbering scheme for the image. Do not mark the GitHub Release as a prerelease. The update check offers full releases and reads the version from the tag.
 
 1. Set the root `package.json` `version` to `X.Y.Z`. The `codenames` map in that file names each major (`"1"` is Atlas, `"2"` is Meridian). The current major has to have an entry. A major with no code name fails the check.
-2. Run `npm run version:sync`. That copies the version into `client/package.json`, `server/package.json`, the root version fields of the three lockfiles, the `ARG NERDGRAM_VERSION` lines in the Dockerfile, and the image tag and `NERDGRAM_VERSION` pin in `compose.yaml`. It also writes `ARG NERDGRAM_CODENAME` and the `NERDGRAM_CODENAME` build arg from the map. It does not rewrite this README. Install examples stay on the `vX.Y.Z` placeholder. `npm run version:check` still requires an image pin written out as `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z` with real numbers, or a `nerdgram1337@` example, to match `package.json`. The names v1.0.5 and v2.0.0 are allowed in this section.
+2. Run `npm run version:sync`. That copies the version into `client/package.json`, `server/package.json`, `cli/package.json`, the root version fields of the three lockfiles, the `ARG NERDGRAM_VERSION` lines in the Dockerfile, and the published image tag in `compose.yaml`. The local build args live in `compose.build.yaml`, tagged `nerdgram1337:local`. It also writes `ARG NERDGRAM_CODENAME` and the `NERDGRAM_CODENAME` build arg from the map. It does not rewrite this README. Install examples stay on the `vX.Y.Z` placeholder. `npm run version:check` still requires an image pin written out as `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z` with real numbers, or a `nerdgram1337@` example, to match `package.json`. The names v1.0.5, v1.0.6, and v2.0.0 are allowed in this section.
 3. Run `npm run version:check`. It fails when those files disagree, when the current major has no code name, when `CHANGELOG.md` has no section for this version, and when a link in this README does not resolve.
 4. Add a `CHANGELOG.md` section headed `## X.Y.Z "Code name" - YYYY-MM-DD`. The quoted code name has to match the map. The section body is the GitHub Release notes. The notes script also accepts `## X.Y.Z` and `## [X.Y.Z]`, with an optional code name and date, but `version:check` requires the code name on the heading. The release title is not taken from the heading. It is `vX.Y.Z "Code name"` from the tag and the map.
 5. Commit and merge to `main`. Then, from `main`, tag the matching version and push the tag. `vX.Y.Z` is that version:
@@ -994,11 +996,13 @@ Vite is bound to `localhost`, which can be `::1` only. Use [http://localhost:517
 ```
 NerdGram1337/                  (or NerdGram1337-main/ from the ZIP)
 ├── package.json               install:all, dev, build, start, lint, test, version:check, version:sync
-├── compose.yaml               loopback publish, read-only root, tmpfs /tmp, nerdgram-data
+├── compose.yaml               published image, loopback publish, read-only root, nerdgram-data
+├── compose.build.yaml         local build, tagged nerdgram1337:local
 ├── Dockerfile                 Node 22 bookworm-slim image, uid 1001, HOST=0.0.0.0 inside
 ├── client/                    React + Vite UI
 ├── server/                    Express API
-├── diagrams/                  default workspace (Welcome, NetworkMap, Examples/Sequence)
+├── cli/                       nerdgram command launcher
+├── diagrams/                  samples, including WAN and Sites/Atlanta
 ├── templates/                 six bundled starters
 ├── reference/                 offline Mermaid syntax pages
 ├── scripts/                   version check, version sync, changelog notes, docker smoke
@@ -1018,7 +1022,7 @@ NerdGram1337/                  (or NerdGram1337-main/ from the ZIP)
 | `npm test` | Server Vitest, then client Vitest. |
 | `npm run lint` | Oxlint in `client/`. |
 | `npm run version:check` | Versions, Dockerfile, compose.yaml, and this README. |
-| `npm run version:sync` | Copy the root version into the client, server, Dockerfile, and compose.yaml. |
+| `npm run version:sync` | Copy the root version into the client, server, cli, Dockerfile, compose.yaml, and compose.build.yaml. |
 | `npm run sync:reference` | Refresh the offline syntax mirror. |
 
 Server tests set `fileParallelism: false` in `server/vitest.config.ts` because they share `NERDGRAM_DATA_DIR`. Client tests set the same flag in `client/vite.config.ts`. Client lint is oxlint. `react/rules-of-hooks` is an error. The current tree also reports known warnings: `react(set-state-in-effect)` in the workspace, editor, settings, and reference pages, and `eslint(no-useless-escape)` in the Mermaid completion pattern. `react/only-export-components` is set to warn in `client/.oxlintrc.json`.

@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { isDockerIgnored } from "../src/dockerContext.js";
+import { bundledSampleFiles } from "../src/seed.js";
 import { REPO_ROOT } from "../src/paths.js";
 
 async function read(relative: string): Promise<string> {
@@ -26,6 +28,7 @@ describe("docker packaging", () => {
     expect(dockerfile).toContain("NERDGRAM_DATA_DIR=/data");
     expect(dockerfile).toContain("NERDGRAM_INSTALL=docker");
     expect(dockerfile).toContain("NERDGRAM_COMMIT");
+    expect(dockerfile).toContain("COPY Dockerfile compose.yaml compose.build.yaml");
     expect(dockerfile).toContain("/api/health");
     expect(dockerfile).toContain("--uid 1001");
     expect(dockerfile).toContain("org.opencontainers.image.source");
@@ -33,7 +36,11 @@ describe("docker packaging", () => {
     expect(dockerfile).not.toMatch(/apt-get install[^\n]*\bgit\b/);
 
     expect(compose).toContain(`ghcr.io/networknerd1337/nerdgram1337:v${version}`);
-    expect(compose).toContain(`NERDGRAM_CODENAME: "${codename}"`);
+    expect(compose).not.toMatch(/^\s*build\s*:/m);
+    const buildCompose = await read("compose.build.yaml");
+    expect(buildCompose).toContain("image: nerdgram1337:local");
+    expect(buildCompose).toContain(`NERDGRAM_VERSION: "${version}"`);
+    expect(buildCompose).toContain(`NERDGRAM_CODENAME: "${codename}"`);
     expect(compose).toContain("127.0.0.1:8787:8787");
     expect(compose).toContain("container_name: nerdgram1337");
     expect(compose).toContain("name: nerdgram-data");
@@ -58,5 +65,26 @@ describe("docker packaging", () => {
     expect(release).toContain('tags:\n      - "v*.*.*"');
     expect(ci).toContain("scripts/docker-smoke.sh");
     expect(ci).toContain("push: false");
+  });
+
+  it("ships every bundled sample, including ones added under diagrams/", async () => {
+    const ignore = await read(".dockerignore");
+    const samples = await bundledSampleFiles();
+    expect(samples).toEqual(
+      expect.arrayContaining(["Welcome.mmd", "NetworkMap.mmd", "Examples/Sequence.mmd", "WAN.mmd", "Sites/Atlanta.mmd"]),
+    );
+    const excluded = samples.filter((file) => isDockerIgnored(ignore, `diagrams/${file}`));
+    expect(excluded).toEqual([]);
+
+    const oldIgnore = [
+      "diagrams/**",
+      "!diagrams/Welcome.mmd",
+      "!diagrams/NetworkMap.mmd",
+      "!diagrams/Examples/",
+      "!diagrams/Examples/Sequence.mmd",
+    ].join("\n");
+    expect(isDockerIgnored(oldIgnore, "diagrams/Welcome.mmd")).toBe(false);
+    expect(isDockerIgnored(oldIgnore, "diagrams/WAN.mmd")).toBe(true);
+    expect(isDockerIgnored(oldIgnore, "diagrams/Sites/Atlanta.mmd")).toBe(true);
   });
 });

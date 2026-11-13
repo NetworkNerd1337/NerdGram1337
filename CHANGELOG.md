@@ -2,6 +2,43 @@
 
 Release notes for GitHub Releases. The heading for a release is `## X.Y.Z "Code name" - YYYY-MM-DD`. It has to match the root `package.json` version. `npm run version:check` requires the quoted code name to match the `codenames` map. The notes script also accepts `## X.Y.Z` and `## [X.Y.Z]`, with an optional code name and date. The `vX.Y.Z` tag is the version the update check reads. The GitHub Release title is `vX.Y.Z "Code name"`, from that tag and the map.
 
+## 1.1.0 "Atlas" - 2026-11-13
+
+First minor release on the Atlas line. The code name stays Atlas. This adds the v1.1 features and the fixes from a fresh-clone smoke test of main at `2ee2952`.
+
+### Diagram checks
+
+From #39 (#38, #34). The editor underlines a Mermaid syntax error on the line and column the parser stopped at, and it keeps the last diagram that rendered, marked out of date. Optional warnings cover duplicate ids, unconnected flowchart nodes, unlabeled endpoints, unused and undefined classes, front matter, and a `click` link to a diagram that is not in the workspace. A quick fix can rename a duplicate id, remove an unused class, create a missing class, or jump to the first definition. `nerdgram lint`, `POST /api/lint`, and `/api/v1/lint` run the same checks. A syntax error is an error diagnostic with that line number, and `nerdgram lint` exits non-zero. `nerdgram render` reports the same line, not the caret line in Mermaid's message.
+
+### Linked diagrams
+
+From #40 (#35). A Mermaid `click` line opens another diagram in the preview and in presentation. The trail keeps Back and Forward. Renaming or moving a diagram inside the app rewrites `click` targets that point at it. A real pointer click in presentation drills down. Panning still starts once the pointer moves.
+
+### Diagrams from data
+
+Phase 1 of #36, from #41. A CSV or JSON file can create a flowchart. Refresh from data shows nodes and edges added, removed, and changed before it rewrites the generated block. Text outside `%% nerdgram:generated` stays. The sample files are `docs/samples/campus-links.csv` and `docs/samples/campus.json`.
+
+### Automation
+
+From #42 (#37). `/api/v1` takes a bearer token for list, search, get, put, export, lint, generate, refresh, and render. `nerdgram` runs those commands. Render and lint of a file on disk do not need a server. Revoking a token asks first.
+
+### Fixes from the smoke test
+
+- The image seeds every bundled sample, including subfolders. `WAN.mmd` and `Sites/Atlanta.mmd` are in the image and in an empty data directory. A test fails if a new `.mmd` file under `diagrams/` is left out of the Docker context.
+- Dashboard thumbnails draw diagrams that contain `click` lines. Mermaid's `xlink:href` is given the xlink namespace so the picture is valid XML when the browser draws it as an image.
+- The Refresh from data dialog uses dark text on its white background. The editor header Commands button and the Edit info button use light text on the dark header. Both meet WCAG AA.
+- The out-of-date mark sits above the preview instead of covering the diagram.
+- Building from source says that Docker BuildKit is required, and how to turn it on. A local Compose build is tagged `nerdgram1337:local`. `docker compose pull` still uses `ghcr.io/networknerd1337/nerdgram1337:v1.1.0`.
+- The code editor's accessible name is on the editable text. Automation tokens and diagram checks are in the sidebar, not only under the GitHub sync page.
+
+### Not in this release
+
+- #36 phase 2: a NetBox connector, and pasted `show lldp neighbors detail` or `show cdp neighbors detail` output.
+- #43: publishing the `nerdgram` package to npm.
+- #44: repairing `click` links after a rename or move made outside the app.
+- #45: lint rules for diagram types other than flowchart, sequence, and state.
+- #46: moving or copying a generated diagram's data file when the diagram is moved, duplicated, or deleted.
+
 ## 1.0.6 "Atlas" - 2026-11-13
 
 Patch on the Atlas line. The code name stays Atlas. These fixes come from the v1.0.5 release run and a fresh-user smoke test.

@@ -30,15 +30,15 @@ function notes(args: string[], changelog?: string): { code: number; stdout: stri
 }
 
 describe("changelog notes", () => {
-  it("prints the Atlas title and the 1.0.6 section without the heading", () => {
-    const title = notes(["--title", "v1.0.6"]);
+  it("prints the Atlas title and the 1.1.0 section without the heading", () => {
+    const title = notes(["--title", "v1.1.0"]);
     expect(title.code).toBe(0);
-    expect(title.stdout).toBe('v1.0.6 "Atlas"\n');
-    const body = notes(["v1.0.6"]);
+    expect(title.stdout).toBe('v1.1.0 "Atlas"\n');
+    const body = notes(["v1.1.0"]);
     expect(body.code).toBe(0);
-    expect(body.stdout.startsWith("Patch on the Atlas line.")).toBe(true);
-    expect(body.stdout).toContain("Take over editing");
-    expect(body.stdout).not.toContain('## 1.0.6 "Atlas"');
+    expect(body.stdout.startsWith("First minor release on the Atlas line.")).toBe(true);
+    expect(body.stdout).toContain("nerdgram1337:local");
+    expect(body.stdout).not.toContain('## 1.1.0 "Atlas"');
     expect(body.stdout).not.toContain("### Highlights");
   });
 

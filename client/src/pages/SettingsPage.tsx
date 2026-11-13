@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { ApiError, api } from "../api";
 import { Brand } from "../components/Brand";
 import { CommandsButton } from "../components/CommandPalette";
@@ -57,11 +57,19 @@ export function SettingsPage() {
     }
   };
 
+  const location = useLocation();
+
   useEffect(() => {
     void refresh();
     const timer = window.setInterval(() => void refresh(), 2000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    const id = location.hash.replace(/^#/, "");
+    if (!id) return;
+    document.getElementById(id)?.scrollIntoView({ block: "start" });
+  }, [location.hash]);
 
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -91,10 +99,16 @@ export function SettingsPage() {
             <Brand compact />
           </Link>
           <div>
-            <h1>GitHub sync</h1>
+            <h1>Settings</h1>
             <p className="reference-meta">
-              Diagrams stay in the local folder. GitHub gets a copy.
+              GitHub sync, automation tokens, and diagram checks.
             </p>
+            <nav className="settings-nav" aria-label="Settings sections">
+              <a href="#github-sync">GitHub sync</a>
+              <a href="#tokens">Automation tokens</a>
+              <a href="#diagram-checks">Diagram checks</a>
+              <a href="#app-updates">App updates</a>
+            </nav>
           </div>
         </div>
         <div className="reference-top-actions">
@@ -106,7 +120,7 @@ export function SettingsPage() {
       </header>
 
       <main className="sync-page">
-        <section className="sync-card">
+        <section className="sync-card" id="github-sync">
           <p>
             NerdGram does not ship a GitHub app or a client secret. You register an OAuth app
             in your own GitHub account, enable Device flow, and paste its client ID here.
@@ -379,7 +393,7 @@ export function SettingsPage() {
         ) : null}
         <TokenSettings />
         <LintSettings />
-        <section className="sync-card">
+        <section className="sync-card" id="app-updates">
           <h2>App updates</h2>
           <p>
             Version checks are separate from GitHub sync. The sync token is not used. The server

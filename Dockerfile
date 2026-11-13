@@ -39,8 +39,8 @@ COPY cli cli
 COPY templates templates
 COPY reference reference
 COPY diagrams diagrams
-COPY Dockerfile compose.yaml README.md CHANGELOG.md LICENSE ./
-ARG NERDGRAM_VERSION=1.0.6
+COPY Dockerfile compose.yaml compose.build.yaml README.md CHANGELOG.md LICENSE ./
+ARG NERDGRAM_VERSION=1.1.0
 ARG NERDGRAM_CODENAME=Atlas
 ENV NERDGRAM_VERSION=${NERDGRAM_VERSION} \
     NERDGRAM_CODENAME=${NERDGRAM_CODENAME}
@@ -106,7 +106,7 @@ RUN chmod -R a-w /app/templates /app/reference /app/diagrams /app/server/dist /a
  && printf '%s\n' '#!/bin/sh' 'exec node /app/server/dist/cli.js "$@"' > /usr/local/bin/nerdgram \
  && chmod 755 /usr/local/bin/nerdgram
 
-ARG NERDGRAM_VERSION=1.0.6
+ARG NERDGRAM_VERSION=1.1.0
 ARG NERDGRAM_CODENAME=Atlas
 ARG NERDGRAM_COMMIT=
 ENV NODE_ENV=production \

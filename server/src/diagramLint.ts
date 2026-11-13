@@ -14,11 +14,11 @@ import {
 /**
  * Diagram checks shared by the editor and `POST /api/lint`.
  *
- * The rules are plain text analysis so a future `nerdgram lint` command can
- * run them without a browser. The editor prefers Mermaid's parser for syntax
- * errors and, when the diagram database is available, confirms these warnings
- * against that database. Flowcharts are checked first, then sequence diagrams,
- * then state diagrams.
+ * The rules are plain text analysis so `nerdgram lint` can run them without
+ * a browser. Syntax errors are added by `lintDiagramSource`, which asks
+ * Mermaid's parser. When the diagram database is available, the editor
+ * confirms these warnings against that database. Flowcharts are checked
+ * first, then sequence diagrams, then state diagrams.
  */
 
 export const LINT_RULES = [
@@ -81,7 +81,8 @@ export type LintFix = {
 };
 
 export type LintDiagnostic = {
-  ruleId: LintRuleId;
+  /** `"parse"` is a Mermaid syntax error. It is not a switch in Diagram checks. */
+  ruleId: LintRuleId | "parse";
   severity: "error" | "warning";
   message: string;
   from: number;
@@ -173,7 +174,7 @@ export function applyEdits(source: string, edits: readonly LintEdit[]): string {
   return next;
 }
 
-/** Lint one diagram. Parse errors from Mermaid are added by the editor, not here. */
+/** Lint one diagram. Mermaid syntax errors are added by `lintDiagramSource`. */
 export function lintDiagram(source: string, options: LintOptions = {}): LintDiagnostic[] {
   const enabled = normalizeLintRules(options.rules);
   const diagnostics: LintDiagnostic[] = [];

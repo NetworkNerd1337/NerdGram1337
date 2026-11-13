@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { seedEmptyDataDir } from "../src/seed.js";
+import { bundledSampleFiles, seedEmptyDataDir } from "../src/seed.js";
 import { makeTempDataDir } from "./helpers.js";
 
 describe("sample seed", () => {
@@ -22,6 +22,12 @@ describe("sample seed", () => {
     expect(await fs.readFile(path.join(temp.dir, "Examples", "Sequence.mmd"), "utf8")).toContain("sequence");
     expect(await fs.readFile(path.join(temp.dir, "WAN.mmd"), "utf8")).toContain("nerdgram:Sites/Atlanta.mmd");
     expect(await fs.readFile(path.join(temp.dir, "Sites", "Atlanta.mmd"), "utf8")).toContain("nerdgram:WAN.mmd");
+    const samples = await bundledSampleFiles();
+    expect(samples.length).toBeGreaterThanOrEqual(5);
+    for (const relative of samples) {
+      const seeded = await fs.readFile(path.join(temp.dir, relative), "utf8");
+      expect(seeded.length, relative).toBeGreaterThan(0);
+    }
     await fs.writeFile(welcome, "flowchart LR\n  Edited\n");
     expect(await seedEmptyDataDir()).toBe(false);
     expect(await fs.readFile(welcome, "utf8")).toContain("Edited");

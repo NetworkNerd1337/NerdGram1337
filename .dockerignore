@@ -26,12 +26,9 @@ reference.bak
 **/*.pem
 **/*.key
 
-# Keep the three sample diagrams. Everything else under diagrams/ stays out.
-diagrams/**
-!diagrams/Welcome.mmd
-!diagrams/NetworkMap.mmd
-!diagrams/Examples/
-!diagrams/Examples/Sequence.mmd
+# Sample diagrams, including subfolders, are copied into the image and seeded
+# into an empty data directory. Do not exclude diagrams/. A new .mmd file
+# there has to ship with the others. server/test/docker.test.ts checks that.
 
 screenshots
 docs

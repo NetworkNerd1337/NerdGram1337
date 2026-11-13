@@ -2,7 +2,8 @@ import type { Express, NextFunction, Request, RequestHandler, Response } from "e
 import { Router } from "express";
 import { importDiagramData } from "./diagramData.js";
 import { createGeneratedDiagram, importInputFromBody, refreshGeneratedDiagram } from "./diagramDataFiles.js";
-import { lintDiagram, normalizeLintRules, type LintRuleId } from "./diagramLint.js";
+import { normalizeLintRules, type LintRuleId } from "./diagramLint.js";
+import { lintDiagramSource } from "./mermaidSyntax.js";
 import * as store from "./fsStore.js";
 import { sendError } from "./httpError.js";
 import { buildOpenApiSpec, openApiPath, V1_ROUTES, type V1Route, type V1Scope } from "./openapi.js";
@@ -244,14 +245,14 @@ export function mountAutomationApi(app: Express, options: MountV1Options = {}): 
         const file = await store.readFile(requested);
         res.json({
           path: file.path,
-          diagnostics: lintDiagram(file.content, { diagramPaths: paths, sourcePath: file.path }),
+          diagnostics: await lintDiagramSource(file.content, { diagramPaths: paths, sourcePath: file.path }),
         });
         return;
       }
-      const diagrams: { path: string; diagnostics: ReturnType<typeof lintDiagram> }[] = [];
+      const diagrams: { path: string; diagnostics: Awaited<ReturnType<typeof lintDiagramSource>> }[] = [];
       for (const filePath of paths) {
         const content = await store.readFile(filePath);
-        const diagnostics = lintDiagram(content.content, { diagramPaths: paths, sourcePath: filePath });
+        const diagnostics = await lintDiagramSource(content.content, { diagramPaths: paths, sourcePath: filePath });
         if (diagnostics.length > 0) diagrams.push({ path: filePath, diagnostics });
       }
       res.json({ checked: paths.length, diagrams });
@@ -268,7 +269,7 @@ export function mountAutomationApi(app: Express, options: MountV1Options = {}): 
       }
       const diagramPaths = paths.slice(0, 5000).map((item: string) => item.slice(0, 500));
       res.json({
-        diagnostics: lintDiagram(req.body.source, {
+        diagnostics: await lintDiagramSource(req.body.source, {
           diagramPaths,
           rules: readLintRules(req.body.rules),
           sourcePath,

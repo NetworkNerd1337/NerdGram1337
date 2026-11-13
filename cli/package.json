@@ -1,6 +1,6 @@
 {
   "name": "nerdgram",
-  "version": "1.0.6",
+  "version": "1.1.0",
   "description": "Command-line tool for a local NerdGram1337 server",
   "type": "module",
   "bin": {

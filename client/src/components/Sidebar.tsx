@@ -119,9 +119,15 @@ export function Sidebar({
       </div>
 
       <div className="nav-section">
-        <div className="nav-label">Sync</div>
-        <Link className="nav-link" to="/settings">
+        <div className="nav-label">Settings</div>
+        <Link className="nav-link" to="/settings#github-sync">
           GitHub sync
+        </Link>
+        <Link className="nav-link" to="/settings#tokens">
+          Automation tokens
+        </Link>
+        <Link className="nav-link" to="/settings#diagram-checks">
+          Diagram checks
         </Link>
       </div>
 

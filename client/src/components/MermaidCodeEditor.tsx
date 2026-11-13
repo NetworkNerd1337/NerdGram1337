@@ -9,9 +9,10 @@ import {
   dropCursor,
   highlightActiveLine,
   highlightActiveLineGutter,
+  EditorView,
   keymap,
   lineNumbers,
-  type EditorView,
+  type EditorView as EditorViewType,
 } from "@codemirror/view";
 import { oneDark } from "@codemirror/theme-one-dark";
 import CodeMirror from "@uiw/react-codemirror";
@@ -24,7 +25,7 @@ import { undoLintFixOrHistory } from "../lib/lintActions";
 import { LINT_RULES_EVENT, readLintRules } from "../lib/lintSettings";
 import { LINT_DELAY_MS, lintMermaidDoc, toCodeMirrorDiagnostics, type ReportedDiagnostic } from "../lib/mermaidLint";
 
-function toggleMermaidComment(view: EditorView): boolean {
+function toggleMermaidComment(view: EditorViewType): boolean {
   const lineNumbers = new Set<number>();
   for (const range of view.state.selection.ranges) {
     const from = view.state.doc.lineAt(range.from).number;
@@ -141,12 +142,13 @@ export function MermaidCodeEditor({
       Prec.high(keymap.of([{ key: "Mod-/", run: toggleMermaidComment, preventDefault: true }])),
       EditorState.tabSize.of(2),
       EditorState.readOnly.of(readOnly),
+      EditorView.contentAttributes.of({ "aria-label": ariaLabel }),
     ],
-    [pathsKey, readOnly, sourcePath],
+    [ariaLabel, pathsKey, readOnly, sourcePath],
   );
 
   return (
-    <div className="mermaid-code-editor" aria-label={ariaLabel}>
+    <div className="mermaid-code-editor">
       <CodeMirror
         value={value}
         height="100%"

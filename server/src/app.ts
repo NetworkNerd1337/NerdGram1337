@@ -27,7 +27,8 @@ import * as updates from "./updates/service.js";
 import { getVersionInfo } from "./updates/versionInfo.js";
 import { importDiagramData } from "./diagramData.js";
 import { createGeneratedDiagram, importInputFromBody, refreshGeneratedDiagram } from "./diagramDataFiles.js";
-import { lintDiagram, normalizeLintRules, type LintRuleId } from "./diagramLint.js";
+import { normalizeLintRules, type LintRuleId } from "./diagramLint.js";
+import { lintDiagramSource } from "./mermaidSyntax.js";
 import { registerTokenRoutes } from "./tokens.js";
 import { mountAutomationApi } from "./v1.js";
 import type { RateLimit } from "./renderDiagram.js";
@@ -228,7 +229,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     }
   });
 
-  app.post("/api/lint", (req, res) => {
+  app.post("/api/lint", async (req, res) => {
     try {
       if (!jsonObject(req, res)) return;
       const source = req.body?.source;
@@ -243,7 +244,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const diagramPaths = readDiagramPaths(req.body?.diagramPaths);
       const rules = readLintRulesBody(req.body?.rules);
       const sourcePath = typeof req.body?.sourcePath === "string" ? req.body.sourcePath : undefined;
-      res.json({ diagnostics: lintDiagram(source, { diagramPaths, rules, sourcePath }) });
+      res.json({ diagnostics: await lintDiagramSource(source, { diagramPaths, rules, sourcePath }) });
     } catch (err) {
       sendError(res, err);
     }
@@ -253,10 +254,10 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     try {
       const files = walkDiagramFiles(await store.buildTree());
       const diagramPaths = files.map((file) => file.path);
-      const diagrams: { path: string; diagnostics: ReturnType<typeof lintDiagram> }[] = [];
+      const diagrams: { path: string; diagnostics: Awaited<ReturnType<typeof lintDiagramSource>> }[] = [];
       for (const file of files) {
         const content = await store.readFile(file.path);
-        const diagnostics = lintDiagram(content.content, { diagramPaths, sourcePath: file.path });
+        const diagnostics = await lintDiagramSource(content.content, { diagramPaths, sourcePath: file.path });
         if (diagnostics.length > 0) diagrams.push({ path: file.path, diagnostics });
       }
       res.json({ checked: files.length, diagrams });

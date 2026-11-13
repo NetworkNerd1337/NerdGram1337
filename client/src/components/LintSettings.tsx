@@ -9,7 +9,7 @@ export function LintSettings() {
   };
 
   return (
-    <section className="sync-card">
+    <section className="sync-card" id="diagram-checks">
       <h2>Diagram checks</h2>
       <p>
         Warnings show in the editor gutter and the problems list. They do not block the preview or

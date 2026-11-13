@@ -3,6 +3,7 @@ import { ApiError, api } from "../api";
 import { FALLBACK_THEME, thumbnailCacheKey } from "../lib/frontMatter";
 import { renderMermaid } from "../lib/mermaidRender";
 import { lookupThumbnailRecord, rememberThumbnail, scheduleThumbnail } from "../lib/thumbnailCache";
+import { svgForImage } from "../../../server/src/svgImage.ts";
 
 type MermaidThumbnailProps = {
   path: string;
@@ -173,7 +174,7 @@ function SanitizedSvg({ svg }: { svg: string }) {
   useEffect(() => {
     const image = imageRef.current;
     if (!image) return;
-    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    const url = URL.createObjectURL(new Blob([svgForImage(svg)], { type: "image/svg+xml" }));
     image.src = url;
     return () => {
       URL.revokeObjectURL(url);

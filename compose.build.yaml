@@ -1,0 +1,19 @@
+# Local build of this tree. Merge it over compose.yaml:
+#
+#   docker compose -f compose.yaml -f compose.build.yaml up -d --build
+#
+# The image name is nerdgram1337:local. It is not the published
+# ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z tag. docker compose pull, without
+# this file, still pulls the published tag from compose.yaml.
+#
+# The Dockerfile needs BuildKit (the default on Docker Engine 23 and later).
+
+services:
+  nerdgram:
+    image: nerdgram1337:local
+    build:
+      context: .
+      args:
+        NERDGRAM_VERSION: "1.1.0"
+        NERDGRAM_CODENAME: "Atlas"
+        NERDGRAM_COMMIT: ${NERDGRAM_COMMIT:-}

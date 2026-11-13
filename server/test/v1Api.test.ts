@@ -240,6 +240,12 @@ describe("automation API", () => {
       .send({ source: "flowchart LR\n  A[One] --> B[Two]\n" });
     expect(lintPosted.status).toBe(200);
     expect(lintPosted.body.diagnostics).toEqual([]);
+    const lintBroken = await request(server)
+      .post("/api/v1/lint")
+      .set(auth)
+      .send({ source: "flowchart LR\n  A -->\n" });
+    expect(lintBroken.status).toBe(200);
+    expect(lintBroken.body.diagnostics.some((item: { ruleId: string; line: number; severity: string }) => item.ruleId === "parse" && item.severity === "error" && item.line === 2)).toBe(true);
 
     const generated = await request(server).post("/api/v1/generate").set(auth).send({ text: links, path: "Campus.mmd", title: "Campus" });
     expect(generated.status).toBe(201);

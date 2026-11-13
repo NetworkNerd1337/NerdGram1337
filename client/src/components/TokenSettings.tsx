@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { Modal } from "./Modal";
 
 type TokenMeta = {
   id: string;
@@ -23,6 +24,7 @@ export function TokenSettings() {
   const [revealed, setRevealed] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
 
   const refresh = async () => {
     const listed = await api.listTokens();
@@ -33,8 +35,10 @@ export function TokenSettings() {
     void refresh().catch((err: unknown) => setError(messageOf(err)));
   }, []);
 
+  const pending = tokens.find((token) => token.id === confirmId);
+
   return (
-    <section className="sync-card">
+    <section className="sync-card" id="tokens">
       <h2>Automation tokens</h2>
       <p>
         Scripts and CI call <code>/api/v1</code> with <code>Authorization: Bearer</code>.
@@ -105,20 +109,34 @@ export function TokenSettings() {
             type="button"
             className="btn btn-danger"
             disabled={busy || token.revokedAt != null}
-            onClick={() => {
-              setBusy(true);
-              setError(null);
-              void api
-                .revokeToken(token.id)
-                .then(() => refresh())
-                .catch((err: unknown) => setError(messageOf(err)))
-                .finally(() => setBusy(false));
-            }}
+            onClick={() => setConfirmId(token.id)}
           >
             Revoke
           </button>
         </div>
       ))}
+      {pending ? (
+        <Modal
+          title={`Revoke ${pending.name}?`}
+          confirmLabel="Revoke token"
+          onClose={() => setConfirmId(null)}
+          onConfirm={() => {
+            const id = pending.id;
+            setConfirmId(null);
+            setBusy(true);
+            setError(null);
+            void api
+              .revokeToken(id)
+              .then(() => refresh())
+              .catch((err: unknown) => setError(messageOf(err)))
+              .finally(() => setBusy(false));
+          }}
+        >
+          <p>
+            {pending.name} ({pending.prefix}…) stops working immediately. This does not delete diagrams.
+          </p>
+        </Modal>
+      ) : null}
     </section>
   );
 }
