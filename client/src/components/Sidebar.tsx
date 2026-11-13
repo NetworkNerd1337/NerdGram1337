@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import type { DragPayload } from "../lib/drag";
 import type { TreeNode } from "../types";
 import { Brand } from "./Brand";
 import { FolderTree } from "./FolderTree";
@@ -14,6 +15,11 @@ type SidebarProps = {
   trashCount?: number;
   trashActive?: boolean;
   onOpenTrash?: () => void;
+  dropHighlight?: { path: string; valid: boolean } | null;
+  onFolderDragOver?: (path: string, event: DragPayload) => void;
+  onFolderDrop?: (path: string, event: DragPayload) => void;
+  onTrashDragOver?: (event: DragPayload) => void;
+  onTrashDrop?: (event: DragPayload) => void;
 };
 
 export function Sidebar({
@@ -26,7 +32,18 @@ export function Sidebar({
   trashCount = 0,
   trashActive = false,
   onOpenTrash,
+  dropHighlight = null,
+  onFolderDragOver,
+  onFolderDrop,
+  onTrashDragOver,
+  onTrashDrop,
 }: SidebarProps) {
+  const rootDrop =
+    dropHighlight?.path === ""
+      ? dropHighlight.valid
+        ? " drop-valid"
+        : " drop-invalid"
+      : "";
   return (
     <aside className="sidebar">
       <Link to="/" onClick={() => onSelectFolder("")}>
@@ -47,8 +64,10 @@ export function Sidebar({
         <div className="nav-label">Your space</div>
         <button
           type="button"
-          className={`nav-link${currentFolder === "" && !trashActive ? " active" : ""}`}
+          className={`nav-link${currentFolder === "" && !trashActive ? " active" : ""}${rootDrop}`}
           onClick={() => onSelectFolder("")}
+          onDragOver={onFolderDragOver ? (event) => onFolderDragOver("", event) : undefined}
+          onDrop={onFolderDrop ? (event) => onFolderDrop("", event) : undefined}
         >
           Dashboard
         </button>
@@ -56,6 +75,8 @@ export function Sidebar({
           type="button"
           className={`nav-link${trashActive ? " active" : ""}`}
           onClick={() => onOpenTrash?.()}
+          onDragOver={onTrashDragOver}
+          onDrop={onTrashDrop}
         >
           Trash{trashCount > 0 ? ` (${trashCount})` : ""}
         </button>
@@ -63,6 +84,9 @@ export function Sidebar({
           nodes={tree}
           currentPath={currentFolder}
           onSelectFolder={onSelectFolder}
+          dropHighlight={dropHighlight}
+          onFolderDragOver={onFolderDragOver}
+          onFolderDrop={onFolderDrop}
         />
       </div>
 

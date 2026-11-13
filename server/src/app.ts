@@ -2,6 +2,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import * as store from "./fsStore.js";
+import { importDiagrams } from "./import.js";
 import * as history from "./history.js";
 import * as locks from "./locks.js";
 import { ensureDataRoot, REPO_ROOT, resolveSafePath, toRelativePath } from "./paths.js";
@@ -211,6 +212,34 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
         return;
       }
       const result = await store.moveItem(from, toFolder);
+      res.json(result);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/duplicate", async (req, res) => {
+    try {
+      const itemPath = String(req.body?.path || "");
+      if (!itemPath) {
+        res.status(400).json({ error: "path is required", code: "invalid" });
+        return;
+      }
+      const result = await store.duplicateItem(itemPath);
+      res.status(201).json(result);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/import", async (req, res) => {
+    try {
+      if (req.body?.folder != null && typeof req.body.folder !== "string") {
+        res.status(400).json({ error: "folder must be a string", code: "invalid" });
+        return;
+      }
+      const folder = typeof req.body?.folder === "string" ? req.body.folder : "";
+      const result = await importDiagrams(folder, req.body?.files);
       res.json(result);
     } catch (err) {
       sendError(res, err);

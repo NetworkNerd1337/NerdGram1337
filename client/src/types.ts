@@ -48,3 +48,12 @@ export type FolderListing = {
   folders: TreeNode[];
   files: TreeNode[];
 };
+
+export type ImportFileResult = {
+  name: string;
+  status: "created" | "renamed" | "replaced" | "skipped" | "collision" | "error";
+  path?: string;
+  suggestedPath?: string;
+  code?: string;
+  error?: string;
+};
