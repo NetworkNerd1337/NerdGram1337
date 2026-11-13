@@ -24,6 +24,7 @@ import * as templates from "./templates.js";
 import * as thumbnails from "./thumbnails.js";
 import * as updates from "./updates/service.js";
 import { getVersionInfo } from "./updates/versionInfo.js";
+import { lintDiagram, normalizeLintRules, type LintRuleId } from "./diagramLint.js";
 
 export type ListenPort = { port: number };
 
@@ -107,6 +108,39 @@ function optionalBoolean(value: unknown, name: string): boolean | undefined {
     throw httpFail(400, `${name} must be a boolean`, "invalid");
   }
   return value;
+}
+
+function readDiagramPaths(value: unknown): string[] | undefined {
+  if (value == null) return undefined;
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw httpFail(400, "diagramPaths must be an array of strings", "invalid");
+  }
+  return value.slice(0, 5000).map((item: string) => item.slice(0, 500));
+}
+
+function readLintRulesBody(value: unknown): Partial<Record<LintRuleId, boolean>> | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw httpFail(400, "rules must be an object", "invalid");
+  }
+  const record = value as Record<string, unknown>;
+  for (const [key, flag] of Object.entries(record)) {
+    if (flag != null && typeof flag !== "boolean") {
+      throw httpFail(400, `${key} must be a boolean`, "invalid");
+    }
+  }
+  return normalizeLintRules(record);
+}
+
+type DiagramFile = { type: string; path: string; children?: DiagramFile[] };
+
+function walkDiagramFiles(nodes: DiagramFile[]): DiagramFile[] {
+  const files: DiagramFile[] = [];
+  for (const node of nodes) {
+    if (node.type === "folder" && node.children) files.push(...walkDiagramFiles(node.children));
+    else if (node.type === "file") files.push(node);
+  }
+  return files;
 }
 
 export function createApp(options: CreateAppOptions = {}): express.Express {
@@ -229,6 +263,42 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     try {
       const diagrams = await store.listDiagramMeta();
       res.json({ diagrams });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/lint", (req, res) => {
+    try {
+      if (!jsonObject(req, res)) return;
+      const source = req.body?.source;
+      if (typeof source !== "string") {
+        res.status(400).json({ error: "source must be a string", code: "invalid" });
+        return;
+      }
+      if (source.length > 512 * 1024) {
+        res.status(400).json({ error: "source is too large", code: "invalid" });
+        return;
+      }
+      const diagramPaths = readDiagramPaths(req.body?.diagramPaths);
+      const rules = readLintRulesBody(req.body?.rules);
+      res.json({ diagnostics: lintDiagram(source, { diagramPaths, rules }) });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.get("/api/diagram-lint", async (_req, res) => {
+    try {
+      const files = walkDiagramFiles(await store.buildTree());
+      const diagramPaths = files.map((file) => file.path);
+      const diagrams: { path: string; diagnostics: ReturnType<typeof lintDiagram> }[] = [];
+      for (const file of files) {
+        const content = await store.readFile(file.path);
+        const diagnostics = lintDiagram(content.content, { diagramPaths });
+        if (diagnostics.length > 0) diagrams.push({ path: file.path, diagnostics });
+      }
+      res.json({ checked: files.length, diagrams });
     } catch (err) {
       sendError(res, err);
     }

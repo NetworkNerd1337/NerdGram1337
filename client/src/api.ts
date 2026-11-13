@@ -1,3 +1,4 @@
+import type { LintDiagnostic } from "../../server/src/diagramLint.ts";
 import type {
   DiagramMeta,
   DiagramSearchResponse,
@@ -89,6 +90,13 @@ export const api = {
       body: JSON.stringify({ path, cacheKey, svg }),
     }),
   diagramMeta: () => request<{ diagrams: DiagramMeta[] }>("/api/diagram-meta"),
+  lintSource: (source: string, diagramPaths?: string[]) =>
+    request<{ diagnostics: LintDiagnostic[] }>("/api/lint", {
+      method: "POST",
+      body: JSON.stringify({ source, diagramPaths }),
+    }),
+  diagramLint: () =>
+    request<{ checked: number; diagrams: { path: string; diagnostics: LintDiagnostic[] }[] }>("/api/diagram-lint"),
   search: (query: string, options?: { namesOnly?: boolean; signal?: AbortSignal }) => {
     const params = new URLSearchParams({ q: query });
     if (options?.namesOnly) params.set("names", "1");

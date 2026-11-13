@@ -27,13 +27,36 @@ function initializeFor(code: string, fallbackTheme: string): void {
 }
 
 export async function parseMermaid(code: string): Promise<void> {
+  const inspected = await inspectMermaid(code);
+  if (!inspected.ok) throw inspected.error instanceof Error ? inspected.error : new Error(String(inspected.error));
+}
+
+export type MermaidInspection =
+  | { ok: true; diagram: unknown }
+  | { ok: false; error: unknown };
+
+/**
+ * Parse the diagram text Mermaid received, without trimming, so a failure's
+ * line and column refer to the editor buffer. Returns the diagram database
+ * when Mermaid built one.
+ */
+export async function inspectMermaid(code: string): Promise<MermaidInspection> {
   return enqueue(async () => {
-    const trimmed = code.trim();
-    if (!trimmed) {
-      throw new Error("Paste Mermaid markdown to render a diagram.");
+    if (!code.trim()) {
+      return { ok: false, error: new Error("Paste Mermaid markdown to render a diagram.") };
     }
-    initializeFor(trimmed, FALLBACK_THEME);
-    await mermaid.parse(trimmed);
+    initializeFor(code, FALLBACK_THEME);
+    const api = (mermaid as { mermaidAPI?: { getDiagramFromText?: (text: string) => Promise<unknown> } }).mermaidAPI;
+    try {
+      if (api?.getDiagramFromText) {
+        const diagram = await api.getDiagramFromText(code);
+        return { ok: true, diagram };
+      }
+      await mermaid.parse(code);
+      return { ok: true, diagram: null };
+    } catch (error) {
+      return { ok: false, error };
+    }
   });
 }
 
