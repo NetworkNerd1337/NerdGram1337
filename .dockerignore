@@ -33,6 +33,7 @@ diagrams/**
 !diagrams/Examples/Sequence.mmd
 
 screenshots
+docs
 **/*.mp4
 **/*.webp
 

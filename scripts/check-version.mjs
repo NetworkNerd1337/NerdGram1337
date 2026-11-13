@@ -1,6 +1,9 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+
+/** Planned releases named in the README. They are not the package.json pin. */
+const POLICY_VERSIONS = new Set(["1.0.5", "2.0.0"]);
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const files = ["package.json", "client/package.json", "server/package.json"];
@@ -38,4 +41,132 @@ if (!compose.includes(image) || !compose.includes(`NERDGRAM_VERSION: "${expected
   process.exit(1);
 }
 
-console.log(`Version ${expected} matches in root, client, server, Dockerfile, and compose.yaml.`);
+const readmePath = join(root, "README.md");
+if (!existsSync(readmePath)) {
+  console.error("README.md is missing. Version examples in the README are checked against package.json.");
+  process.exit(1);
+}
+const readme = readFileSync(readmePath, "utf8");
+assertReadmeVersions(readme, expected);
+assertReadmeLinks(readme, root);
+
+console.log(
+  `Version ${expected} matches in root, client, server, Dockerfile, compose.yaml, and README.md.`,
+);
+
+/**
+ * Install commands use a vX.Y.Z placeholder so a release does not have to edit
+ * every example. An image tag, `nerdgram1337@`, or NERDGRAM_VERSION pin has to
+ * match the root package.json. `npm run version:sync` does not rewrite the README.
+ *
+ * The versioning section also names planned releases. Those are not the
+ * package that is checked out today, so they are allowed in prose only.
+ */
+function assertReadmeVersions(markdown, version) {
+  const pinPatterns = [
+    /ghcr\.io\/networknerd1337\/nerdgram1337:v(\d+\.\d+\.\d+)/g,
+    /nerdgram1337@(\d+\.\d+\.\d+)/g,
+    /NERDGRAM_VERSION(?:=|:)\s*"?(\d+\.\d+\.\d+)/g,
+  ];
+  const bad = new Set();
+  for (const pattern of pinPatterns) {
+    for (const match of markdown.matchAll(pattern)) {
+      if (match[1] !== version) bad.add(match[0]);
+    }
+  }
+  for (const match of markdown.matchAll(/(?<![A-Za-z0-9.])v(\d+\.\d+\.\d+)\b/g)) {
+    if (match[1] !== version && !POLICY_VERSIONS.has(match[1])) bad.add(match[0]);
+  }
+  if (bad.size > 0) {
+    console.error(`README version examples must match package.json ${version}, or use the vX.Y.Z placeholder.`);
+    console.error("Prose may also name the planned releases v1.0.5 (Atlas) and v2.0.0 (Meridian).");
+    for (const item of bad) console.error(`  ${item}`);
+    process.exit(1);
+  }
+}
+
+function assertReadmeLinks(markdown, repoRoot) {
+  const { headings, links } = markdownOutsideFences(markdown);
+  const slugs = githubSlugs(headings);
+  const missingAnchors = [];
+  const missingFiles = [];
+  let skippedFiles = 0;
+
+  for (const target of links) {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(target)) continue;
+    const hash = target.startsWith("#") ? target.slice(1) : null;
+    if (hash != null && !target.includes("/")) {
+      const id = decodeURIComponent(hash);
+      if (!slugs.has(id)) missingAnchors.push(`#${id}`);
+      continue;
+    }
+    const pathPart = target.split("#")[0] ?? "";
+    if (!pathPart) continue;
+    const relative = decodeURIComponent(pathPart);
+    if (existsSync(join(repoRoot, relative))) continue;
+    if (relative.includes("/")) {
+      const top = relative.split("/")[0];
+      if (!existsSync(join(repoRoot, top))) {
+        skippedFiles += 1;
+        continue;
+      }
+    }
+    missingFiles.push(relative);
+  }
+
+  if (missingAnchors.length > 0 || missingFiles.length > 0) {
+    console.error("README links do not resolve.");
+    for (const item of missingAnchors) console.error(`  missing anchor ${item}`);
+    for (const item of missingFiles) console.error(`  missing file ${item}`);
+    process.exit(1);
+  }
+  if (skippedFiles > 0) {
+    console.log(`README file links skipped: ${skippedFiles} (those directories are not in this tree).`);
+  }
+}
+
+function markdownOutsideFences(markdown) {
+  const headings = [];
+  const links = [];
+  let fence = null;
+  for (const line of markdown.split(/\r?\n/)) {
+    const fenceMatch = /^(```+|~~~+)/.exec(line.trim());
+    if (fenceMatch) {
+      const marker = fenceMatch[1][0];
+      if (!fence) fence = marker;
+      else if (fence === marker) fence = null;
+      continue;
+    }
+    if (fence) continue;
+    const heading = /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
+    if (heading) headings.push(headingText(heading[2]));
+    for (const match of line.matchAll(/!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)) {
+      links.push(match[1]);
+    }
+  }
+  return { headings, links };
+}
+
+function headingText(raw) {
+  return raw
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/[*_]{1,3}([^*_]+)[*_]{1,3}/g, "$1")
+    .trim();
+}
+
+function githubSlugs(headings) {
+  const seen = new Map();
+  const slugs = new Set();
+  for (const text of headings) {
+    const base = text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, "")
+      .trim()
+      .replace(/\s+/g, "-");
+    const count = seen.get(base) ?? 0;
+    seen.set(base, count + 1);
+    slugs.add(count === 0 ? base : `${base}-${count}`);
+  }
+  return slugs;
+}
