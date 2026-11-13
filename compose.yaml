@@ -6,7 +6,12 @@
 #
 # The image tag matches the root package.json version. scripts/check-version.mjs
 # fails when they drift. ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z and :latest
-# are pushed when that vX.Y.Z tag is released. Until then, build locally:
+# are published for each release. Pull that image:
+#
+#   docker compose pull
+#   docker compose up -d
+#
+# To build from this tree instead:
 #
 #   docker compose up -d --build
 #
@@ -23,11 +28,11 @@ name: nerdgram1337
 
 services:
   nerdgram:
-    image: ghcr.io/networknerd1337/nerdgram1337:v1.0.5
+    image: ghcr.io/networknerd1337/nerdgram1337:v1.0.6
     build:
       context: .
       args:
-        NERDGRAM_VERSION: "1.0.5"
+        NERDGRAM_VERSION: "1.0.6"
         NERDGRAM_CODENAME: "Atlas"
         NERDGRAM_COMMIT: ${NERDGRAM_COMMIT:-}
     container_name: nerdgram1337

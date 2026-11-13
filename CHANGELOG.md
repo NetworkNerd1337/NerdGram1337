@@ -2,6 +2,17 @@
 
 Release notes for GitHub Releases. The heading for a release is `## X.Y.Z "Code name" - YYYY-MM-DD`. It has to match the root `package.json` version. `npm run version:check` requires the quoted code name to match the `codenames` map. The notes script also accepts `## X.Y.Z` and `## [X.Y.Z]`, with an optional code name and date. The `vX.Y.Z` tag is the version the update check reads. The GitHub Release title is `vX.Y.Z "Code name"`, from that tag and the map.
 
+## 1.0.6 "Atlas" - 2026-11-13
+
+Patch on the Atlas line. The code name stays Atlas. These fixes come from the v1.0.5 release run and a fresh-user smoke test.
+
+- The Docker publish workflow no longer fails the release when it cannot mark the GHCR package public. `PATCH /user/packages/container/nerdgram1337` returns HTTP 404, the image push itself succeeds, and anonymous pulls already work. The step now prints a warning and leaves the job green. Set the package to Public once in the package settings.
+- GitHub Releases use only the CHANGELOG section. The release workflow turns off generated release notes, so GitHub does not append its own "What's Changed" list.
+- The Docker quick start pulls `ghcr.io/networknerd1337/nerdgram1337`. The current tag is on the Releases page, and `:latest` is the newest full release. Building from a clone is the alternative. The old "no image until the tag is pushed" wording is gone from the README and from `compose.yaml`.
+- Placeholders such as `<data>` and `<repo>` are written in code formatting, and the README explains those names once, so GitHub does not hide them as HTML tags.
+- The bundled Mermaid syntax reference points Getting Started at `https://mermaid.js.org/intro/getting-started.html`, including the initialize-call anchor, and points the other short diagram links that 404 (`flowchart`, `sequenceDiagram`, `stateDiagram`, `pie`, `sankey`) at the current `/syntax/` pages. A reference sync rewrites those retired URLs if upstream still emits them.
+- An editor lock still expires 90 seconds after its last heartbeat, and the open editor keeps refreshing it. Leaving the page releases the lock with `navigator.sendBeacon`, with a keepalive request if the beacon is refused, so a navigation that aborts `POST /api/lock/release` does not leave the lock behind. If a lock is left anyway, the read-only banner offers **Take over editing**. After confirmation, that call replaces the lock only once it is stale. A second window that is still heartbeating keeps the lock.
+
 ## 1.0.5 "Atlas" - 2026-11-13
 
 First release of NerdGram1337. Atlas is the code name for the whole 1.x line. Diagrams are `.mmd` files on this computer. The app is a local, single-user tool: there is no account and no login.

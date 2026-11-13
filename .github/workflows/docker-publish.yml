@@ -1,7 +1,8 @@
 # Push ghcr.io/networknerd1337/nerdgram1337 when a vX.Y.Z tag is pushed.
 # The same tag filter as release.yml. The tag must match package.json
 # (scripts/check-version.mjs). Nothing is pushed on pull requests.
-# Until the first tag is pushed, the image is not on GHCR. Build it locally.
+# A failed attempt to mark the package public does not fail the job.
+# Set Public once in the GHCR package settings if a pull needs it.
 
 name: Docker
 
@@ -83,16 +84,11 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           package=nerdgram1337
-          for attempt in 1 2 3 4 5 6; do
-            if gh api --method PATCH "/user/packages/container/${package}" -f visibility=public; then
-              echo "Package visibility is public."
-              exit 0
-            fi
-            echo "Package visibility was not updated (attempt ${attempt})."
-            sleep 10
-          done
-          echo "The image was pushed, but this token could not mark the package public."
-          echo "Open the package on GitHub and set its visibility to Public once."
-          exit 1
+          if gh api --method PATCH "/user/packages/container/${package}" -f visibility=public; then
+            echo "Package visibility is public."
+            exit 0
+          fi
+          echo "::warning::The image was pushed, but this token could not mark the GHCR package public. PATCH /user/packages/container/${package} failed (often HTTP 404). Set visibility to Public once in the package settings: https://github.com/users/NetworkNerd1337/packages/container/nerdgram1337/settings — a later release does not need this step to succeed."
+          exit 0

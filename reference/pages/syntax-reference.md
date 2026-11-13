@@ -41,7 +41,7 @@ erDiagram
 
 Ctrl + Enter|Run ▶
 
-The [Getting Started](https://mermaid.js.org/getting-started.html) section can also provide some practical examples of mermaid syntax.
+The [Getting Started](https://mermaid.js.org/intro/getting-started.html) section can also provide some practical examples of mermaid syntax.
 
 ## Diagram Breaking [​](#diagram-breaking)
 
@@ -83,7 +83,7 @@ Now, that you've seen what you should not add to your diagrams, you can play aro
 
 Configuration is the third part of Mermaid, after deployment and syntax. It deals with the different ways that Mermaid can be customized across different deployments.
 
-If you are interested in altering and customizing your Mermaid Diagrams, you will find the methods and values available for [Configuration](https://mermaid.js.org/config/setup/README.html) here. It includes themes. This section will introduce the different methods of configuring the behaviors and appearances of Mermaid Diagrams. The following are the most commonly used methods, and they are all tied to Mermaid [Deployment](https://mermaid.js.org/getting-started.html) methods.
+If you are interested in altering and customizing your Mermaid Diagrams, you will find the methods and values available for [Configuration](https://mermaid.js.org/config/setup/README.html) here. It includes themes. This section will introduce the different methods of configuring the behaviors and appearances of Mermaid Diagrams. The following are the most commonly used methods, and they are all tied to Mermaid [Deployment](https://mermaid.js.org/intro/getting-started.html) methods.
 
 ### Configuration Section in the [Live Editor](https://mermaid.live). [​](#configuration-section-in-the-live-editor)
 
@@ -91,7 +91,7 @@ Here you can edit certain values to change the behavior and appearance of the di
 
 Each of these techniques are functionally equivalent, but better for different deployments.
 
-### [The initialize() call](https://mermaid.js.org/getting-started.html#_4-calling-the-mermaid-javascript-api) [​](#the-initialize-call)
+### [The initialize() call](https://mermaid.js.org/intro/getting-started.html#_4-calling-the-mermaid-javascript-api) [​](#the-initialize-call)
 
 Used when Mermaid is called via an API, or through a `<script>` tag.
 

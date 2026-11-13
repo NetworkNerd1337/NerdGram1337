@@ -253,6 +253,19 @@ export const api = {
       body: JSON.stringify({ path, token }),
       keepalive: init?.keepalive,
     }),
+  takeoverLock: (path: string, sessionId: string) =>
+    request<{
+      path: string;
+      token: string;
+      sessionId: string;
+      heartbeatAt: string;
+      acquiredAt: string;
+      heartbeatEveryMs: number;
+      staleAfterMs: number;
+    }>("/api/lock/takeover", {
+      method: "POST",
+      body: JSON.stringify({ path, sessionId }),
+    }),
   templates: () => request<{ templates: TemplateSummary[] }>("/api/templates"),
   template: (id: string) =>
     request<TemplateSummary>(`/api/templates/${encodeURIComponent(id)}`),

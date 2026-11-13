@@ -51,4 +51,6 @@ jobs:
           body_path: release-notes.md
           draft: false
           prerelease: false
-          generate_release_notes: true
+          # The body is the CHANGELOG section only. GitHub's generated
+          # "What's Changed" list would be appended after it.
+          generate_release_notes: false

@@ -236,12 +236,12 @@ describe("update check API", () => {
     useEnv("NERDGRAM_COMMIT", "abc1234");
     const res = await request(app()).get("/api/version").set("Host", HOST);
     expect(res.status).toBe(200);
-    expect(res.body.version).toBe("1.0.5");
+    expect(res.body.version).toBe("1.0.6");
     expect(res.body.codename).toBe("Atlas");
     expect(res.body.commit).toBe("abc1234");
     expect(res.body.installKind).toBe("zip");
     const health = await request(app()).get("/api/health").set("Host", HOST);
-    expect(health.body.version).toBe("1.0.5");
+    expect(health.body.version).toBe("1.0.6");
     expect(health.body.codename).toBe("Atlas");
     expect(health.body.installKind).toBe("zip");
   });
@@ -460,20 +460,20 @@ describe("update check API", () => {
 
   it("confirms a matching version and reports one that still lags", async () => {
     useEnv("NERDGRAM_INSTALL", "docker");
-    mockFetch(() => jsonResponse(200, releaseBody("v1.0.5")));
+    mockFetch(() => jsonResponse(200, releaseBody("v1.0.6")));
     const same = await manualCheck();
     expect(same.matchesLatest).toBe(true);
     expect(same.updateAvailable).toBe(false);
     expect(same.canApply).toBe(false);
     expect(same.codename).toBe("Atlas");
-    expect(same.docker?.tag).toBe("v1.0.5");
+    expect(same.docker?.tag).toBe("v1.0.6");
     expect(same.docker?.steps.map((step) => step.command).join("\n")).toContain("127.0.0.1:8787:8787");
     expect(same.docker?.persistNote).toContain(".nerdgram-git");
     mockFetch(() => jsonResponse(200, releaseBody("v2.0.0", "Meridian notes", { name: 'v9.9.9 "Nope"' })));
     const behind = await manualCheck();
     expect(behind.matchesLatest).toBe(false);
     expect(behind.updateAvailable).toBe(true);
-    expect(behind.currentVersion).toBe("1.0.5");
+    expect(behind.currentVersion).toBe("1.0.6");
     expect(behind.codename).toBe("Atlas");
     expect(behind.latest?.version).toBe("2.0.0");
     expect(behind.latest?.tag).toBe("v2.0.0");

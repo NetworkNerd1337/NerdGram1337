@@ -6,10 +6,12 @@ import { CommandsButton } from "../components/CommandPalette";
 import { useCommandHost } from "../components/commandPaletteContext";
 import { ConflictDialog } from "../components/ConflictDialog";
 import { DiagramInfoPanel } from "../components/DiagramInfoPanel";
+import { EditorLockBanner, TakeoverDialog } from "../components/EditorLockBanner";
 import { HistoryDialog } from "../components/HistoryDialog";
 import { MermaidCodeEditor } from "../components/MermaidCodeEditor";
 import { PresentationView } from "../components/PresentationView";
 import { revealEditorMatch, runFind, runGotoLine, runReplace } from "../lib/editorCommands";
+import { OTHER_WINDOW_NOTE, STILL_HELD_NOTE, releaseEditorLock } from "../lib/editorLock";
 import { exportDiagram, type ExportFormat } from "../lib/exportDiagram";
 import {
   cancelScheduledLockRelease,
@@ -95,6 +97,7 @@ export function EditorPage() {
   >("idle");
   const [exportError, setExportError] = useState<string | null>(null);
   const [lockNote, setLockNote] = useState<string | null>(null);
+  const [takeoverOpen, setTakeoverOpen] = useState(false);
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -228,6 +231,7 @@ export function EditorPage() {
     setAccess("loading");
     setConflict(null);
     setLockNote(null);
+    setTakeoverOpen(false);
     setCopyNote(null);
     setHistoryOpen(false);
     setLoadError(null);
@@ -268,9 +272,7 @@ export function EditorPage() {
         } catch (err) {
           if (!(err instanceof ApiError) || err.code !== "locked") throw err;
           if (!editorEpochIsCurrent(filePath, epoch)) return;
-          setLockNote(
-            "This diagram is open in another window. You can view it, but changes are not saved.",
-          );
+          setLockNote(OTHER_WINDOW_NOTE);
         }
 
         if (!editorEpochIsCurrent(filePath, epoch)) return;
@@ -295,7 +297,7 @@ export function EditorPage() {
       scheduleLockRelease(filePath, () => {
         clearStoredLock(filePath);
         if (lockTokenRef.current === token) lockTokenRef.current = null;
-        void api.releaseLock(filePath, token).catch(() => undefined);
+        releaseEditorLock(filePath, token);
       });
     };
   }, [filePath]);
@@ -330,7 +332,7 @@ export function EditorPage() {
       const token = lockTokenRef.current;
       if (!token) return;
       clearStoredLock(filePath);
-      void api.releaseLock(filePath, token, { keepalive: true }).catch(() => undefined);
+      releaseEditorLock(filePath, token);
     };
     window.addEventListener("pagehide", onHide);
     return () => window.removeEventListener("pagehide", onHide);
@@ -508,6 +510,63 @@ export function EditorPage() {
       setCopyNote(`Saved a copy to ${copyPath}`);
     } catch (err) {
       setCopyNote(err instanceof Error ? err.message : "Could not save a copy");
+    }
+  };
+
+  const confirmTakeover = async () => {
+    const currentPath = pathRef.current;
+    setTakeoverOpen(false);
+    try {
+      const lock = await api.takeoverLock(currentPath, editorSessionId());
+      if (pathRef.current !== currentPath) {
+        releaseEditorLock(currentPath, lock.token);
+        return;
+      }
+      const disk = await api.readFile(currentPath);
+      if (pathRef.current !== currentPath) {
+        releaseEditorLock(currentPath, lock.token);
+        return;
+      }
+      lockTokenRef.current = lock.token;
+      setLockToken(lock.token);
+      heartbeatEveryRef.current = lock.heartbeatEveryMs || heartbeatEveryRef.current;
+      writeStoredLock(currentPath, { token: lock.token, sessionId: lock.sessionId });
+      const localDirty = latestCodeRef.current !== lastSavedRef.current;
+      const diskChanged = baselineRef.current != null && disk.hash !== baselineRef.current.hash;
+      if (diskChanged && localDirty && latestCodeRef.current !== disk.content) {
+        conflictRef.current = true;
+        setConflict({
+          mine: latestCodeRef.current,
+          disk: disk.content,
+          diskMtimeMs: disk.mtimeMs,
+          diskHash: disk.hash,
+          open: true,
+        });
+        setAccess("edit");
+        setLockNote(null);
+        setSaveState("paused");
+        return;
+      }
+      if (!localDirty) {
+        skipNextSave.current = true;
+        lastSavedRef.current = disk.content;
+        setSavedCode(disk.content);
+        latestCodeRef.current = disk.content;
+        baselineRef.current = { mtimeMs: disk.mtimeMs, hash: disk.hash };
+        setCode(disk.content);
+      } else {
+        baselineRef.current = { mtimeMs: disk.mtimeMs, hash: disk.hash };
+      }
+      setAccess("edit");
+      setLockNote(null);
+      setSaveState(localDirty ? "idle" : "saved");
+    } catch (err) {
+      if (pathRef.current !== currentPath) return;
+      if (err instanceof ApiError && err.code === "locked") {
+        setLockNote(STILL_HELD_NOTE);
+        return;
+      }
+      setLockNote(err instanceof Error ? err.message : "Could not take over editing.");
     }
   };
 
@@ -726,17 +785,20 @@ export function EditorPage() {
         </div>
       )}
       {lockNote && (
-        <div className="editor-banner" role="status">
-          <div>{lockNote}</div>
-          {access === "readonly" && dirty && (
-            <div className="editor-banner-actions">
-              <button type="button" className="btn btn-primary" onClick={() => void saveCopy()}>
-                Save a copy
-              </button>
-            </div>
-          )}
-          {copyNote && <div>{copyNote}</div>}
-        </div>
+        <EditorLockBanner
+          note={lockNote}
+          readOnly={access === "readonly"}
+          dirty={dirty}
+          copyNote={copyNote}
+          onTakeOver={() => setTakeoverOpen(true)}
+          onSaveCopy={() => void saveCopy()}
+        />
+      )}
+      {takeoverOpen && (
+        <TakeoverDialog
+          onClose={() => setTakeoverOpen(false)}
+          onConfirm={() => void confirmTakeover()}
+        />
       )}
       {conflict && !conflict.open && (
         <div className="editor-banner" role="status">

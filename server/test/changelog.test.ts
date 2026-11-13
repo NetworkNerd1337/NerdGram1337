@@ -30,17 +30,16 @@ function notes(args: string[], changelog?: string): { code: number; stdout: stri
 }
 
 describe("changelog notes", () => {
-  it("prints the Atlas title and the 1.0.5 section without the heading", () => {
-    const title = notes(["--title", "v1.0.5"]);
+  it("prints the Atlas title and the 1.0.6 section without the heading", () => {
+    const title = notes(["--title", "v1.0.6"]);
     expect(title.code).toBe(0);
-    expect(title.stdout).toBe('v1.0.5 "Atlas"\n');
-    const body = notes(["v1.0.5"]);
+    expect(title.stdout).toBe('v1.0.6 "Atlas"\n');
+    const body = notes(["v1.0.6"]);
     expect(body.code).toBe(0);
-    expect(body.stdout.startsWith("First release of NerdGram1337.")).toBe(true);
-    expect(body.stdout).toContain("### Highlights");
-    expect(body.stdout).toContain("### Known limitations");
-    expect(body.stdout).not.toContain('## 1.0.5 "Atlas"');
-    expect(body.stdout).toContain("/data/Welcome.mmd");
+    expect(body.stdout.startsWith("Patch on the Atlas line.")).toBe(true);
+    expect(body.stdout).toContain("Take over editing");
+    expect(body.stdout).not.toContain('## 1.0.6 "Atlas"');
+    expect(body.stdout).not.toContain("### Highlights");
   });
 
   it("matches a quoted heading and a bracket heading, and not a longer patch", () => {
