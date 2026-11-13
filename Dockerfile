@@ -28,7 +28,7 @@ COPY server server
 COPY templates templates
 COPY reference reference
 COPY diagrams diagrams
-COPY Dockerfile compose.yaml ./
+COPY Dockerfile compose.yaml README.md LICENSE ./
 ARG NERDGRAM_VERSION=1.0.0
 ENV NERDGRAM_VERSION=${NERDGRAM_VERSION}
 RUN node scripts/check-version.mjs \
