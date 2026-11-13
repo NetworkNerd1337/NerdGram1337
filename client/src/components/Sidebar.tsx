@@ -55,7 +55,7 @@ export function Sidebar({
         <input
           value={search}
           onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search diagrams"
+          placeholder="Search name, title, or tags"
           aria-label="Search diagrams"
         />
       </div>

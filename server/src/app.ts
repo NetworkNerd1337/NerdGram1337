@@ -127,6 +127,15 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     }
   });
 
+  app.get("/api/diagram-meta", async (_req, res) => {
+    try {
+      const diagrams = await store.listDiagramMeta();
+      res.json({ diagrams });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
   app.get("/api/file", async (req, res) => {
     try {
       const filePath = String(req.query.path || "");

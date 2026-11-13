@@ -1,45 +1,52 @@
 import mermaid from "mermaid";
+import { diagramInitConfig, FALLBACK_THEME } from "./frontMatter";
 
-let initialized = false;
 let renderSeq = 0;
+let chain: Promise<unknown> = Promise.resolve();
 
-export type MermaidTheme = "default" | "neutral" | "dark" | "forest" | "base";
-
-export function initMermaid(theme: MermaidTheme = "neutral") {
-  mermaid.initialize({
-    startOnLoad: false,
-    securityLevel: "loose",
-    theme,
-    fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
-  });
-  initialized = true;
+function enqueue<T>(task: () => Promise<T>): Promise<T> {
+  const run = chain.then(task, task);
+  chain = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
 }
 
-export function setMermaidTheme(theme: MermaidTheme) {
-  initMermaid(theme);
+function initializeFor(code: string, fallbackTheme: string): void {
+  const config = diagramInitConfig(code, fallbackTheme);
+  mermaid.initialize(config as Parameters<typeof mermaid.initialize>[0]);
 }
 
 export async function parseMermaid(code: string): Promise<void> {
-  if (!initialized) initMermaid();
-  const trimmed = code.trim();
-  if (!trimmed) {
-    throw new Error("Paste Mermaid markdown to render a diagram.");
-  }
-  await mermaid.parse(trimmed);
+  return enqueue(async () => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      throw new Error("Paste Mermaid markdown to render a diagram.");
+    }
+    initializeFor(trimmed, FALLBACK_THEME);
+    await mermaid.parse(trimmed);
+  });
 }
 
+/**
+ * Render a diagram. `fallbackTheme` is used only when the file does not set
+ * `config.theme` (or a diagram-type theme). Front matter and `%%{init}%%`
+ * are applied by initializing with that config before `mermaid.render`, so a
+ * file theme wins over the app fallback.
+ */
 export async function renderMermaid(
   code: string,
-  theme: MermaidTheme = "neutral",
+  fallbackTheme: string = FALLBACK_THEME,
 ): Promise<{ svg: string; id: string }> {
-  if (!initialized) initMermaid(theme);
-  else setMermaidTheme(theme);
-
-  const id = `nerdgram-${++renderSeq}`;
-  const trimmed = code.trim();
-  if (!trimmed) {
-    throw new Error("Paste Mermaid markdown to render a diagram.");
-  }
-  const { svg } = await mermaid.render(id, trimmed);
-  return { svg, id };
+  return enqueue(async () => {
+    const trimmed = code.trim();
+    if (!trimmed) {
+      throw new Error("Paste Mermaid markdown to render a diagram.");
+    }
+    initializeFor(trimmed, fallbackTheme);
+    const id = `nerdgram-${++renderSeq}`;
+    const { svg } = await mermaid.render(id, trimmed);
+    return { svg, id };
+  });
 }

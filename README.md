@@ -368,6 +368,38 @@ Use the same variable with `npm start` when you run production mode. Set it in t
 
 Favorites metadata is stored in `diagrams/.meta/favorites.json` (or `<your data dir>/.meta/favorites.json` when `NERDGRAM_DATA_DIR` is set). `favorites.json` is written when you favorite or unfavorite a diagram. Local syntax-reference annotations are stored in `diagrams/.meta/syntax-overrides.json`. Trash, revision history, and editor locks live in that same `.meta` folder. The in-app folder tree hides `.meta`, and the `.mmd` files themselves stay plain text. See [Trash, version history, and editing locks](#trash-version-history-and-editing-locks).
 
+## Titles, themes, and notes
+
+A diagram can start with [Mermaid's YAML front matter](https://mermaid.js.org/config/configuration.html). The title, theme, look, and layout are stored in the `.mmd` file, so they stay with it when you duplicate, import, or copy the folder.
+
+```yaml
+---
+title: Network overview
+config:
+  theme: forest
+  look: handDrawn
+  layout: elk
+nerdgram:
+  description: Edge path into the lab
+  tags:
+    - network
+  notes: |
+    Draft for the lab write-up.
+---
+flowchart LR
+  Internet --> Firewall
+```
+
+In the editor, **Diagram info** edits the title, description, notes, and tags, and sets the theme, look, and layout. The preview toolbar has the same theme, look, and layout controls. Those controls write this header and update the preview. The preview, dashboard thumbnails, and SVG, PNG, JPG, and PDF export use the theme in the file. If the file does not set one, they use dark.
+
+The dashboard shows the title when the file has one, and the file name otherwise. A description is shown under the title. Tags are chips; click a chip, or use the tag row, to filter the dashboard. Search matches the file name, title, tags, description, and notes. A file name match is listed before a title match.
+
+`%%` at the start of a line is a Mermaid comment. In the code pane, Ctrl+/ (Cmd+/ on a Mac) comments or uncomments the selected lines.
+
+Description, notes, and tags live under `nerdgram:` because Mermaid has no field for them. Mermaid still reads `title` and `config` from the same header. A diagram with no front matter previews the same way as before.
+
+An older `%%{init: ...}%%` line still renders. The editor can move that config into the front matter. If the header is not valid YAML, the editor shows the error and leaves the file text alone.
+
 ## Trash, version history, and editing locks
 
 Delete on the dashboard moves a diagram or a folder into the trash. It does not erase the files. Open **Trash** in the sidebar to restore an item or delete it permanently. **Empty trash** removes everything in the trash for good.
@@ -523,7 +555,7 @@ The production build has not been created. From the project root run `npm run bu
 - Paste-only Mermaid create flow (`/new`)
 - Split code + live preview editor with autosave (500 ms) and Auto-Update preview
 - Mermaid syntax highlighting, autocomplete (diagram types, keywords, arrows, snippets, existing node IDs), bracket matching, and inline parse-error diagnostics in the code pane
-- Theme switcher for previews (dark, default, neutral, forest, base)
+- Per-diagram title, description, notes, and tags in Mermaid front matter, with theme, look, and layout written into the file. The dashboard shows the title and can filter by tag. Ctrl+/ or Cmd+/ toggles a `%%` comment
 - Export to SVG, PNG, JPG, and PDF (PDF is built client-side from the live SVG so the current theme is preserved)
 - Offline Mermaid syntax reference library with sync from mermaid.js.org
 

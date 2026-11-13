@@ -1,10 +1,24 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
+import { FALLBACK_THEME, thumbnailCacheKey } from "../lib/frontMatter";
 import { renderMermaid } from "../lib/mermaidRender";
 
 type MermaidThumbnailProps = {
   path: string;
 };
+
+const MAX_THUMBNAILS = 80;
+const thumbnailCache = new Map<string, string>();
+
+function rememberThumbnail(key: string, svg: string) {
+  if (thumbnailCache.has(key)) thumbnailCache.delete(key);
+  thumbnailCache.set(key, svg);
+  while (thumbnailCache.size > MAX_THUMBNAILS) {
+    const oldest = thumbnailCache.keys().next().value;
+    if (oldest == null) break;
+    thumbnailCache.delete(oldest);
+  }
+}
 
 export function MermaidThumbnail({ path }: MermaidThumbnailProps) {
   const [svg, setSvg] = useState<string | null>(null);
@@ -22,7 +36,17 @@ export function MermaidThumbnail({ path }: MermaidThumbnailProps) {
           }
           return;
         }
-        const result = await renderMermaid(file.content, "dark");
+        const key = thumbnailCacheKey(file.content);
+        const cached = thumbnailCache.get(key);
+        if (cached) {
+          if (!cancelled) {
+            setSvg(cached);
+            setFailed(false);
+          }
+          return;
+        }
+        const result = await renderMermaid(file.content, FALLBACK_THEME);
+        rememberThumbnail(key, result.svg);
         if (!cancelled) {
           setSvg(result.svg);
           setFailed(false);
