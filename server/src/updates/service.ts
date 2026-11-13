@@ -5,6 +5,7 @@ import { dockerGuideForTag, type DockerGuide } from "./dockerGuide.js";
 import { applyGitUpdate, type ApplyOutcome } from "./gitApply.js";
 import type { InstallKind } from "./installKind.js";
 import { setCommandRunner } from "./commands.js";
+import { releaseCodename } from "./codename.js";
 import { relationToRelease, stableTag, parseSemver } from "./semver.js";
 import {
   loadUpdateFile,
@@ -22,19 +23,22 @@ const DEFAULT_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 export type UpdatePhase = "disabled" | "current" | "available" | "ahead" | "unknown" | "no_release";
 
+export type PublicRelease = StoredRelease & { codename: string | null };
+
 export type UpdateStatus = {
   enabled: boolean;
   automatic: boolean;
   includePrerelease: boolean;
   installKind: InstallKind;
   currentVersion: string;
+  codename: string | null;
   commit: string | null;
   phase: UpdatePhase;
   updateAvailable: boolean;
   skipped: boolean;
   dismissed: boolean;
   skippedVersions: string[];
-  latest: StoredRelease | null;
+  latest: PublicRelease | null;
   checkedAt: string | null;
   error: { code: string; message: string } | null;
   canApply: boolean;
@@ -415,19 +419,25 @@ function statusOf(file: UpdateFile, info: VersionInfo): UpdateStatus {
     includePrerelease,
     installKind: info.installKind,
     currentVersion: info.version,
+    codename: info.codename,
     commit: info.commit,
     phase,
     updateAvailable,
     skipped,
     dismissed,
     skippedVersions: file.skipped,
-    latest: relation === "incomparable" && release?.prerelease && !includePrerelease ? null : release,
+    latest: relation === "incomparable" && release?.prerelease && !includePrerelease ? null : presentRelease(release),
     checkedAt: file.cache?.fetchedAt ?? null,
     error: enabled ? file.manualError : null,
     canApply,
     matchesLatest: relation === "same",
     docker,
   };
+}
+
+function presentRelease(release: StoredRelease | null): PublicRelease | null {
+  if (!release) return null;
+  return { ...release, codename: releaseCodename(release.version, release.name) };
 }
 
 function asFailure(err: unknown): { code: string; message: string } {

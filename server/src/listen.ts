@@ -145,7 +145,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Ser
   console.log(`Data directory: ${ensureDataRoot()}`);
   const version = getVersionInfo();
   console.log(
-    `Install: ${version.installKind} ${version.version}${version.commit ? ` ${version.commit}` : ""}`,
+    `Install: ${version.installKind} ${version.version}${version.codename ? ` "${version.codename}"` : ""}${version.commit ? ` ${version.commit}` : ""}`,
   );
   console.log(`Server module dir: ${__dirname}`);
 

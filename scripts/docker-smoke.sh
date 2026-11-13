@@ -92,14 +92,25 @@ wait_docker_health "$NAME"
 HEALTH="$(curl -fsS "http://127.0.0.1:${PORT}/api/health" -H "Host: 127.0.0.1:${PORT}")"
 export HEALTH
 node --input-type=module -e '
+import { readFileSync } from "node:fs";
 const health = JSON.parse(process.env.HEALTH);
+const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+const major = String(pkg.version).split(".")[0];
 if (health.ok !== true) throw new Error("health ok");
 if (health.installKind !== "docker") throw new Error("installKind " + health.installKind);
 if (health.dataDir !== "/data") throw new Error("dataDir " + health.dataDir);
 if (health.name !== "NerdGram1337") throw new Error("name");
+if (health.version !== pkg.version) throw new Error("version " + health.version);
+if (health.codename !== pkg.codenames[major]) throw new Error("codename " + health.codename);
 const expected = process.env.NERDGRAM_EXPECT_COMMIT || "";
 if (expected && health.commit !== expected) throw new Error("commit " + health.commit);
 '
+LABEL_VERSION="$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' "$IMAGE")"
+LABEL_NAME="$(docker inspect -f '{{index .Config.Labels "org.opencontainers.image.codename"}}' "$IMAGE")"
+ENV_NAME="$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$IMAGE" | sed -n 's/^NERDGRAM_CODENAME=//p')"
+test "$LABEL_VERSION" = "$(node -p "require('./package.json').version")"
+test "$LABEL_NAME" = "$(node scripts/codenames.mjs)"
+test "$ENV_NAME" = "$LABEL_NAME"
 
 curl -fsS "http://127.0.0.1:${PORT}/api/health" -H "Host: localhost:${PORT}" >/dev/null
 curl -fsS "http://localhost:${PORT}/api/health" >/dev/null

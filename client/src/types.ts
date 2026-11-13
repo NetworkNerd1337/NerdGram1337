@@ -151,6 +151,7 @@ export type InstallKind = "git" | "docker" | "zip" | "unknown";
 export type VersionInfo = {
   name: string;
   version: string;
+  codename: string | null;
   commit: string | null;
   installKind: InstallKind;
 };
@@ -158,6 +159,7 @@ export type VersionInfo = {
 export type UpdateRelease = {
   tag: string;
   version: string;
+  codename: string | null;
   name: string;
   body: string;
   htmlUrl: string;
@@ -171,6 +173,7 @@ export type UpdateStatus = {
   includePrerelease: boolean;
   installKind: InstallKind;
   currentVersion: string;
+  codename: string | null;
   commit: string | null;
   phase: "disabled" | "current" | "available" | "ahead" | "unknown" | "no_release";
   updateAvailable: boolean;

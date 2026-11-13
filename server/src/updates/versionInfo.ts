@@ -1,12 +1,14 @@
 import fs from "node:fs";
 import path from "node:path";
 import { REPO_ROOT } from "../paths.js";
+import { codenameForVersion } from "./codename.js";
 import { detectInstallKind, type InstallKind } from "./installKind.js";
 import { parseSemver } from "./semver.js";
 
 export type VersionInfo = {
   name: "NerdGram1337";
   version: string;
+  codename: string | null;
   commit: string | null;
   installKind: InstallKind;
 };
@@ -38,9 +40,11 @@ export function readCommit(installKind: InstallKind, repoRoot = REPO_ROOT): stri
 
 export function getVersionInfo(): VersionInfo {
   const installKind = detectInstallKind();
+  const version = readRootVersion();
   return {
     name: "NerdGram1337",
-    version: readRootVersion(),
+    version,
+    codename: codenameForVersion(version),
     commit: readCommit(installKind),
     installKind,
   };

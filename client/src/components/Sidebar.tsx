@@ -6,6 +6,7 @@ import { CommandsButton } from "./CommandPalette";
 import { FolderTree } from "./FolderTree";
 import { useUpdate } from "./updateContext";
 import { displayName } from "../lib/paths";
+import { formatVersionLabel } from "../lib/versionLabel";
 
 type SidebarProps = {
   tree: TreeNode[];
@@ -45,7 +46,9 @@ export function Sidebar({
   onTrashDrop,
 }: SidebarProps) {
   const updates = useUpdate();
-  const version = updates.status?.currentVersion;
+  const version = updates.status
+    ? formatVersionLabel(updates.status.currentVersion, updates.status.codename)
+    : null;
   const rootDrop =
     dropHighlight?.path === ""
       ? dropHighlight.valid
@@ -147,7 +150,7 @@ export function Sidebar({
       </div>
       <button type="button" className="sidebar-about" onClick={updates.openAbout}>
         <span>About</span>
-        <span>{version ? `v${version}` : "version"}</span>
+        <span>{version ?? "version"}</span>
       </button>
     </aside>
   );

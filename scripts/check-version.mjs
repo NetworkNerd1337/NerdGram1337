@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { findChangelogSection } from "./changelog-notes.mjs";
+import { currentCodename } from "./codenames.mjs";
 
 /** Planned releases named in the README. They are not the package.json pin. */
 const POLICY_VERSIONS = new Set(["1.0.5", "2.0.0"]);
@@ -19,6 +21,13 @@ if (typeof expected !== "string" || !semver.test(expected)) {
   process.exit(1);
 }
 
+const named = currentCodename(root);
+if (!named.ok) {
+  console.error(named.error);
+  process.exit(1);
+}
+const codename = named.codename;
+
 const drifted = versions.filter((item) => item.version !== expected);
 if (drifted.length > 0) {
   console.error("package.json versions differ. The root package.json version is the source of truth.");
@@ -33,11 +42,60 @@ if (versionArgs.length === 0 || versionArgs.some((version) => version !== expect
   console.error(`Dockerfile ARG NERDGRAM_VERSION must be ${expected}. Found ${versionArgs.join(", ") || "none"}.`);
   process.exit(1);
 }
+const codenameArgs = [...dockerfile.matchAll(/^ARG NERDGRAM_CODENAME=(\S+)\s*$/gm)].map((match) => match[1]);
+if (codenameArgs.length === 0 || codenameArgs.some((name) => name !== codename)) {
+  console.error(`Dockerfile ARG NERDGRAM_CODENAME must be ${codename}. Found ${codenameArgs.join(", ") || "none"}.`);
+  process.exit(1);
+}
+if (!dockerfile.includes('org.opencontainers.image.codename="${NERDGRAM_CODENAME}"')) {
+  console.error("Dockerfile must label org.opencontainers.image.codename from NERDGRAM_CODENAME.");
+  process.exit(1);
+}
+if (!dockerfile.includes("NERDGRAM_CODENAME=${NERDGRAM_CODENAME}")) {
+  console.error("Dockerfile must bake NERDGRAM_CODENAME into the image environment.");
+  process.exit(1);
+}
 
 const compose = readFileSync(join(root, "compose.yaml"), "utf8");
 const image = `ghcr.io/networknerd1337/nerdgram1337:v${expected}`;
 if (!compose.includes(image) || !compose.includes(`NERDGRAM_VERSION: "${expected}"`)) {
   console.error(`compose.yaml must pin ${image} and NERDGRAM_VERSION ${expected}.`);
+  process.exit(1);
+}
+if (!compose.includes(`NERDGRAM_CODENAME: "${codename}"`)) {
+  console.error(`compose.yaml must pin NERDGRAM_CODENAME ${codename}.`);
+  process.exit(1);
+}
+
+for (const file of ["package-lock.json", "client/package-lock.json", "server/package-lock.json"]) {
+  const lock = JSON.parse(readFileSync(join(root, file), "utf8"));
+  const top = lock.version;
+  const nested = lock.packages?.[""]?.version;
+  if (top !== expected || nested !== expected) {
+    console.error(`${file} version must be ${expected}. Found ${top} and ${nested}.`);
+    console.error("Run npm run version:sync from the project root.");
+    process.exit(1);
+  }
+}
+
+const changelogPath = join(root, "CHANGELOG.md");
+if (!existsSync(changelogPath)) {
+  console.error("CHANGELOG.md is missing. The release notes section has to match package.json.");
+  process.exit(1);
+}
+const section = findChangelogSection(readFileSync(changelogPath, "utf8"), expected);
+if (!section) {
+  console.error(`CHANGELOG.md needs a section for ${expected}, for example ## ${expected} "${codename}" - YYYY-MM-DD.`);
+  process.exit(1);
+}
+if (section.codename !== codename) {
+  console.error(
+    `CHANGELOG heading for ${expected} must name the code name ${codename}. Found ${section.codename ?? "no code name"}.`,
+  );
+  process.exit(1);
+}
+if (!section.body) {
+  console.error(`CHANGELOG.md section ${expected} is empty.`);
   process.exit(1);
 }
 
@@ -51,7 +109,7 @@ assertReadmeVersions(readme, expected);
 assertReadmeLinks(readme, root);
 
 console.log(
-  `Version ${expected} matches in root, client, server, Dockerfile, compose.yaml, and README.md.`,
+  `Version ${expected} "${codename}" matches in root, client, server, Dockerfile, compose.yaml, CHANGELOG.md, and README.md.`,
 );
 
 /**
