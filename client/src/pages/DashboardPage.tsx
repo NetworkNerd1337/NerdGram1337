@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import { MermaidThumbnail } from "../components/MermaidThumbnail";
 import { Modal } from "../components/Modal";
 import { Sidebar } from "../components/Sidebar";
@@ -12,7 +12,7 @@ import {
   formatRelativeTime,
   joinPath,
 } from "../lib/paths";
-import type { TreeNode } from "../types";
+import type { TrashItem, TreeNode } from "../types";
 
 function findFolder(nodes: TreeNode[], path: string): TreeNode[] {
   if (!path) return nodes;
@@ -41,6 +41,24 @@ export function DashboardPage() {
   >(null);
   const [nameValue, setNameValue] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [showTrash, setShowTrash] = useState(false);
+  const [trash, setTrash] = useState<TrashItem[]>([]);
+  const [collision, setCollision] = useState<{
+    id: string;
+    path: string;
+    suggestedPath?: string;
+  } | null>(null);
+
+  const loadTrash = async () => {
+    const result = await api.trash();
+    setTrash(result.items);
+  };
+
+  useEffect(() => {
+    void loadTrash().catch((err: unknown) => {
+      setActionError(err instanceof Error ? err.message : "Could not load trash");
+    });
+  }, []);
 
   const folderNodes = useMemo(() => findFolder(tree, folder), [tree, folder]);
   const folders = folderNodes.filter((n) => n.type === "folder");
@@ -111,13 +129,62 @@ export function DashboardPage() {
   };
 
   const handleDelete = async (path: string) => {
-    if (!window.confirm(`Delete "${displayName(path)}"?`)) return;
+    if (!window.confirm(`Move "${displayName(path)}" to the trash? You can restore it later.`)) {
+      return;
+    }
     setActionError(null);
     try {
       await api.delete(path);
+      if (folder === path || folder.startsWith(`${path}/`)) setFolder("");
       await refresh();
+      await loadTrash();
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Delete failed");
+    }
+  };
+
+  const restoreItem = async (
+    id: string,
+    options?: { path?: string; overwrite?: boolean },
+  ) => {
+    setActionError(null);
+    try {
+      await api.restoreTrash(id, options);
+      setCollision(null);
+      await refresh();
+      await loadTrash();
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "collision") {
+        setCollision({
+          id,
+          path: err.path || "that path",
+          suggestedPath: err.suggestedPath,
+        });
+        return;
+      }
+      setActionError(err instanceof Error ? err.message : "Restore failed");
+    }
+  };
+
+  const purgeItem = async (id: string) => {
+    if (!window.confirm("Delete this item permanently? This cannot be undone.")) return;
+    setActionError(null);
+    try {
+      await api.purgeTrash(id);
+      await loadTrash();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not delete that item");
+    }
+  };
+
+  const emptyTrash = async () => {
+    if (!window.confirm("Empty the trash? This permanently deletes everything in it.")) return;
+    setActionError(null);
+    try {
+      await api.emptyTrash();
+      await loadTrash();
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Could not empty the trash");
     }
   };
 
@@ -128,14 +195,26 @@ export function DashboardPage() {
       <Sidebar
         tree={tree}
         favorites={favorites}
-        currentFolder={folder}
+        currentFolder={showTrash ? "__trash__" : folder}
         search={search}
-        onSearch={setSearch}
-        onSelectFolder={setFolder}
+        onSearch={(value) => {
+          setSearch(value);
+          if (value.trim()) setShowTrash(false);
+        }}
+        onSelectFolder={(path) => {
+          setShowTrash(false);
+          setFolder(path);
+        }}
+        trashCount={trash.length}
+        trashActive={showTrash}
+        onOpenTrash={() => {
+          setShowTrash(true);
+          setSearch("");
+        }}
       />
       <main className="main">
         <div className="page-header">
-          <h1>{search.trim() ? "Search" : title}</h1>
+          <h1>{showTrash ? "Trash" : search.trim() ? "Search" : title}</h1>
           <Link className="btn btn-ghost" to="/new">
             Paste Mermaid
           </Link>
@@ -146,12 +225,21 @@ export function DashboardPage() {
         )}
 
         <div className="toolbar">
-          <button type="button" className="btn btn-primary" onClick={openCreateDiagram}>
-            New diagram
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={openCreateFolder}>
-            New folder
-          </button>
+          {showTrash ? (
+            <button type="button" className="btn btn-danger" onClick={() => void emptyTrash()} disabled={trash.length === 0}>
+              Empty trash
+            </button>
+          ) : (
+            <>
+              <button type="button" className="btn btn-primary" onClick={openCreateDiagram}>
+                New diagram
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={openCreateFolder}>
+                New folder
+              </button>
+            </>
+          )}
+          {!showTrash && (
           <div className="view-toggle" role="group" aria-label="View mode">
             <button
               type="button"
@@ -168,11 +256,18 @@ export function DashboardPage() {
               List
             </button>
           </div>
+          )}
         </div>
 
         {loading ? <p>Loading workspace…</p> : null}
 
-        {searchResults ? (
+        {showTrash ? (
+          <TrashList
+            items={trash}
+            onRestore={(id) => void restoreItem(id)}
+            onPurge={(id) => void purgeItem(id)}
+          />
+        ) : searchResults ? (
           <>
             <div className="section-title">
               {searchResults.length} match{searchResults.length === 1 ? "" : "es"}
@@ -297,6 +392,47 @@ export function DashboardPage() {
         )}
       </main>
 
+      {collision && (
+        <div className="modal-backdrop" role="presentation" onClick={() => setCollision(null)}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="restore-collision-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 id="restore-collision-title">That path is taken</h3>
+            <p>
+              Something is already at <strong>{collision.path}</strong>. You can restore a copy
+              beside it, or replace it. Replacing moves the current item to the trash.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setCollision(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={() => void restoreItem(collision.id, { overwrite: true })}
+              >
+                Replace
+              </button>
+              {collision.suggestedPath && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() =>
+                    void restoreItem(collision.id, { path: collision.suggestedPath })
+                  }
+                >
+                  Restore as {displayName(collision.suggestedPath)}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {modal && (
         <Modal
           title={
@@ -322,6 +458,41 @@ export function DashboardPage() {
           />
         </Modal>
       )}
+    </div>
+  );
+}
+
+function TrashList({
+  items,
+  onRestore,
+  onPurge,
+}: {
+  items: TrashItem[];
+  onRestore: (id: string) => void;
+  onPurge: (id: string) => void;
+}) {
+  if (items.length === 0) {
+    return <div className="empty-state">Trash is empty.</div>;
+  }
+  return (
+    <div className="list-view">
+      {items.map((item) => (
+        <div key={item.id} className="list-row">
+          <div>
+            <strong>{item.name}</strong>
+            <div style={{ color: "var(--ink-soft)", fontSize: "0.8rem" }}>
+              {item.type === "folder" ? "Folder" : "Diagram"} · {item.originalPath} ·{" "}
+              {new Date(item.deletedAt).toLocaleString()}
+            </div>
+          </div>
+          <button type="button" className="btn btn-primary" onClick={() => onRestore(item.id)}>
+            Restore
+          </button>
+          <button type="button" className="btn btn-danger" onClick={() => onPurge(item.id)}>
+            Delete permanently
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

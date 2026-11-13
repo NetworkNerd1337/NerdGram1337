@@ -211,6 +211,12 @@ describe("API host, origin, and path guards", () => {
       .set(headers);
     expect(removed.status).toBe(204);
     await expect(fs.access(path.join(dir, "Lab", "Edge.mmd"))).rejects.toThrow();
+
+    const trashed = await request(app).get("/api/trash").set("Host", HOST);
+    expect(trashed.status).toBe(200);
+    expect(trashed.body.items).toEqual([
+      expect.objectContaining({ originalPath: "Lab/Edge.mmd", type: "file" }),
+    ]);
   });
 
   it("rejects path traversal and null bytes without writing outside the data root", async () => {

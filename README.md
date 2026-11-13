@@ -366,7 +366,33 @@ npm run dev
 
 Use the same variable with `npm start` when you run production mode. Set it in the terminal first, then start the server, so that process inherits it.
 
-Favorites metadata is stored in `diagrams/.meta/favorites.json` (or `<your data dir>/.meta/favorites.json` when `NERDGRAM_DATA_DIR` is set). The `.meta` folder is created when the app reads favorites. `favorites.json` is written when you favorite or unfavorite a diagram. Local syntax-reference annotations are stored in `diagrams/.meta/syntax-overrides.json`. The in-app folder tree hides `.meta`.
+Favorites metadata is stored in `diagrams/.meta/favorites.json` (or `<your data dir>/.meta/favorites.json` when `NERDGRAM_DATA_DIR` is set). `favorites.json` is written when you favorite or unfavorite a diagram. Local syntax-reference annotations are stored in `diagrams/.meta/syntax-overrides.json`. Trash, revision history, and editor locks live in that same `.meta` folder. The in-app folder tree hides `.meta`, and the `.mmd` files themselves stay plain text. See [Trash, version history, and editing locks](#trash-version-history-and-editing-locks).
+
+## Trash, version history, and editing locks
+
+Delete on the dashboard moves a diagram or a folder into the trash. It does not erase the files. Open **Trash** in the sidebar to restore an item or delete it permanently. **Empty trash** removes everything in the trash for good.
+
+Restore puts the item back at its original path. If something is already there, the app asks you to restore a copy (`Name (restored).mmd`, or `Name (restored 2)` and so on) or to replace the current item. Replacing moves that current item to the trash first, so it is not erased either.
+
+A folder is one trash entry. Restore puts the whole folder back, including every file that was inside it.
+
+Favorites come off the sidebar while an item is in the trash and go back when you restore it. If you restore to a different path, the favorite follows that path.
+
+Every save that changes a diagram keeps the previous contents as a revision. In the editor, **History** lists those revisions, shows the old text, and can restore one. Restoring writes the text you are replacing into history first, so you can undo a restore. The last **20** revisions are kept for each diagram. Older ones are dropped. There is no age limit, so a diagram you have not opened in a long time still has its recent history.
+
+Rename and move carry that history with the diagram. Trash does too. Permanently deleting an item deletes its history.
+
+The file you edit stays a plain `.mmd` file. Revisions, trash, and locks are under the data directory:
+
+- `.meta/trash/items/<id>/` — one soft-deleted file or folder, plus the favorites and revisions that belonged to it
+- `.meta/versions/p_<encoded-path>/` — the previous contents of one diagram
+- `.meta/locks/p_<encoded-path>.json` — the editor lock for one path
+
+Autosave still waits 500 ms after you stop typing, and Auto-Update still refreshes the preview. Each save sends the modification time and a content hash from the last time this editor loaded or saved the file. If the bytes on disk are different, autosave stops. You can reload the disk copy, overwrite the disk with your copy, or keep your copy without saving. Overwrite stores the disk copy as a revision first. Creating a diagram does not need a baseline. Saving over a file that already exists does: a second write with no baseline is refused, so a new diagram will not silently replace one that is already there.
+
+Opening a diagram takes a lock for that browser tab. Another tab, or a second NerdGram process pointed at the same data directory with a different `PORT`, can open the diagram read-only and is told that it is already open. The editor sends a heartbeat every **15 seconds**. If the heartbeat is missing for **90 seconds**, or the server process that held the lock has exited, the next editor can take the lock. Closing the tab releases it. These locks are not accounts and they do not stop you from editing the `.mmd` file in another program. That case is the conflict prompt above.
+
+You cannot rename, move, or trash a diagram (or a folder that contains it) while an editor still holds its lock. Close the editor first.
 
 ## Offline Mermaid syntax reference library
 
@@ -425,7 +451,7 @@ Two browser checks sit in front of that bind:
 
 `NERDGRAM_CORS_ORIGINS` is an optional comma-separated list of extra origins, for example when Vite falls over to port 5174 (see troubleshooting). It is not a wildcard.
 
-Paths stay inside the data directory. The server rejects null bytes and any path that escapes that directory, and diagram writes must be `.mmd` files.
+Paths stay inside the data directory. The server rejects null bytes, hidden paths such as `.meta`, and any path that escapes that directory. Diagram writes must be `.mmd` files. Editor locks only keep two windows from writing the same diagram. They are not authentication.
 
 ## Troubleshooting
 
@@ -471,10 +497,14 @@ The production build has not been created. From the project root run `npm run bu
 ## Features
 
 - Dashboard with folder tree, search, grid/list views
-- Create / rename / delete folders and diagrams
-- Favorite diagrams, stored in `.meta/favorites.json` inside the data folder
+- Create / rename / delete folders and diagrams. Delete moves them to trash
+- Trash, with restore, replace-or-copy when the old path is taken, and permanent purge
+- Per-diagram version history (the last 20 previous saves) that follows rename and move
+- Conflict check on autosave, so a file that changed on disk is not overwritten without a choice
+- One writable editor per diagram. A second tab opens read-only until the lock is released or goes stale
+- Favorite diagrams, stored in `.meta/favorites.json` inside the data folder. A favorite returns when you restore the diagram from trash
 - Paste-only Mermaid create flow (`/new`)
-- Split code + live preview editor with autosave
+- Split code + live preview editor with autosave (500 ms) and Auto-Update preview
 - Mermaid syntax highlighting, autocomplete (diagram types, keywords, arrows, snippets, existing node IDs), bracket matching, and inline parse-error diagnostics in the code pane
 - Theme switcher for previews (dark, default, neutral, forest, base)
 - Export to SVG, PNG, JPG, and PDF (PDF is built client-side from the live SVG so the current theme is preserved)

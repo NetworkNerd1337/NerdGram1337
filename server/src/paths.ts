@@ -35,6 +35,15 @@ export function resolveSafePath(relativePath: string): string {
     throw new Error("Invalid path");
   }
 
+  // Dot paths are bookkeeping (.meta) or files the dashboard already hides.
+  // ".." is left for the escape check below so traversal still reports as an escape.
+  const hidden = cleaned
+    .split("/")
+    .filter((part) => part.length > 0 && part !== "." && part !== "..");
+  if (hidden.some((part) => part.startsWith("."))) {
+    throw new Error("Invalid path");
+  }
+
   const absolute = path.resolve(root, cleaned === "" ? "." : cleaned);
   const relative = path.relative(root, absolute);
 

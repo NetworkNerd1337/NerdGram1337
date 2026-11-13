@@ -46,6 +46,12 @@ describe("resolveSafePath", () => {
     expect(() => resolveSafePath("safe\0.mmd")).toThrow(/Invalid path/);
   });
 
+  it("rejects hidden bookkeeping paths", () => {
+    expect(() => resolveSafePath(".meta")).toThrow(/Invalid path/);
+    expect(() => resolveSafePath(".meta/trash/items/x")).toThrow(/Invalid path/);
+    expect(() => resolveSafePath("Lab/.secret.mmd")).toThrow(/Invalid path/);
+  });
+
   it("does not create a file outside the data root when a traversal is rejected", async () => {
     const outside = path.join(path.dirname(dir), "nerdgram-escaped.mmd");
     expect(() => resolveSafePath("../nerdgram-escaped.mmd")).toThrow(/escapes/);
