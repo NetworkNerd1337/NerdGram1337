@@ -1,0 +1,21 @@
+agg-sw# show lldp neighbor-info detail
+-------------------------------------------------------------------------------
+Port                           : 1/1/1
+Neighbor Entries               : 1
+Neighbor System-Name           : core-sw
+Neighbor System-Description    : Aruba JL661A 6300M 48G CL4 4SFP56 Switch
+Neighbor Chassis-ID            : 00:11:22:33:44:55
+Neighbor Management-Address    : 10.6.0.1
+Neighbor Port-ID               : 1/1/49
+Neighbor Port-Description      : 1/1/49
+Neighbor Capabilities Available: Bridge, Router
+Neighbor Capabilities Enabled  : Bridge, Router
+-------------------------------------------------------------------------------
+Port                           : 1/1/2
+Neighbor Entries               : 1
+Neighbor System-Name           : access-sw
+Neighbor System-Description    : Aruba JL666A 6300F 24G Switch
+Neighbor Chassis-ID            : 00:11:22:33:44:77
+Neighbor Port-ID               : 1/1/1
+Neighbor Port-Description      : uplink
+Neighbor Capabilities Enabled  : Bridge

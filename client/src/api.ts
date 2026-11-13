@@ -175,12 +175,14 @@ export const api = {
     edgesMapping?: Record<string, string>;
     direction?: string;
     grouping?: boolean;
+    groupBy?: string;
+    localDevice?: string;
     title?: string;
     sourceFile?: string;
     edgesFile?: string;
   }) =>
     request<{
-      format: "csv" | "json";
+      format: "csv" | "json" | "cdp" | "lldp";
       shape: "links" | "nodes" | "edges" | "graph";
       headers: string[];
       edgesHeaders: string[];
@@ -206,6 +208,8 @@ export const api = {
     edgesMapping?: Record<string, string>;
     direction?: string;
     grouping?: boolean;
+    groupBy?: string;
+    localDevice?: string;
     title?: string;
     description?: string;
     sourceFile?: string;

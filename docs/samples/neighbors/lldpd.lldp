@@ -1,0 +1,26 @@
+edge#lldpctl
+-------------------------------------------------------------------------------
+LLDP neighbors:
+-------------------------------------------------------------------------------
+Interface:    eth0, via: LLDP, RID: 1, Time: 0 day, 00:01:12
+  Chassis:
+    ChassisID:    mac 00:11:22:33:44:55
+    SysName:      core-sw
+    SysDescr:     Arista Networks EOS version 4.28.3M
+    MgmtIP:       10.1.1.1
+    Capability:   Bridge, on
+    Capability:   Router, off
+  Port:
+    PortID:       ifname Ethernet49
+    PortDescr:    uplink
+-------------------------------------------------------------------------------
+Interface:    eth1, via: LLDP, RID: 2, Time: 0 day, 00:00:40
+  Chassis:
+    ChassisID:    mac 00:11:22:33:44:66
+    SysName:      dist-sw
+    SysDescr:     Linux running lldpd on Debian
+    Capability:   Bridge, on
+    Capability:   Station, on
+  Port:
+    PortID:       ifname eth2
+    PortDescr:    server

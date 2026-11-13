@@ -119,6 +119,62 @@ describe("generate wizard flow", () => {
     expect(previewRequest(state).grouping).toBe(true);
   });
 
+  it.each([
+    ["cdp", "Cisco CDP", "core-sw#show cdp neighbors detail\n-------------------------\nDevice ID: dist-sw\nPlatform: cisco C9300-48P, Capabilities: Switch\nInterface: Gi1/0/1, Port ID (outgoing port): Gi1/0/48\n"],
+    ["lldp", "LLDP neighbors", "core-sw#show lldp neighbors detail\nLocal Intf: Gi1/0/1\nPort id: Gi1/0/48\nSystem Name: dist-sw\nSystem Description: Cisco IOS Software\nEnabled Capabilities: B\n"],
+  ] as const)("chooses %s in the wizard and previews a diagram", (format, label, sample) => {
+    let state = initialWizardState("Sites");
+    const dispatch = (action: Parameters<typeof wizardReducer>[1]) => {
+      state = wizardReducer(state, action);
+    };
+    function render() {
+      act(() => {
+        if (!root) {
+          const host = document.createElement("div");
+          document.body.appendChild(host);
+          root = createRoot(host);
+        }
+        root?.render(
+          <GenerateWizard
+            state={state}
+            dispatch={dispatch}
+            busy={false}
+            onInspect={(step) => dispatch({ type: "result", result: inspection(state, step), step })}
+            onCreate={() => undefined}
+          />,
+        );
+      });
+    }
+
+    render();
+    setValue(document.querySelector<HTMLSelectElement>("#generate-format")!, format);
+    render();
+    expect(document.querySelector("label[for='generate-data']")?.textContent).toContain(label === "Cisco CDP" ? "Cisco CDP" : "LLDP");
+    expect(document.querySelector("#generate-edges")).toBeNull();
+    expect(document.querySelector("#generate-local-device")).toBeTruthy();
+    setValue(document.querySelector<HTMLTextAreaElement>("#generate-data")!, sample);
+    render();
+    (document.querySelector("button.btn-primary") as HTMLButtonElement).click();
+    render();
+    expect(state.step).toBe("map");
+    expect(document.querySelector("#map-localDevice")).toBeNull();
+    expect(document.querySelector("#generate-group-by")).toBeTruthy();
+    setValue(document.querySelector<HTMLSelectElement>("#generate-group-by")!, "capability");
+    render();
+    const previewButton = [...document.querySelectorAll("button")].find((button) => button.textContent === "Preview");
+    previewButton?.click();
+    render();
+    expect(state.step).toBe("preview");
+    expect(state.errors).toEqual([]);
+    expect(state.mermaid).toContain("flowchart LR");
+    expect(state.mermaid).toContain('["dist-sw"]');
+    expect(state.mermaid).toContain('["Switch"]');
+    expect(canCreate(state)).toBe(true);
+    expect(previewRequest(state).format).toBe(format);
+    expect(previewRequest(state).groupBy).toBe("capability");
+    expect(previewRequest(state).sourceFile).toBe(format === "cdp" ? "Sites/Untitled.cdp" : "Sites/Untitled.lldp");
+  });
+
   it("keeps create disabled when a row is invalid", () => {
     let state = wizardReducer(initialWizardState(), { type: "text", text: "Local Device,Remote Device\nCore,\n" });
     const result = inspection(state, "preview");

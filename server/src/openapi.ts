@@ -146,7 +146,7 @@ export const V1_ROUTES: readonly V1Route[] = [
     path: "/generate/preview",
     scope: "read",
     operationId: "previewGenerate",
-    summary: "Preview a diagram generated from CSV or JSON. Nothing is written.",
+    summary: "Preview a diagram generated from CSV, JSON, Cisco CDP, or LLDP. Nothing is written.",
     tag: "Generate",
   },
   {
@@ -154,7 +154,7 @@ export const V1_ROUTES: readonly V1Route[] = [
     path: "/generate",
     scope: "write",
     operationId: "generateDiagram",
-    summary: "Create a diagram from CSV or JSON and store the data file beside it.",
+    summary: "Create a diagram from CSV, JSON, Cisco CDP, or LLDP and store the data file beside it.",
     tag: "Generate",
   },
   {
@@ -245,14 +245,16 @@ function operationBody(operationId: string): Record<string, unknown> | undefined
       }, ["format"]);
     case "previewGenerate":
     case "generateDiagram":
-      return jsonBody("CSV or JSON table.", {
+      return jsonBody("CSV, JSON, Cisco CDP, or LLDP neighbor output.", {
         text: { type: "string" },
         path: { type: "string", description: "Required for generate. Diagram path ending in .mmd." },
-        format: { type: "string", enum: ["csv", "json"] },
+        format: { type: "string", enum: ["csv", "json", "cdp", "lldp"] },
         shape: { type: "string" },
         direction: { type: "string", enum: ["TD", "TB", "LR", "RL", "BT"] },
         mapping: { type: "object" },
         grouping: { type: "boolean" },
+        groupBy: { type: "string", enum: ["platform", "capability"], description: "CDP and LLDP grouping. Defaults to platform." },
+        localDevice: { type: "string", description: "Hostname when the paste has no CLI prompt." },
         title: { type: "string" },
         edgesText: { type: "string" },
         storeData: { type: "boolean" },

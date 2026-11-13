@@ -1,0 +1,28 @@
+core-sw# show cdp neighbors detail
+----------------------------------------
+Device ID:leaf-1
+VTP Management Domain Name:
+
+Interface address(es):
+    IPv4 Address: 10.3.0.11
+Platform: N9K-C93180YC-EX, Capabilities: Router Switch IGMP Filtering Supports-STP-Dispute
+Interface: Ethernet1/1, Port ID (outgoing port): Ethernet1/49
+Holdtime: 143 sec
+
+Version:
+Cisco Nexus Operating System (NX-OS) Software, Version 9.3(10)
+
+advertisement version: 2
+Native VLAN: 1
+Duplex: full
+
+----------------------------------------
+Device ID:leaf-2
+Interface address(es):
+    IPv4 Address: 10.3.0.12
+Platform: N9K-C93180YC-EX, Capabilities: Router Switch
+Interface: Eth1/2, Port ID (outgoing port): Eth1/50
+Holdtime: 139 sec
+
+Version:
+Cisco NX-OS(tm) n9000, Software (n9000-), Version 9.3(5), RELEASE SOFTWARE

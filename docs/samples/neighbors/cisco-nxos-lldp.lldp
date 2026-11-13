@@ -1,0 +1,28 @@
+core-sw# show lldp neighbors detail
+Capability codes:
+  (R) Router, (B) Bridge, (T) Telephone, (C) DOCSIS Cable Device
+  (W) WLAN Access Point, (P) Repeater, (S) Station, (O) Other
+Chassis id: 5254.0011.2233
+Port id: Ethernet1/49
+Local Port id: Eth1/1
+Port Description: uplink
+System Name: leaf-1
+System Description: Cisco Nexus Operating System (NX-OS) Software 9.3(10)
+Time remaining: 112 seconds
+System Capabilities: B, R
+Enabled Capabilities: B, R
+Management Address: 10.3.0.11
+Vlan ID: 1
+
+Chassis id: 5254.0011.2244
+Port id: Eth1/50
+Local Port id: Eth1/2
+Port Description: null
+System Name: leaf-2
+System Description: Cisco NX-OS(tm) n9000, Software (n9000-), Version 9.3(5)
+Time remaining: 108 seconds
+System Capabilities: BR
+Enabled Capabilities: BR
+Management Address: 10.3.0.12
+Management Address IPV6: not advertised
+Vlan ID: not advertised

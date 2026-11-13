@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { extensionForFormat } from "./dataFiles.js";
 import {
   assertDataPath,
   dataFail,
@@ -23,7 +24,7 @@ import { atomicWriteText, httpFail, normalizeRelative, pathExists, resolveAvaila
 
 export type CreateGeneratedInput = ImportInput & {
   path: string;
-  /** Defaults to true. The CSV or JSON is written next to the diagram. */
+  /** Defaults to true. The data file is written next to the diagram. */
   storeData?: boolean;
   dataName?: string;
 };
@@ -134,6 +135,14 @@ export function importInputFromBody(body: Record<string, unknown>): ImportInput 
     if (typeof body.edgesFile !== "string") throw dataFail(400, "edgesFile must be a string.", "invalid");
     input.edgesFile = body.edgesFile;
   }
+  if (body.localDevice != null) {
+    if (typeof body.localDevice !== "string") throw dataFail(400, "localDevice must be a string.", "invalid");
+    input.localDevice = body.localDevice;
+  }
+  if (body.groupBy != null) {
+    if (typeof body.groupBy !== "string") throw dataFail(400, "groupBy must be a string.", "invalid");
+    input.groupBy = body.groupBy;
+  }
   return input;
 }
 
@@ -215,6 +224,8 @@ export async function refreshGeneratedDiagram(input: RefreshGeneratedInput): Pro
     grouping: config.grouping,
     sourceFile: config.file,
     edgesFile: config.edgesFile,
+    localDevice: config.localDevice,
+    groupBy: config.groupBy,
   });
   if (imported.errors.length > 0) {
     throw dataFail(400, "Fix the rows listed before refreshing.", "invalid", { errors: imported.errors });
@@ -233,6 +244,8 @@ export async function refreshGeneratedDiagram(input: RefreshGeneratedInput): Pro
     mapping: config.mapping,
     edgesMapping: config.edgesMapping,
     edgesFormat: config.edgesFormat,
+    groupBy: config.groupBy,
+    localDevice: config.localDevice,
   });
   if (input.writeData) {
     await writeDataFile(config.file, text);
@@ -272,7 +285,7 @@ function assertDiagramPath(relativePath: string): string {
 
 function siblingDataPath(diagramPath: string, format: DataFormat, role: "data" | "edges"): string {
   const stem = diagramPath.replace(/\.mmd$/i, "");
-  const ext = format === "json" ? "json" : "csv";
+  const ext = extensionForFormat(format);
   return role === "edges" ? `${stem}.edges.${ext}` : `${stem}.${ext}`;
 }
 

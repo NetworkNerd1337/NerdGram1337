@@ -1,0 +1,20 @@
+core-sw# show lldp neighbors detailed
+-----------------------------------------------------------------------------
+Local Port    : 1:1
+Neighbor      : 00:11:22:33:44:55 / 1:49
+Chassis ID    : 00:11:22:33:44:55
+Port ID       : 1:49
+System Name   : dist-sw
+System Desc   : ExtremeXOS version 32.5.1.5
+Port Desc     : uplink
+System Caps   : Bridge, Router
+Enabled Caps  : Bridge
+Mgmt Address  : 10.10.0.2
+-----------------------------------------------------------------------------
+Local Port    : 1:2
+Chassis ID    : 00:11:22:33:44:66
+Port ID       : 2:1
+System Name   : access-sw
+System Desc   : ExtremeXOS (X440-G2-48p) version 31.7.1.4
+Port Desc     : downlink
+Enabled Caps  : Bridge

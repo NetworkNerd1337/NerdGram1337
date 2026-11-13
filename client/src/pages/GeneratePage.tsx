@@ -79,8 +79,8 @@ export function GeneratePage() {
         </div>
         <h1>Generate a diagram from data</h1>
         <p className="generate-lead">
-          Paste a links table or a list of nodes and edges. Column names are mapped, groups become subgraphs, and the
-          diagram stays tied to the data file so it can be refreshed.
+          Paste a links table, a list of nodes and edges, Cisco CDP, or LLDP neighbor output from any vendor. The
+          diagram stays tied to that data file so it can be refreshed.
         </p>
         <GenerateWizard
           state={state}

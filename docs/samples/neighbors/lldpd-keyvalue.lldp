@@ -1,0 +1,20 @@
+edge#lldpctl -f keyvalue
+lldp.eth0.via=LLDP
+lldp.eth0.rid=1
+lldp.eth0.age=0 day, 00:01:12
+lldp.eth0.chassis.mac=00:11:22:33:44:55
+lldp.eth0.chassis.name=core-sw
+lldp.eth0.chassis.descr=Arista Networks EOS version 4.28.3M
+lldp.eth0.chassis.mgmt-ip=10.1.1.1
+lldp.eth0.chassis.Bridge.enabled=on
+lldp.eth0.chassis.Router.enabled=off
+lldp.eth0.port.ifname=Ethernet49
+lldp.eth0.port.descr=uplink
+lldp.eth1.via=LLDP
+lldp.eth1.rid=2
+lldp.eth1.chassis.mac=00:11:22:33:44:66
+lldp.eth1.chassis.name=dist-sw
+lldp.eth1.chassis.descr=Cisco IOS Software, C9300-48P
+lldp.eth1.chassis.Bridge.enabled=on
+lldp.eth1.port.ifname=Gi1/0/24
+lldp.eth1.port.descr=downlink

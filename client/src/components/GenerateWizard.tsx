@@ -1,10 +1,11 @@
 import type { Dispatch, ReactNode } from "react";
-import type { FlowDirection } from "../../../server/src/diagramData.ts";
+import type { FlowDirection, GroupBy } from "../../../server/src/diagramData.ts";
 import {
   canCreate,
   canInspect,
   edgeFields,
   fieldsFor,
+  isNeighborSource,
   showEdgeFields,
   type WizardAction,
   type WizardState,
@@ -29,11 +30,12 @@ type GenerateWizardProps = {
 
 export function GenerateWizard({ state, dispatch, busy, folderControl, onInspect, onCreate }: GenerateWizardProps) {
   const fields = fieldsFor(state);
+  const neighbor = isNeighborSource(state);
   return (
     <div className="generate-wizard">
       <ol className="generate-steps" aria-label="Steps">
         <li className={state.step === "input" ? "active" : ""}>Data</li>
-        <li className={state.step === "map" ? "active" : ""}>Columns</li>
+        <li className={state.step === "map" ? "active" : ""}>{neighbor ? "Options" : "Columns"}</li>
         <li className={state.step === "preview" ? "active" : ""}>Preview</li>
       </ol>
 
@@ -43,21 +45,33 @@ export function GenerateWizard({ state, dispatch, busy, folderControl, onInspect
 
       {state.step === "input" ? (
         <div className="generate-panel">
-          <label htmlFor="generate-data">CSV or JSON</label>
+          <label htmlFor="generate-format">Source</label>
+          <select
+            id="generate-format"
+            value={state.format}
+            onChange={(event) => dispatch({ type: "format", format: event.target.value as WizardState["format"] })}
+          >
+            <option value="auto">CSV or JSON</option>
+            <option value="csv">CSV</option>
+            <option value="json">JSON</option>
+            <option value="cdp">Cisco CDP</option>
+            <option value="lldp">LLDP neighbors</option>
+          </select>
+          <label htmlFor="generate-data">{dataLabel(state.format)}</label>
           <textarea
             id="generate-data"
             value={state.text}
             onChange={(event) => dispatch({ type: "text", text: event.target.value })}
             spellCheck={false}
             rows={12}
-            placeholder={"Local Device,Local Port,Remote Device,Remote Port\nCore,Gi0/0,Atlanta,Gi0/1"}
+            placeholder={dataPlaceholder(state.format)}
           />
           <label className="generate-file">
             Upload a file
             <input
               type="file"
-              accept=".csv,.json,text/csv,application/json"
-              aria-label="Upload CSV or JSON"
+              accept=".csv,.json,.cdp,.lldp,.txt,text/csv,application/json,text/plain"
+              aria-label="Upload data file"
               onChange={(event) => {
                 const file = event.target.files?.[0];
                 event.target.value = "";
@@ -66,15 +80,30 @@ export function GenerateWizard({ state, dispatch, busy, folderControl, onInspect
               }}
             />
           </label>
-          <label htmlFor="generate-edges">Edges file, if the first file is only nodes</label>
-          <textarea
-            id="generate-edges"
-            value={state.edgesText}
-            onChange={(event) => dispatch({ type: "edges", text: event.target.value })}
-            spellCheck={false}
-            rows={5}
-            placeholder="source,target,label"
-          />
+          {state.format === "cdp" || state.format === "lldp" ? (
+            <label htmlFor="generate-local-device">
+              Local device name
+              <input
+                id="generate-local-device"
+                value={state.localDevice}
+                onChange={(event) => dispatch({ type: "localDevice", localDevice: event.target.value })}
+                placeholder="Used when the output has no hostname prompt"
+              />
+            </label>
+          ) : null}
+          {state.format === "cdp" || state.format === "lldp" ? null : (
+            <>
+              <label htmlFor="generate-edges">Edges file, if the first file is only nodes</label>
+              <textarea
+                id="generate-edges"
+                value={state.edgesText}
+                onChange={(event) => dispatch({ type: "edges", text: event.target.value })}
+                spellCheck={false}
+                rows={5}
+                placeholder="source,target,label"
+              />
+            </>
+          )}
           <div className="generate-actions">
             <button type="button" className="btn btn-primary" disabled={!canInspect(state) || busy} onClick={() => onInspect("map")}>
               {busy ? "Reading…" : "Continue"}
@@ -85,6 +114,30 @@ export function GenerateWizard({ state, dispatch, busy, folderControl, onInspect
 
       {state.step === "map" ? (
         <div className="generate-panel">
+          {neighbor ? (
+            <>
+              <label htmlFor="generate-local-device">
+                Local device name
+                <input
+                  id="generate-local-device"
+                  value={state.localDevice}
+                  onChange={(event) => dispatch({ type: "localDevice", localDevice: event.target.value })}
+                  placeholder="Used when the output has no hostname prompt"
+                />
+              </label>
+              <label htmlFor="generate-group-by">Group by</label>
+              <select
+                id="generate-group-by"
+                value={state.groupBy}
+                disabled={!state.grouping}
+                onChange={(event) => dispatch({ type: "groupBy", groupBy: event.target.value as GroupBy })}
+              >
+                <option value="platform">Platform</option>
+                <option value="capability">Capability</option>
+              </select>
+            </>
+          ) : (
+            <>
           <label htmlFor="generate-shape">Data shape</label>
           <select
             id="generate-shape"
@@ -117,7 +170,7 @@ export function GenerateWizard({ state, dispatch, busy, folderControl, onInspect
               </label>
             ))}
           </div>
-          {showEdgeFields(state) ? (
+          {!neighbor && showEdgeFields(state) ? (
             <div className="generate-map">
               {edgeFields().map((field) => (
                 <label key={field.field} htmlFor={`edge-${field.field}`}>
@@ -141,6 +194,8 @@ export function GenerateWizard({ state, dispatch, busy, folderControl, onInspect
               ))}
             </div>
           ) : null}
+            </>
+          )}
           <label htmlFor="generate-direction">Direction</label>
           <select
             id="generate-direction"
@@ -160,7 +215,7 @@ export function GenerateWizard({ state, dispatch, busy, folderControl, onInspect
               checked={state.grouping}
               onChange={(event) => dispatch({ type: "grouping", grouping: event.target.checked })}
             />
-            Groups become subgraphs
+            {neighbor ? "Group devices" : "Groups become subgraphs"}
           </label>
           <div className="generate-actions">
             <button type="button" className="btn btn-ghost" onClick={() => dispatch({ type: "back" })}>
@@ -223,6 +278,24 @@ export function GenerateWizard({ state, dispatch, busy, folderControl, onInspect
       ) : null}
     </div>
   );
+}
+
+function dataLabel(format: WizardState["format"]): string {
+  if (format === "cdp") return "Cisco CDP output";
+  if (format === "lldp") return "LLDP neighbor output";
+  if (format === "json") return "JSON";
+  if (format === "csv") return "CSV";
+  return "CSV or JSON";
+}
+
+function dataPlaceholder(format: WizardState["format"]): string {
+  if (format === "cdp") {
+    return "core-sw#show cdp neighbors detail\nDevice ID: dist-sw\nInterface: Gi1/0/1, Port ID (outgoing port): Gi1/0/48";
+  }
+  if (format === "lldp") {
+    return "core-sw#show lldp neighbors detail\nLocal Intf: Gi1/0/1\nPort id: Gi1/0/48\nSystem Name: dist-sw";
+  }
+  return "Local Device,Local Port,Remote Device,Remote Port\nCore,Gi0/0,Atlanta,Gi0/1";
 }
 
 function IssueList({ title, issues }: { title: string; issues: { row: number; message: string }[] }) {

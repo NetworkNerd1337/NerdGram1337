@@ -1,0 +1,35 @@
+core-sw#show lldp neighbors detail
+Interface Ethernet1 detected 1 LLDP neighbors:
+
+  Neighbor 0011.2233.4455/Ethernet49, age 12 seconds
+  Discovered 0:02:15 ago; last changed 0:02:15 ago
+    - Chassis ID type: MAC address (4)
+      Chassis ID     : 0011.2233.4455
+    - Port ID type: Interface name (5)
+      Port ID     : "Ethernet49"
+    - Time To Live: 120 seconds
+    - Port Description: "uplink"
+    - System Name: "dist-sw"
+    - System Description: "Arista Networks EOS version 4.28.3M running on an Arista Networks DCS-7050SX3-48YC8"
+    - System Capabilities : Bridge, Router
+      Enabled Capabilities: Bridge
+    - Management Address Subtype: IPv4
+      Management Address        : 10.4.0.2
+      Interface Number Subtype  : ifIndex (2)
+      Interface Number          : 999001
+      OID String                :
+    - IEEE802.1 Port VLAN ID: 1
+
+Interface Ethernet2 detected 1 LLDP neighbors:
+
+  Neighbor 0011.2233.4466/Ethernet1, age 8 seconds
+    - Chassis ID type: MAC address (4)
+      Chassis ID     : 0011.2233.4466
+    - Port ID type: Interface name (5)
+      Port ID     : "Ethernet1"
+    - System Name: "access-sw"
+    - System Description: "Arista Networks EOS version 4.28.3M"
+    - System Capabilities : Bridge
+      Enabled Capabilities: Bridge
+
+Interface Management1 detected 0 LLDP neighbors:
