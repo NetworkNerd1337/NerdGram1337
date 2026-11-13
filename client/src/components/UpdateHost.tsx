@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { ApiError, api } from "../api";
 import { requestUpdateReload } from "../lib/updateReload";
-import type { UpdateJob, UpdateStatus } from "../types";
+import { formatVersionLabel } from "../lib/versionLabel";
+import type { UpdateJob, UpdateRelease, UpdateStatus } from "../types";
 import { ReleaseMarkdown } from "./ReleaseMarkdown";
 import { UpdateContext, useUpdate, type UpdatePanel } from "./updateContext";
 
@@ -11,6 +12,14 @@ const TARGET_KEY = "nerdgram-update-target";
 function messageOf(err: unknown): string {
   if (err instanceof Error) return err.message;
   return "The update request failed.";
+}
+
+function runningLabel(status: UpdateStatus): string {
+  return formatVersionLabel(status.currentVersion, status.codename);
+}
+
+function releaseLabel(release: Pick<UpdateRelease, "version" | "codename">): string {
+  return formatVersionLabel(release.version, release.codename);
 }
 
 function shortCommit(commit: string | null): string | null {
@@ -35,7 +44,7 @@ export function UpdateHost({ children }: { children: ReactNode }) {
     const target = sessionStorage.getItem(TARGET_KEY);
     if (target && next.currentVersion === target) {
       sessionStorage.removeItem(TARGET_KEY);
-      setNotice(`NerdGram ${next.currentVersion} is running. This install matches the release you updated to.`);
+      setNotice(`NerdGram ${runningLabel(next)} is running. This install matches the release you updated to.`);
     }
   }, []);
 
@@ -70,7 +79,7 @@ export function UpdateHost({ children }: { children: ReactNode }) {
         return;
       }
       if (next.matchesLatest || next.phase === "current") {
-        setNotice(`NerdGram ${next.currentVersion} is up to date.`);
+        setNotice(`NerdGram ${runningLabel(next)} is up to date.`);
       } else if (next.phase === "ahead") {
         setNotice(`This build (${next.currentVersion}) is newer than the latest stable release.`);
       } else if (next.phase === "no_release") {
@@ -270,8 +279,8 @@ export function UpdateHost({ children }: { children: ReactNode }) {
       {showBanner && status?.latest ? (
         <div className="update-banner" role="status">
           <p>
-            NerdGram <strong>{status.latest.version}</strong> is available. This install is{" "}
-            <strong>{status.currentVersion}</strong>.
+            NerdGram <strong>{releaseLabel(status.latest)}</strong> is available. This install is{" "}
+            <strong>{runningLabel(status)}</strong>.
           </p>
           <div className="update-banner-actions">
             <button type="button" className="btn" onClick={() => setPanel("notes")}>
@@ -307,11 +316,11 @@ export function UpdateHost({ children }: { children: ReactNode }) {
         </Dialog>
       ) : null}
       {panel === "notes" && status?.latest ? (
-        <Dialog title={`Release ${status.latest.version}`} onClose={() => setPanel(null)}>
+        <Dialog title={`Release ${releaseLabel(status.latest)}`} onClose={() => setPanel(null)}>
           <p className="update-version-line">
-            Running {status.currentVersion}
+            Running {runningLabel(status)}
             {shortCommit(status.commit) ? ` (${shortCommit(status.commit)})` : ""}. Release{" "}
-            {status.latest.version}.
+            {releaseLabel(status.latest)}.
           </p>
           <p>
             <a href={status.latest.htmlUrl} target="_blank" rel="noreferrer noopener">
@@ -324,7 +333,8 @@ export function UpdateHost({ children }: { children: ReactNode }) {
       {panel === "docker" && dockerGuide && status ? (
         <Dialog title={`Upgrade to ${dockerGuide.tag}`} onClose={() => setPanel(null)}>
           <p className="update-version-line">
-            This container is running {status.currentVersion}. The release is {dockerGuide.tag.replace(/^v/, "")}.
+            This container is running {runningLabel(status)}. The release is{" "}
+            {formatVersionLabel(dockerGuide.tag, status.latest?.tag === dockerGuide.tag ? status.latest.codename : status.codename)}.
             NerdGram will not change the container from the inside.
           </p>
           {status.latest ? <ReleaseMarkdown markdown={status.latest.body || "This release has no notes."} /> : null}
@@ -352,10 +362,11 @@ export function UpdateHost({ children }: { children: ReactNode }) {
           </div>
           {actionError ? <p className="update-error">{actionError}</p> : null}
           {status.currentVersion === dockerGuide.tag.replace(/^v/, "") ? (
-            <p role="status">This install is running {status.currentVersion}, which matches {dockerGuide.tag}.</p>
+            <p role="status">This install is running {runningLabel(status)}, which matches {dockerGuide.tag}.</p>
           ) : (
             <p role="status">
-              This process is still running {status.currentVersion}. The release is {dockerGuide.tag.replace(/^v/, "")}.
+              This process is still running {runningLabel(status)}. The release is{" "}
+              {formatVersionLabel(dockerGuide.tag, status.latest?.tag === dockerGuide.tag ? status.latest.codename : status.codename)}.
               Recreate the container with the steps above, then check again.
             </p>
           )}
@@ -371,7 +382,7 @@ export function UpdateHost({ children }: { children: ReactNode }) {
           {!job ? (
             <>
               <p>
-                Update to {status.latest?.version}? NerdGram will fetch that release, reinstall from the lockfiles,
+                Update to {status.latest ? releaseLabel(status.latest) : "the release"}? NerdGram will fetch that release, reinstall from the lockfiles,
                 and rebuild. Your diagrams are not modified. The git tree has to be clean, on main or a detached
                 release tag, and the release has to be a fast-forward. You will restart the app when it finishes.
               </p>
@@ -446,7 +457,7 @@ export function UpdateSettingsFields() {
   return (
     <div>
       <p>
-        Version {status.currentVersion}
+        Version {runningLabel(status)}
         {status.commit ? ` · ${shortCommit(status.commit)}` : ""} · {installLabel(status.installKind)}
       </p>
       <label className="sync-check">
@@ -491,7 +502,7 @@ function AboutBody() {
   return (
     <>
       <p>
-        <strong>NerdGram1337</strong> {status.currentVersion}
+        <strong>NerdGram1337</strong> {runningLabel(status)}
         {status.commit ? ` (${shortCommit(status.commit)})` : ""}
       </p>
       <p>Install: {installLabel(status.installKind)}</p>
@@ -526,8 +537,8 @@ function ManualCopy({ status }: { status: UpdateStatus }) {
   return (
     <>
       <p>
-        This copy is {status.currentVersion}
-        {latest ? `, and ${latest.version} is the latest release.` : "."} Update now is not available for a{" "}
+        This copy is {runningLabel(status)}
+        {latest ? `, and ${releaseLabel(latest)} is the latest release.` : "."} Update now is not available for a{" "}
         {status.installKind} install.
       </p>
       {status.installKind === "zip" ? (

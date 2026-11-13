@@ -133,6 +133,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       name: "NerdGram1337",
       dataDir: ensureDataRoot(),
       version: version.version,
+      codename: version.codename,
       commit: version.commit,
       installKind: version.installKind,
     });

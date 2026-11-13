@@ -20,7 +20,7 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 COPY client/package.json client/package-lock.json client/
 COPY server/package.json server/package-lock.json server/
-COPY scripts/check-version.mjs scripts/check-version.mjs
+COPY scripts/check-version.mjs scripts/codenames.mjs scripts/changelog-notes.mjs scripts/
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefix client && npm ci --prefix server
 COPY client client
@@ -28,11 +28,14 @@ COPY server server
 COPY templates templates
 COPY reference reference
 COPY diagrams diagrams
-COPY Dockerfile compose.yaml README.md LICENSE ./
-ARG NERDGRAM_VERSION=1.0.0
-ENV NERDGRAM_VERSION=${NERDGRAM_VERSION}
+COPY Dockerfile compose.yaml README.md CHANGELOG.md LICENSE ./
+ARG NERDGRAM_VERSION=1.0.5
+ARG NERDGRAM_CODENAME=Atlas
+ENV NERDGRAM_VERSION=${NERDGRAM_VERSION} \
+    NERDGRAM_CODENAME=${NERDGRAM_CODENAME}
 RUN node scripts/check-version.mjs \
  && node -e "const v=require('./package.json').version; if (v !== process.env.NERDGRAM_VERSION) { console.error('NERDGRAM_VERSION '+process.env.NERDGRAM_VERSION+' does not match package.json '+v); process.exit(1); }" \
+ && node -e "const p=require('./package.json'); const major=String(p.version).split('.')[0]; const name=p.codenames&&p.codenames[major]; if (name !== process.env.NERDGRAM_CODENAME) { console.error('NERDGRAM_CODENAME '+process.env.NERDGRAM_CODENAME+' does not match package.json '+(name||'(missing)')); process.exit(1); }" \
  && npm run build --prefix client \
  && npm run build --prefix server
 
@@ -66,7 +69,8 @@ COPY --link --from=build /src/diagrams /app/diagrams
 RUN chmod -R a-w /app/templates /app/reference /app/diagrams /app/server/dist /app/package.json /app/server/package.json \
  && chmod -R a+rX /app/templates /app/reference /app/diagrams /app/server /app/client /app/package.json
 
-ARG NERDGRAM_VERSION=1.0.0
+ARG NERDGRAM_VERSION=1.0.5
+ARG NERDGRAM_CODENAME=Atlas
 ARG NERDGRAM_COMMIT=
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
@@ -74,6 +78,7 @@ ENV NODE_ENV=production \
     NERDGRAM_DATA_DIR=/data \
     NERDGRAM_INSTALL=docker \
     NERDGRAM_COMMIT=${NERDGRAM_COMMIT} \
+    NERDGRAM_CODENAME=${NERDGRAM_CODENAME} \
     HOME=/tmp \
     TMPDIR=/tmp
 
@@ -83,6 +88,7 @@ LABEL org.opencontainers.image.title="NerdGram1337" \
       org.opencontainers.image.url="https://github.com/NetworkNerd1337/NerdGram1337" \
       org.opencontainers.image.source="https://github.com/NetworkNerd1337/NerdGram1337" \
       org.opencontainers.image.version="${NERDGRAM_VERSION}" \
+      org.opencontainers.image.codename="${NERDGRAM_CODENAME}" \
       org.opencontainers.image.revision="${NERDGRAM_COMMIT}"
 
 USER nerdgram

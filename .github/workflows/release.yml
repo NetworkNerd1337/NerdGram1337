@@ -1,7 +1,8 @@
 # Publishing a GitHub Release for a vX.Y.Z tag.
-# The tag must match the root package.json version. #12 publishes
-# ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z from this same tag.
-# Keep that image workflow on this version; do not invent a second scheme.
+# The tag must match the root package.json version. The release title is
+# vX.Y.Z "Code name" from the codenames map. The body is the CHANGELOG section.
+# docker-publish.yml pushes ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z
+# from this same tag. Keep that image workflow on this version.
 
 name: Release
 
@@ -17,9 +18,9 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 20
 
@@ -35,11 +36,18 @@ jobs:
 
       - name: Notes from CHANGELOG
         id: notes
-        run: node scripts/changelog-notes.mjs "$GITHUB_REF_NAME" > release-notes.md
+        run: |
+          node scripts/changelog-notes.mjs "$GITHUB_REF_NAME" > release-notes.md
+          {
+            echo "title<<EOF"
+            node scripts/changelog-notes.mjs --title "$GITHUB_REF_NAME"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
+          name: ${{ steps.notes.outputs.title }}
           body_path: release-notes.md
           draft: false
           prerelease: false
