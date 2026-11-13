@@ -23,6 +23,9 @@ jobs:
             client/package-lock.json
             server/package-lock.json
 
+      - name: Check version
+        run: node scripts/check-version.mjs
+
       - name: Install
         run: |
           npm ci

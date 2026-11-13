@@ -16,6 +16,7 @@ import type { DiagramSearchHit } from "../types";
 import "../lib/builtinCommands";
 import "../lib/presentCommands";
 import "../lib/syncCommands";
+import "../lib/updateCommands";
 import { HighlightedText } from "./HighlightedText";
 import { PaletteContext, usePaletteControls, type PaletteControls } from "./commandPaletteContext";
 

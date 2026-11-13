@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { CommandPaletteRoot } from "./components/CommandPalette";
+import { UpdateHost } from "./components/UpdateHost";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EditorPage } from "./pages/EditorPage";
 import { NewDiagramPage } from "./pages/NewDiagramPage";
@@ -13,6 +14,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <CommandPaletteRoot>
+        <UpdateHost>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/new" element={<NewDiagramPage />} />
@@ -24,6 +26,7 @@ export default function App() {
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </UpdateHost>
       </CommandPaletteRoot>
     </BrowserRouter>
   );

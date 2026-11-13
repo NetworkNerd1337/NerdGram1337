@@ -5,6 +5,7 @@ import { Brand } from "../components/Brand";
 import { CommandsButton } from "../components/CommandPalette";
 import { useCommandHost } from "../components/commandPaletteContext";
 import { Modal } from "../components/Modal";
+import { UpdateSettingsFields } from "../components/UpdateHost";
 import type { SyncStatus } from "../types";
 
 const DOCS = "https://github.com/NetworkNerd1337/NerdGram1337#github-sync";
@@ -374,6 +375,14 @@ export function SettingsPage() {
             ))}
           </section>
         ) : null}
+        <section className="sync-card">
+          <h2>App updates</h2>
+          <p>
+            Version checks are separate from GitHub sync. The sync token is not used. The server
+            asks the public GitHub releases API whether a newer stable version of NerdGram exists.
+          </p>
+          <UpdateSettingsFields />
+        </section>
       </main>
 
       {disconnectOpen ? (

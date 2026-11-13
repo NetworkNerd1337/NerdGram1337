@@ -601,6 +601,13 @@ export function EditorPage() {
   });
 
   const dirty = code !== savedCode;
+  useEffect(() => {
+    if (dirty) document.body.dataset.unsaved = "true";
+    else delete document.body.dataset.unsaved;
+    return () => {
+      delete document.body.dataset.unsaved;
+    };
+  }, [dirty]);
   const saveLabel =
     saveState === "saving"
       ? "Saving…"

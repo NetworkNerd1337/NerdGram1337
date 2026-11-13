@@ -6,7 +6,7 @@ import { importDiagrams } from "./import.js";
 import * as history from "./history.js";
 import * as locks from "./locks.js";
 import { ensureDataRoot, REPO_ROOT, resolveSafePath, toRelativePath } from "./paths.js";
-import { REVISION_RETENTION } from "./storage.js";
+import { REVISION_RETENTION, httpFail } from "./storage.js";
 import * as trash from "./trash.js";
 import {
   createDevCors,
@@ -22,6 +22,8 @@ import * as sync from "./sync/engine.js";
 import * as syntaxReference from "./syntaxReference.js";
 import * as templates from "./templates.js";
 import * as thumbnails from "./thumbnails.js";
+import * as updates from "./updates/service.js";
+import { getVersionInfo } from "./updates/versionInfo.js";
 
 export type ListenPort = { port: number };
 
@@ -87,6 +89,26 @@ function sendError(res: express.Response, err: unknown): void {
   res.status(status).json(body);
 }
 
+function jsonObject(req: express.Request, res: express.Response): boolean {
+  if (req.body == null) {
+    req.body = {};
+    return true;
+  }
+  if (typeof req.body !== "object" || Array.isArray(req.body)) {
+    res.status(400).json({ error: "JSON object required", code: "invalid" });
+    return false;
+  }
+  return true;
+}
+
+function optionalBoolean(value: unknown, name: string): boolean | undefined {
+  if (value == null) return undefined;
+  if (typeof value !== "boolean") {
+    throw httpFail(400, `${name} must be a boolean`, "invalid");
+  }
+  return value;
+}
+
 export function createApp(options: CreateAppOptions = {}): express.Express {
   const portRef = options.portRef ?? { port: options.port ?? Number(process.env.PORT || 8787) };
   if (options.port != null && options.port > 0) portRef.port = options.port;
@@ -105,11 +127,82 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
   app.use(express.json({ limit: "5mb" }));
 
   app.get("/api/health", (_req, res) => {
+    const version = getVersionInfo();
     res.json({
       ok: true,
       name: "NerdGram1337",
       dataDir: ensureDataRoot(),
+      version: version.version,
+      commit: version.commit,
+      installKind: version.installKind,
     });
+  });
+
+  app.get("/api/version", (_req, res) => {
+    res.json(getVersionInfo());
+  });
+
+  app.get("/api/updates", async (_req, res) => {
+    try {
+      res.json(await updates.getUpdateStatus());
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.get("/api/updates/job", (_req, res) => {
+    res.json({ job: updates.getUpdateJob() });
+  });
+
+  app.post("/api/updates/check", async (req, res) => {
+    try {
+      if (!jsonObject(req, res)) return;
+      res.json(await updates.manualCheck());
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/updates/settings", async (req, res) => {
+    try {
+      if (!jsonObject(req, res)) return;
+      res.json(
+        await updates.saveUpdateSettings({
+          automatic: optionalBoolean(req.body?.automatic, "automatic"),
+          includePrerelease: optionalBoolean(req.body?.includePrerelease, "includePrerelease"),
+          clearSkipped: optionalBoolean(req.body?.clearSkipped, "clearSkipped"),
+        }),
+      );
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/updates/skip", async (req, res) => {
+    try {
+      if (!jsonObject(req, res)) return;
+      res.json(await updates.skipCurrentRelease());
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/updates/later", async (req, res) => {
+    try {
+      if (!jsonObject(req, res)) return;
+      res.json(await updates.dismissCurrentRelease());
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/updates/apply", async (req, res) => {
+    try {
+      if (!jsonObject(req, res)) return;
+      res.status(202).json({ job: updates.startApply() });
+    } catch (err) {
+      sendError(res, err);
+    }
   });
 
   app.get("/api/tree", async (_req, res) => {
