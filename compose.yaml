@@ -1,0 +1,58 @@
+# Local single-user NerdGram1337.
+#
+# Inside the container the server listens on 0.0.0.0 (HOST is set in the image).
+# On the host the port is published on 127.0.0.1 only. Do not publish every
+# interface.
+#
+# The image tag matches the root package.json version. scripts/check-version.mjs
+# fails when they drift. ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z and :latest
+# are pushed when that vX.Y.Z tag is released. Until then, build locally:
+#
+#   docker compose up -d --build
+#
+# Pass the git commit when you have one:
+#
+#   NERDGRAM_COMMIT=$(git rev-parse HEAD) docker compose build
+#
+# A bind mount instead of the named volume must be writable by uid 1001
+# (gid 1001, user nerdgram):
+#
+#   sudo chown -R 1001:1001 /path/to/nerdgram-data
+
+name: nerdgram1337
+
+services:
+  nerdgram:
+    image: ghcr.io/networknerd1337/nerdgram1337:v1.0.0
+    build:
+      context: .
+      args:
+        NERDGRAM_VERSION: "1.0.0"
+        NERDGRAM_COMMIT: ${NERDGRAM_COMMIT:-}
+    container_name: nerdgram1337
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1:8787:8787"
+    environment:
+      NERDGRAM_DATA_DIR: /data
+      NERDGRAM_INSTALL: docker
+      # Optional. An empty value is treated as unset.
+      NERDGRAM_GITHUB_CLIENT_ID: ${NERDGRAM_GITHUB_CLIENT_ID:-}
+      NERDGRAM_GITHUB_TOKEN: ${NERDGRAM_GITHUB_TOKEN:-}
+      # Extra hostname, only if you mean to use one. Saving from the browser
+      # also needs the origin. This does not make a shared server supported.
+      #   NERDGRAM_ALLOWED_HOSTS=diagrams.home
+      #   NERDGRAM_CORS_ORIGINS=http://diagrams.home:8787
+      NERDGRAM_ALLOWED_HOSTS: ${NERDGRAM_ALLOWED_HOSTS:-}
+      NERDGRAM_CORS_ORIGINS: ${NERDGRAM_CORS_ORIGINS:-}
+    volumes:
+      - nerdgram-data:/data
+
+volumes:
+  nerdgram-data:
+    name: nerdgram-data

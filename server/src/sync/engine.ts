@@ -142,7 +142,39 @@ type DeviceSession = {
 };
 
 let device: DeviceSession | null = null;
+let devicePoll: { resolve: () => void; timer: NodeJS.Timeout } | null = null;
 let memoryError: Failure | null = null;
+
+function waitForDevicePoll(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      if (devicePoll?.timer === timer) devicePoll = null;
+      resolve();
+    }, ms);
+    timer.unref?.();
+    devicePoll = {
+      resolve: () => {
+        clearTimeout(timer);
+        if (devicePoll?.timer === timer) devicePoll = null;
+        resolve();
+      },
+      timer,
+    };
+  });
+}
+
+function cancelDevicePoll(): void {
+  devicePoll?.resolve();
+}
+
+/** Stop timers and wait for the sync already running. Used on SIGTERM. */
+export async function stopSyncForShutdown(): Promise<void> {
+  deviceGeneration += 1;
+  device = null;
+  cancelDevicePoll();
+  stopLoops();
+  await chain;
+}
 
 export function setSyncTestHook(hook: (() => Promise<void>) | null): void {
   testHook = hook;
@@ -162,6 +194,7 @@ export async function resetSyncForTests(): Promise<void> {
   active = 0;
   maxActive = 0;
   suppress = 0;
+  cancelDevicePoll();
   stopLoops();
   clearRememberedSecrets();
   setGithubFetch(null);
@@ -1012,7 +1045,7 @@ async function pollDevice(generation: number): Promise<void> {
       device.error = { code: "invalid_client", message: `The sign-in code expired. Start again. ${SYNC_DOCS_URL}` };
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, device?.intervalMs ?? 1000));
+    await waitForDevicePoll(device?.intervalMs ?? 1000);
     if (!device || device.generation !== generation || device.phase !== "pending") return;
     try {
       const result = await pollDeviceToken(device.clientId, device.deviceCode);

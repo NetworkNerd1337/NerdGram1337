@@ -10,6 +10,8 @@ You already get three sample diagrams: `Welcome.mmd`, `NetworkMap.mmd`, and `Exa
 
 ## Install and run
 
+Docker is the other way to run the app, with no Node.js install. See [Docker](#docker). The steps below are the Node.js install.
+
 Do these steps in order the first time. Every `npm` command below is run from the project root: the folder that contains the top-level `package.json`, next to `client/` and `server/`.
 
 ### 1. Check prerequisites
@@ -94,6 +96,8 @@ After either option, the project folder contains:
 
 ```
 NerdGram1337/                  (or NerdGram1337-main/ from the ZIP)
+├── Dockerfile                 production image
+├── compose.yaml               loopback publish and the data volume
 ├── package.json               scripts: install:all, dev, build, start
 ├── package-lock.json
 ├── README.md
@@ -317,6 +321,105 @@ The server reads `PORT` if you set it. In production, `PORT=8790 npm start` (Com
 - `HOST=0.0.0.0`, `HOST=::`, or any other non-loopback address listens beyond this machine. Startup prints a loud warning. There is still no authentication, and that setup is unsupported on a shared host, LAN, or NAS. The only intended use is inside a container, with the host publishing `127.0.0.1:8787:8787` rather than `0.0.0.0:8787`.
 
 macOS or Linux: `HOST=127.0.0.1 npm start`. Windows Command Prompt: `set HOST=127.0.0.1` then `npm start`. PowerShell: `$env:HOST = "127.0.0.1"`. The same variable applies to `npm run dev`. Development mode (the `tsx` dev script) also allows the Vite origin on port 5173. `npm start` runs the compiled server and does not. Set `NODE_ENV=production` or `NODE_ENV=development` only if you need to override that.
+
+## Docker
+
+A container runs the production server. The UI and the API are the same origin on port 8787. You do not need Node.js on the host. The image is not on GitHub Container Registry until a `vX.Y.Z` release tag is pushed (the same tag as the GitHub Release, and it has to match the root `package.json` version). Until that tag exists, build the image yourself.
+
+The process inside the container listens on `0.0.0.0` so Docker can publish the port. Every command below publishes **`127.0.0.1:8787:8787`**. That is loopback on the host. Do not publish `8787:8787`, which would listen on every host interface. There is still no login. A line in the container log warns that `0.0.0.0` is not loopback. That warning is expected in the container. It is not a request to publish the port more widely.
+
+The container runs as uid **1001**, gid **1001** (user `nerdgram`). A fresh named volume is writable by that user. A bind mount is not, until you change its owner:
+
+```bash
+sudo chown -R 1001:1001 /path/to/nerdgram-data
+```
+
+`templates/` and `reference/` are copied into the image and are not on the volume. With `NERDGRAM_DATA_DIR` set, a syntax-reference sync writes under `/data/.meta/reference` and survives a new container. If that copy is missing, the app serves the reference pages baked into the image. Templates stay the ones in the image.
+
+### Build and run
+
+From the project root, the folder that contains the `Dockerfile`:
+
+```bash
+docker build \
+  --build-arg NERDGRAM_VERSION="$(node -p "require('./package.json').version")" \
+  --build-arg NERDGRAM_COMMIT="$(git rev-parse HEAD)" \
+  -t nerdgram1337:local .
+```
+
+`node` and `git` are only used for those two build arguments. The image itself does not contain git. If you do not have them, omit the arguments. The version argument then defaults to the version pinned in the Dockerfile, which matches `package.json`.
+
+```bash
+docker run -d \
+  --name nerdgram1337 \
+  --restart unless-stopped \
+  -p 127.0.0.1:8787:8787 \
+  -e NERDGRAM_DATA_DIR=/data \
+  -e NERDGRAM_INSTALL=docker \
+  -v nerdgram-data:/data \
+  nerdgram1337:local
+```
+
+After a release is published, the same command uses the registry image. Replace the last line with `ghcr.io/networknerd1337/nerdgram1337:v1.0.0` (or `:latest`). The in-app upgrade steps use that image name, the container name `nerdgram1337`, the volume `nerdgram-data`, and `127.0.0.1:8787:8787`.
+
+Open [http://127.0.0.1:8787](http://127.0.0.1:8787) or [http://localhost:8787](http://localhost:8787). Both hosts are allowed. The health check is [http://127.0.0.1:8787/api/health](http://127.0.0.1:8787/api/health). `installKind` is `docker`.
+
+`compose.yaml` is the same layout. From the project root:
+
+```bash
+docker compose up -d --build
+```
+
+`docker compose pull` and `docker compose up -d` use the published image once the tag exists. The file pins `v1.0.0`. On a later release, change that pin to the new tag, or set the image to `:latest` if you want `docker compose pull` to move it. Keep the volume mounted on `/data`.
+
+Optional environment variables, in the shell for `docker run -e`, or in a `.env` file next to `compose.yaml` for Compose:
+
+- `NERDGRAM_GITHUB_CLIENT_ID` for GitHub sync. `NERDGRAM_GITHUB_TOKEN` is optional. The token file is `/data/.meta/github-token` with mode `0600`. The git working copy is `/data/.nerdgram-git`. The image does not include a git binary. Sync uses the library already in the server.
+- `NERDGRAM_ALLOWED_HOSTS` is a comma-separated list of extra hostnames, for example `diagrams.home`, if you deliberately open the app on a name other than `localhost` or `127.0.0.1`. Saving from that name also needs `NERDGRAM_CORS_ORIGINS=http://diagrams.home:8787`. You would also publish the port beyond loopback yourself. That setup is still a single-user app with no login, and it is not a supported shared server.
+
+The published host port has to be **8787**, the same as `PORT` inside the container. The browser sends that port in the `Host` header, and the API allows the port it is listening on. To use another port, set `PORT` in the container and publish `127.0.0.1:THAT:THAT`.
+
+### Volume, backup, and upgrade
+
+The named volume `nerdgram-data` is the whole workspace: `.mmd` files, `.meta` (trash, version history, locks, thumbnails, the search index, `updates.json`, and the GitHub token), and `.nerdgram-git`. One volume is the backup.
+
+Stop the container, then copy the volume out. `tar` is in the image. The entrypoint is the server, so replace it:
+
+```bash
+docker stop nerdgram1337
+docker run --rm --entrypoint tar \
+  -v nerdgram-data:/data:ro \
+  -v "$PWD":/backup \
+  nerdgram1337:local \
+  -C /data -czf /backup/nerdgram-data.tgz .
+```
+
+Use the image you actually run (`nerdgram1337:local` or the `ghcr.io` tag). A bind mount is a normal directory: copy that directory. Include the hidden `.meta` and `.nerdgram-git` folders.
+
+To upgrade, pull the new image and create the container again with the same volume. The app does not update itself from inside the container. About shows the commands when you choose **Show upgrade steps**. Do not run `docker volume rm`.
+
+```bash
+docker pull ghcr.io/networknerd1337/nerdgram1337:v1.0.0
+docker stop nerdgram1337
+docker rm nerdgram1337
+docker run -d \
+  --name nerdgram1337 \
+  --restart unless-stopped \
+  -p 127.0.0.1:8787:8787 \
+  -e NERDGRAM_DATA_DIR=/data \
+  -e NERDGRAM_INSTALL=docker \
+  -v nerdgram-data:/data \
+  ghcr.io/networknerd1337/nerdgram1337:v1.0.0
+```
+
+With Compose, change the pinned tag if you use one, then:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+`docker stop` asks the process to finish the write it is in and any GitHub sync already running. The data stays in the volume.
 
 ## Where diagrams are stored
 
@@ -721,7 +824,9 @@ diagrams/     Default local workspace (*.mmd files)
 templates/    Bundled read-only diagram templates (*.mmd)
 reference/    Offline Mermaid syntax dictionary (manifest + pages)
 screenshots/  UI captures checked into the repo
-.github/      GitHub Actions CI (install, lint, build, test)
+.github/      GitHub Actions CI and the image publish workflow
+Dockerfile    Production image (client, server, templates, reference)
+compose.yaml  Loopback publish, nerdgram-data volume
 package.json  Root scripts: install:all, dev, build, start, test
 ```
 
