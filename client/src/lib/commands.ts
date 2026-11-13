@@ -6,7 +6,7 @@
  * function. Later issues should register here instead of editing the palette:
  *
  * - #13 full search: `diagramHits` on the context (registered below)
- * - #17 new from template: `registerCommands` for each template
+ * - #17 new from template: `templateCommands.ts` registers the gallery and each template
  * - #18 Present: `presentCommands.ts` registers it. F5 and Mod-Shift-Enter
  *   are bound in `presentationKeys.ts`, not here.
  * - #19 check for updates: `registerCommands` from the update module

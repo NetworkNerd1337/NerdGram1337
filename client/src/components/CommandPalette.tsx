@@ -9,7 +9,9 @@ import {
   type CommandHostInput,
   type PaletteCommand,
 } from "../lib/commands";
+import { api } from "../api";
 import { searchDiagrams } from "../lib/diagramSearch";
+import { syncTemplateCommands } from "../lib/templateCommands";
 import type { DiagramSearchHit } from "../types";
 import "../lib/builtinCommands";
 import "../lib/presentCommands";
@@ -46,6 +48,21 @@ export function CommandPaletteRoot({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const hostRef = useRef<CommandHostInput>(EMPTY_COMMAND_HOST);
   const [open, setOpen] = useState(false);
+  const [templateEpoch, setTemplateEpoch] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    void api
+      .templates()
+      .then((result) => {
+        if (cancelled) return;
+        syncTemplateCommands(result.templates);
+        setTemplateEpoch((value) => value + 1);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const openPalette = useMemo(() => () => setOpen(true), []);
   const setHost = useMemo(() => {
     return (input: CommandHostInput) => {
@@ -71,6 +88,7 @@ export function CommandPaletteRoot({ children }: { children: ReactNode }) {
       {children}
       {open ? (
         <CommandPaletteDialog
+          epoch={templateEpoch}
           buildContext={(query) => ({ ...hostRef.current, query, navigate })}
           onClose={() => setOpen(false)}
         />
@@ -81,9 +99,11 @@ export function CommandPaletteRoot({ children }: { children: ReactNode }) {
 
 function CommandPaletteDialog({
   buildContext,
+  epoch,
   onClose,
 }: {
   buildContext: (query: string) => CommandContext;
+  epoch: number;
   onClose: () => void;
 }) {
   const titleId = useId();
@@ -97,10 +117,10 @@ function CommandPaletteDialog({
   const mac = shortcutMac();
   const trimmedQuery = query.trim();
   const diagramHits = trimmedQuery && hitQuery === trimmedQuery ? hits : NO_HITS;
-  const results = useMemo(
-    () => collectCommands({ ...buildContext(query), diagramHits }),
-    [buildContext, query, diagramHits],
-  );
+  const results = useMemo(() => {
+    void epoch;
+    return collectCommands({ ...buildContext(query), diagramHits });
+  }, [buildContext, query, diagramHits, epoch]);
 
   useEffect(() => {
     const q = query.trim();

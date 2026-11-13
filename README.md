@@ -110,6 +110,7 @@ NerdGram1337/                  (or NerdGram1337-main/ from the ZIP)
 │   ├── NetworkMap.mmd
 │   └── Examples/
 │       └── Sequence.mmd
+├── templates/                 bundled starter diagrams
 ├── screenshots/
 └── .github/workflows/         CI (install, lint, build, test)
 ```
@@ -433,7 +434,21 @@ Animated fades are skipped when the system asks for reduced motion.
 
 ## Search
 
-The sidebar search box matches file names and paths, titles, tags, descriptions, notes, and the visible text in a diagram: node and edge labels, subgraph titles, sequence messages, and similar labels. It does not match a diagram only because the file says `flowchart` or `sequenceDiagram`. Results show the matching text. Opening a result jumps to that line in the editor. The command palette (Ctrl+K or Cmd+K) uses the same search. **Names only**, under the search box, limits the dashboard to file names and paths. Diagrams in the trash are not included.
+The sidebar search box matches file names and paths, titles, tags, descriptions, notes, and the visible text in a diagram: node and edge labels, subgraph titles, sequence messages, and similar labels. It does not match a diagram only because the file says `flowchart` or `sequenceDiagram`. Results show the matching text. Opening a result jumps to that line in the editor. The command palette (Ctrl+K or Cmd+K) uses the same search. **Names only**, under the search box, limits the dashboard to file names and paths. Diagrams in the trash are not included. The gallery has its own search. Dashboard search does not list the bundled templates.
+
+## Template gallery
+
+**New diagram** on the dashboard, **Browse templates** on the Paste Mermaid page, **Templates** in the sidebar, and the command palette all open the gallery. The palette lists **Open template gallery** and **New from template:** plus each template name. Those commands do not add a shortcut.
+
+Each card shows a preview, the name, a short description, a category, and the diagram type. Search matches the name, description, tags, category, and diagram type. The category, type, and tag menus narrow the grid further. **Present** opens the template full screen without copying it.
+
+**Use template** asks for a name and a folder. The folder list is the same picker used when you move a diagram. The app writes a new `.mmd` file in your diagram folder and opens that copy in the editor. If the name is already there, the new file is `Name 2.mmd`, then `Name 3.mmd`. The existing file is left as it is. Editing the copy does not change the template.
+
+The starters are a network topology, a home lab, a firewall rule policy, a rack elevation, a flowchart, and a sequence. Addresses in them are documentation ranges from RFC 1918 and RFC 5737.
+
+The files live in `templates/` at the project root, next to `reference/`. They are not in `diagrams/`, and they are not hidden under `.meta`. To add one, drop a `.mmd` file in `templates/` and refresh the gallery. The file name is lowercase letters, numbers, and hyphens, such as `lab-wireless.mmd`. Files in subfolders are skipped. Start the file with Mermaid front matter: `title`, `config.theme` set to a built-in Mermaid theme, and a `nerdgram` block with `description`, `tags`, and `category`. The diagram itself has to be valid Mermaid or the preview shows “Preview unavailable.” No manifest is required.
+
+`templates/` is part of the app. A container image should copy that folder in and leave it read-only, the same way it copies `reference/`. Diagrams you create from a template are saved with your other diagrams (`diagrams/`, or `NERDGRAM_DATA_DIR`). This version does not keep a separate folder of templates you save yourself.
 
 ## Trash, version history, and editing locks
 
@@ -587,7 +602,8 @@ The production build has not been created. From the project root run `npm run bu
 - Conflict check on autosave, so a file that changed on disk is not overwritten without a choice
 - One writable editor per diagram. A second tab opens read-only until the lock is released or goes stale
 - Favorite diagrams, stored in `.meta/favorites.json` inside the data folder. A favorite returns when you restore the diagram from trash
-- Paste-only Mermaid create flow (`/new`)
+- Paste-only Mermaid create flow (`/new`), with the same folder picker used for move and import
+- Template gallery of network, lab, firewall, rack, flowchart, and sequence starters. Use template copies one into a folder you pick
 - Split code + live preview editor with autosave (500 ms) and Auto-Update preview
 - Mermaid syntax highlighting, autocomplete (diagram types, keywords, arrows, snippets, existing node IDs), bracket matching, and inline parse-error diagnostics in the code pane
 - Per-diagram title, description, notes, and tags in Mermaid front matter, with theme, look, and layout written into the file. The dashboard shows the title and can filter by tag. Ctrl+/ or Cmd+/ toggles a `%%` comment
@@ -602,6 +618,7 @@ The production build has not been created. From the project root run `npm run bu
 client/       React + Vite UI (dev server on localhost port 5173)
 server/       Express filesystem API (loopback port 8787)
 diagrams/     Default local workspace (*.mmd files)
+templates/    Bundled read-only diagram templates (*.mmd)
 reference/    Offline Mermaid syntax dictionary (manifest + pages)
 screenshots/  UI captures checked into the repo
 .github/      GitHub Actions CI (install, lint, build, test)

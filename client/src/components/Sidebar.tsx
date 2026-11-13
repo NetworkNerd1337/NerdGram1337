@@ -106,6 +106,13 @@ export function Sidebar({
       </div>
 
       <div className="nav-section">
+        <div className="nav-label">Templates</div>
+        <Link className="nav-link" to="/templates">
+          Template gallery
+        </Link>
+      </div>
+
+      <div className="nav-section">
         <div className="nav-label">Reference</div>
         <Link className="nav-link" to="/reference">
           Open Syntax Reference Library

@@ -164,6 +164,30 @@ describe("front matter parsing", () => {
     expect(parsed.notes).toBe("Line one\nLine two");
     expect(parsed.theme).toBe("forest");
     expect(parsed.body).toBe(CRLF_BODY);
+    expect(parsed.category).toBe("");
+  });
+
+  it("stores category under nerdgram and can clear it", () => {
+    const next = applyDiagramPatch(BODY, {
+      title: "Lab",
+      category: "Network",
+      description: "Edge path",
+    });
+    expect(next.ok).toBe(true);
+    if (!next.ok) return;
+    expect(next.source).toContain("nerdgram:");
+    expect(next.source).toContain("category: Network");
+    const parsed = parseDiagram(next.source);
+    expect(parsed.category).toBe("Network");
+    expect(parsed.description).toBe("Edge path");
+    expect(parsed.title).toBe("Lab");
+    expect(parsed.body).toBe(BODY);
+    const cleared = applyDiagramPatch(next.source, { category: "  " });
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    expect(parseDiagram(cleared.source).category).toBe("");
+    expect(cleared.source).not.toContain("category:");
+    expect(parseDiagram(cleared.source).description).toBe("Edge path");
   });
 
   it("keeps a comment-only header and adds a title without dropping the comment", () => {

@@ -680,6 +680,9 @@ export function DashboardPage() {
               <button type="button" className="btn btn-primary" onClick={openCreateDiagram}>
                 New diagram
               </button>
+              <Link className="btn btn-ghost" to={`/templates?folder=${encodeURIComponent(folder)}`}>
+                Templates
+              </Link>
               <button type="button" className="btn btn-ghost" onClick={openCreateFolder}>
                 New folder
               </button>
@@ -961,6 +964,23 @@ export function DashboardPage() {
           onClose={() => setModal(null)}
           onConfirm={() => void handleConfirm()}
         >
+          {modal.type === "diagram" ? (
+            <>
+              <p className="dialog-note">
+                This creates a blank flowchart. Browse templates for a network, lab, firewall, rack,
+                or sequence starter.
+              </p>
+              <p>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => navigate(`/templates?folder=${encodeURIComponent(folder)}`)}
+                >
+                  Browse templates
+                </button>
+              </p>
+            </>
+          ) : null}
           <label htmlFor="name-input">{modal.type === "folder" ? "Folder name" : "Diagram name"}</label>
           <input
             id="name-input"
