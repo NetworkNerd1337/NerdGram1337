@@ -7,7 +7,8 @@
  *
  * - #13 full search: `diagramHits` on the context (registered below)
  * - #17 new from template: `registerCommands` for each template
- * - #18 Present: one command, shortcut Mod-Shift-Enter or F5 (do not bind those here)
+ * - #18 Present: `presentCommands.ts` registers it. F5 and Mod-Shift-Enter
+ *   are bound in `presentationKeys.ts`, not here.
  * - #19 check for updates: `registerCommands` from the update module
  *
  * Do not bind F5, Mod-Shift-Enter, or Mod-/. Mod-/ toggles a Mermaid comment.
@@ -55,6 +56,8 @@ export type CommandActions = {
   setTheme?: (theme: string | null) => void;
   toggleAutoUpdate?: () => void;
   exportAs?: (format: ExportFormatName) => void;
+  /** Open the current editor diagram in presentation mode. */
+  present?: () => void;
   find?: () => void;
   replace?: () => void;
   gotoLine?: () => void;

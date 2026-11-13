@@ -1560,3 +1560,180 @@ a {
   border: 1px solid #3a4654;
   border-radius: 6px;
 }
+
+.preview-present {
+  color: #e8eef5;
+  border-color: #314257;
+}
+
+.presentation {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  background: #333;
+  color: var(--ink);
+  user-select: none;
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+.presentation:focus {
+  outline: none;
+}
+
+.presentation:fullscreen {
+  width: 100%;
+  height: 100%;
+}
+
+.presentation-stage {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+}
+
+.presentation-stage.is-panning {
+  cursor: grabbing;
+}
+
+.presentation.is-idle .presentation-stage {
+  cursor: none;
+}
+
+.presentation-canvas {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: 0 0;
+}
+
+.presentation-canvas svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+
+.presentation-title {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(80vw, 48rem);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  font-family: var(--font-display);
+}
+
+.presentation-banner,
+.presentation-status {
+  position: absolute;
+  left: 50%;
+  top: 4.5rem;
+  transform: translateX(-50%);
+  width: min(40rem, calc(100% - 2rem));
+  z-index: 2;
+}
+
+.presentation-banner {
+  color: #ffd7d7;
+  background: rgba(70, 18, 18, 0.92);
+  border: 1px solid rgba(255, 180, 180, 0.45);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
+.presentation-banner.is-only,
+.presentation-status {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.presentation-status {
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.94);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+}
+
+.presentation-bar {
+  position: absolute;
+  left: 50%;
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  max-width: calc(100% - 1.5rem);
+  padding: 0.4rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  z-index: 3;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 180ms ease;
+}
+
+.presentation-bar.is-visible,
+.presentation-bar:focus-within {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.presentation-bar .btn {
+  color: var(--ink);
+  background: #fff;
+  border-color: var(--line);
+  padding: 0.4rem 0.7rem;
+  min-width: 2.4rem;
+}
+
+.presentation-bar .btn:hover {
+  transform: none;
+}
+
+.presentation-bar .btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.presentation-zoom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.4rem;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .presentation-bar,
+  .presentation-title,
+  .presentation .btn,
+  .presentation .btn:hover {
+    transition: none;
+    animation: none;
+  }
+
+  .presentation .btn:hover {
+    transform: none;
+  }
+}

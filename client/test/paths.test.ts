@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { basename, displayName, ensureMmd, joinPath, parentPath } from "../src/lib/paths";
+import { basename, displayName, ensureMmd, joinPath, parentPath, presentHref } from "../src/lib/paths";
 
 describe("diagram paths", () => {
   it("joins folder and file names", () => {
@@ -12,6 +12,7 @@ describe("diagram paths", () => {
     expect(parentPath("Welcome.mmd")).toBe("");
     expect(basename("Examples/Sequence.mmd")).toBe("Sequence.mmd");
     expect(displayName("Examples/Sequence.mmd")).toBe("Sequence");
+    expect(presentHref("Examples/Sequence.mmd")).toBe("/present/Examples/Sequence.mmd");
   });
 
   it("adds the .mmd extension once", () => {

@@ -24,6 +24,11 @@ export function displayName(filePath: string): string {
   return basename(filePath).replace(/\.mmd$/i, "");
 }
 
+/** Read-only presentation route. Mirrors `/edit/<path>` and does not open the editor. */
+export function presentHref(filePath: string): string {
+  return `/present/${filePath}`;
+}
+
 export function formatRelativeTime(mtimeMs: number): string {
   const diff = Date.now() - mtimeMs;
   const sec = Math.round(diff / 1000);

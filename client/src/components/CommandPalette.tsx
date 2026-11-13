@@ -12,6 +12,7 @@ import {
 import { searchDiagrams } from "../lib/diagramSearch";
 import type { DiagramSearchHit } from "../types";
 import "../lib/builtinCommands";
+import "../lib/presentCommands";
 import { HighlightedText } from "./HighlightedText";
 import { PaletteContext, usePaletteControls, type PaletteControls } from "./commandPaletteContext";
 
@@ -56,6 +57,7 @@ export function CommandPaletteRoot({ children }: { children: ReactNode }) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!isPaletteShortcut(event)) return;
+      if (document.body.dataset.presenting === "true") return;
       event.preventDefault();
       event.stopPropagation();
       setOpen((current) => !current);

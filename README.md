@@ -406,7 +406,30 @@ Dashboard cards keep a thumbnail of each diagram. The first time a card is on sc
 
 In the editor, Ctrl+F (Cmd+F on a Mac) opens find and replace. The panel can match case, whole words, or a regular expression, and it can replace one match or all of them. Ctrl+G finds the next match. Go to line is Ctrl+Alt+G (Cmd+Alt+G on a Mac), so Ctrl+L / Cmd+L still focuses the address bar. These shortcuts apply while the code pane is focused.
 
-Ctrl+K (Cmd+K on a Mac) opens the command palette. It lists the actions already in the app: new diagram, paste, folder, import, search, open, rename, move, duplicate, trash, restore, diagram info, history, theme, export, find, and go to line. If the browser address bar takes that shortcut, use the **Commands** button. Ctrl+/ (Cmd+/ on a Mac) still comments the selected lines.
+Ctrl+K (Cmd+K on a Mac) opens the command palette. It lists the actions already in the app: new diagram, paste, folder, import, search, open, rename, move, duplicate, trash, restore, diagram info, history, theme, export, present, find, and go to line. If the browser address bar takes that shortcut, use the **Commands** button. Ctrl+/ (Cmd+/ on a Mac) still comments the selected lines.
+
+## Presentation
+
+**Present** shows the diagram on its own, using the theme, look, and layout stored in the file. The title is the front-matter title when the file has one, and the file name otherwise. The control bar can hide the title.
+
+In the editor, use **Present** on the preview toolbar, press **F5**, or press **Ctrl+Shift+Enter** (**Cmd+Shift+Enter** on a Mac). The same **Present diagram** command is in the command palette. **F5** is also the browser reload key. NerdGram uses it for presentation only when a diagram is open and the cursor is not in a form field (search, rename, diagram info, go to line, or the command palette). It does work from the code pane. On the dashboard, the new-diagram page, and the reference, F5 still reloads the page. Pan and zoom keys do not run while you are typing in the editor; they run only during presentation.
+
+**Esc** or **Exit** leaves presentation and returns to the editor or the dashboard. If the browser is showing its own fullscreen and blocks the first Esc, press Esc again or use **Exit**.
+
+On the dashboard, **Present** on a card or a list row opens that diagram without opening the editor. The address looks like `/present/Welcome.mmd`. Presentation does not save the file and does not take the editor lock.
+
+The bar hides after a short pause. Move the pointer, or press Tab, to bring it back. It has zoom in, zoom out, the zoom percent, rotate left, rotate right, fit, title, full screen, and exit.
+
+- The mouse wheel and a trackpad pinch zoom toward the pointer. **+** and **-** zoom toward the last pointer position, or the center of the screen.
+- Zoom from the keys and buttons stays between 10% and 800% of the diagram's own size. **Fit** can go outside that range so the whole diagram is visible.
+- Drag, a trackpad two-finger scroll, **W A S D**, and **Shift+arrow** pan in any direction.
+- Plain arrow keys pan only after you have zoomed in or panned away from the fitted view. At the fitted view they do nothing, so a later slideshow can use them for the next diagram.
+- **R** rotates 90° clockwise. **Shift+R** rotates the other way. **Alt+drag** rotates by any angle.
+- **0** or **F**, or **Fit**, clears zoom, pan, and rotation and fits the diagram. A quarter turn uses the rotated size, so a tall diagram turned sideways fills a landscape screen.
+- If fullscreen is unavailable, the diagram still fills the window. **Full screen** tries again after a click.
+- A bad header or a diagram that cannot be drawn shows the error. The last good picture stays up when a later refresh fails.
+
+Animated fades are skipped when the system asks for reduced motion.
 
 ## Search
 
@@ -569,6 +592,7 @@ The production build has not been created. From the project root run `npm run bu
 - Mermaid syntax highlighting, autocomplete (diagram types, keywords, arrows, snippets, existing node IDs), bracket matching, and inline parse-error diagnostics in the code pane
 - Per-diagram title, description, notes, and tags in Mermaid front matter, with theme, look, and layout written into the file. The dashboard shows the title and can filter by tag. Ctrl+/ or Cmd+/ toggles a `%%` comment
 - Cached dashboard thumbnails, editor find and replace, go to line (Ctrl+Alt+G or Cmd+Alt+G), and a command palette (Ctrl+K or Cmd+K)
+- Fullscreen presentation with zoom, pan, and rotate (F5, or Ctrl+Shift+Enter / Cmd+Shift+Enter). From the dashboard, Present opens the diagram without the editor
 - Export to SVG, PNG, JPG, and PDF (PDF is built client-side from the live SVG so the current theme is preserved)
 - Offline Mermaid syntax reference library with sync from mermaid.js.org
 

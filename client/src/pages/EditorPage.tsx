@@ -8,6 +8,7 @@ import { ConflictDialog } from "../components/ConflictDialog";
 import { DiagramInfoPanel } from "../components/DiagramInfoPanel";
 import { HistoryDialog } from "../components/HistoryDialog";
 import { MermaidCodeEditor } from "../components/MermaidCodeEditor";
+import { PresentationView } from "../components/PresentationView";
 import { revealEditorMatch, runFind, runGotoLine, runReplace } from "../lib/editorCommands";
 import { exportDiagram, type ExportFormat } from "../lib/exportDiagram";
 import {
@@ -34,6 +35,13 @@ import {
   type DiagramPatch,
 } from "../lib/frontMatter";
 import { renderMermaid } from "../lib/mermaidRender";
+import { startPresentation } from "../lib/presentationFullscreen";
+import {
+  isCodeEditorTarget,
+  isFormField,
+  keyEventFrom,
+  presentationAction,
+} from "../lib/presentationKeys";
 import { rememberThumbnail } from "../lib/thumbnailCache";
 import { displayName, joinPath, parentPath } from "../lib/paths";
 
@@ -90,6 +98,12 @@ export function EditorPage() {
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [presenting, setPresenting] = useState(false);
+  const [presentPath, setPresentPath] = useState(filePath);
+  if (presentPath !== filePath) {
+    setPresentPath(filePath);
+    setPresenting(false);
+  }
   const [savedCode, setSavedCode] = useState("");
   const [lockToken, setLockToken] = useState<string | null>(null);
 
@@ -511,6 +525,25 @@ export function EditorPage() {
     }
   };
 
+  useEffect(() => {
+    if (!loaded || presenting || conflict?.open || historyOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      const action = presentationAction(keyEventFrom(event), {
+        presenting: false,
+        available: true,
+        formField: isFormField(event.target),
+        codeEditor: isCodeEditorTarget(event.target),
+        atFit: true,
+      });
+      if (action.type !== "start") return;
+      event.preventDefault();
+      event.stopPropagation();
+      startPresentation(() => setPresenting(true));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [loaded, presenting, conflict?.open, historyOpen]);
+
   const readOnly = access !== "edit";
   const info = useMemo(() => parseDiagram(code), [code]);
   const heading = diagramHeading(info.title, filePath);
@@ -543,6 +576,12 @@ export function EditorPage() {
       exportAs: (format) => {
         void handleExport(format);
       },
+      present:
+        loaded && !conflict?.open
+          ? () => {
+              startPresentation(() => setPresenting(true));
+            }
+          : undefined,
       find: () => {
         runFind();
       },
@@ -787,6 +826,15 @@ export function EditorPage() {
               />
               <button
                 type="button"
+                className="btn btn-ghost preview-present"
+                onClick={() => startPresentation(() => setPresenting(true))}
+                disabled={!loaded}
+                aria-keyshortcuts="F5"
+              >
+                Present
+              </button>
+              <button
+                type="button"
                 className="btn btn-ghost"
                 onClick={() => setInfoOpen(!infoOpen)}
               >
@@ -813,6 +861,9 @@ export function EditorPage() {
           onOverwrite={() => void overwriteDisk()}
         />
       )}
+      {presenting && loaded ? (
+        <PresentationView source={code} path={filePath} onExit={() => setPresenting(false)} />
+      ) : null}
       {historyOpen && (
         <HistoryDialog
           path={filePath}
