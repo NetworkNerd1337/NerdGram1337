@@ -110,7 +110,8 @@ NerdGram1337/                  (or NerdGram1337-main/ from the ZIP)
 │   ├── NetworkMap.mmd
 │   └── Examples/
 │       └── Sequence.mmd
-└── screenshots/
+├── screenshots/
+└── .github/workflows/         CI (install, lint, build, test)
 ```
 
 `npm install` later adds a `node_modules/` folder in the root, in `client/`, and in `server/`. Those are downloaded dependencies. Leave them in place and do not edit them.
@@ -209,8 +210,8 @@ concurrently -n server,client -c blue,magenta "npm run dev --prefix server" "npm
 
 `concurrently` starts both of these and prefixes their logs with `server` and `client`:
 
-- **server** runs `tsx watch src/index.ts`. That starts the Express API and restarts it when files in `server/src/` change. The API listens on port **8787**.
-- **client** runs `vite`. That starts the UI dev server on port **5173** and reloads the page when UI files change. Requests to `/api` on port 5173 are proxied to `http://localhost:8787`, so the page and the API talk to each other while you use the UI URL.
+- **server** runs `tsx watch src/index.ts`. That starts the Express API and restarts it when files in `server/src/` change. By default the API listens on **127.0.0.1 port 8787** and, when IPv6 loopback is available, **::1 port 8787**. It does not listen on the LAN.
+- **client** runs `vite` bound to **localhost** on port **5173** and reloads the page when UI files change. Requests to `/api` on port 5173 are proxied to `http://127.0.0.1:8787`, so the page and the API talk to each other while you use the UI URL.
 
 Leave this terminal open. A successful start looks like this (the Vite version and the timing will vary, and the data-directory path will be yours):
 
@@ -225,7 +226,8 @@ Leave this terminal open. A successful start looks like this (the Vite version a
 
 [client]   VITE v8.x  ready
 [client]   ➜  Local:   http://localhost:5173/
-[server] NerdGram1337 API listening on http://localhost:8787
+[server] NerdGram1337 API listening on http://127.0.0.1:8787
+[server] NerdGram1337 API listening on http://[::1]:8787
 [server] Data directory: /home/you/Projects/NerdGram1337/diagrams
 ```
 
@@ -233,12 +235,14 @@ Open the UI in a browser:
 
 - UI: [http://localhost:5173](http://localhost:5173)
 
+Vite listens on `localhost` only, not on the LAN. That name is a single loopback address, so use the Local URL from the log. If `http://127.0.0.1:5173` does not connect, stay on `http://localhost:5173`.
+
 The dashboard should list the sample diagrams. The API is also up:
 
 - API: [http://localhost:8787](http://localhost:8787)
 - Health check: [http://localhost:8787/api/health](http://localhost:8787/api/health)
 
-The health check returns JSON with `"ok": true` and the `dataDir` the server is using. Day to day, use the UI URL. The Vite server forwards API calls for you.
+The health check returns JSON with `"ok": true` and the `dataDir` the server is using. Those `localhost` URLs work because the default bind includes `::1` as well as `127.0.0.1`. If the log says it could not listen on `::1`, open [http://127.0.0.1:8787/api/health](http://127.0.0.1:8787/api/health) instead. Day to day, use the UI URL. The Vite server forwards API calls for you.
 
 ### 6. Stop the app, and start it again later
 
@@ -288,7 +292,8 @@ Open:
 There is no Vite server in this mode, so [http://localhost:5173](http://localhost:5173) will not respond. The startup log is:
 
 ```text
-NerdGram1337 API listening on http://localhost:8787
+NerdGram1337 API listening on http://127.0.0.1:8787
+NerdGram1337 API listening on http://[::1]:8787
 Data directory: /home/you/Projects/NerdGram1337/diagrams
 ```
 
@@ -302,7 +307,15 @@ Error: Cannot find module '.../server/dist/index.js'
 
 Run `npm run build` from the project root, then `npm start` again.
 
-The server reads `PORT` if you set it. In production, `PORT=8790 npm start` (Command Prompt: `set PORT=8790` then `npm start`; PowerShell: `$env:PORT = "8790"`) serves the UI and the API on that port. During `npm run dev`, leave the API on 8787: the Vite proxy is configured to forward `/api` to `http://localhost:8787`.
+The server reads `PORT` if you set it. In production, `PORT=8790 npm start` (Command Prompt: `set PORT=8790` then `npm start`; PowerShell: `$env:PORT = "8790"`) serves the UI and the API on that port. During `npm run dev`, leave the API on 8787: the Vite proxy is configured to forward `/api` to `http://127.0.0.1:8787`.
+
+`HOST` chooses the bind address. Leave it unset for normal use. That default listens on `127.0.0.1` and `::1` only. Setting `HOST` replaces that pair with the single address you give it:
+
+- `HOST=127.0.0.1` listens on IPv4 loopback only. If `http://localhost:8787` does not open, use `http://127.0.0.1:8787`.
+- `HOST=::1` listens on IPv6 loopback only.
+- `HOST=0.0.0.0`, `HOST=::`, or any other non-loopback address listens beyond this machine. Startup prints a loud warning. There is still no authentication, and that setup is unsupported on a shared host, LAN, or NAS. The only intended use is inside a container, with the host publishing `127.0.0.1:8787:8787` rather than `0.0.0.0:8787`.
+
+macOS or Linux: `HOST=127.0.0.1 npm start`. Windows Command Prompt: `set HOST=127.0.0.1` then `npm start`. PowerShell: `$env:HOST = "127.0.0.1"`. The same variable applies to `npm run dev`. Development mode (the `tsx` dev script) also allows the Vite origin on port 5173. `npm start` runs the compiled server and does not. Set `NODE_ENV=production` or `NODE_ENV=development` only if you need to override that.
 
 ## Where diagrams are stored
 
@@ -399,6 +412,21 @@ Then `npm run dev`, or `npm run build` and `npm start`. `git pull` updates track
 
 **If you used the ZIP**, download a fresh ZIP from the link in step 2 and extract it to a new folder. `cd` into that folder and run `npm run install:all` again. The ZIP does not include `node_modules`. If your diagrams are still in the old project's `diagrams/` folder, copy that folder into the new project. If you set `NERDGRAM_DATA_DIR`, point the new copy at the same path and leave the files where they are.
 
+## Security model
+
+NerdGram1337 is a local, single-user personal tool. It has no accounts and no authentication, by design. Diagrams are plain `.mmd` files, and your operating-system account and file permissions are the access control. Do not run it as a shared service, on a NAS, or on a host other people can reach. That use is unsupported.
+
+The API binds loopback only unless you set `HOST` (see production mode above). Do not forward port 8787 or 5173 to the network.
+
+Two browser checks sit in front of that bind:
+
+- Every request must use a loopback `Host` header (`localhost`, `127.0.0.1`, or `[::1]`, including the API port). Any other `Host` is rejected with **403**. That blocks a public DNS name that points back at your machine. `NERDGRAM_ALLOWED_HOSTS` is an optional comma-separated list of extra hostnames. Adding one does not make shared-server use supported.
+- `POST`, `PUT`, `PATCH`, and `DELETE` must come from the same origin as the API (`http://127.0.0.1:8787`, `http://localhost:8787`, or `http://[::1]:8787`). In development, `http://localhost:5173`, `http://127.0.0.1:5173`, and `http://[::1]:5173` are allowed too. A page on another website is rejected with **403**. Those requests also need `Content-Type: application/json` (a plain HTML form cannot set that, and gets **415**). `curl` on the same machine does not send an `Origin` and is allowed. Production does not enable cross-origin browser access, because the UI and the API are the same port. Development CORS allows only the origins listed above.
+
+`NERDGRAM_CORS_ORIGINS` is an optional comma-separated list of extra origins, for example when Vite falls over to port 5174 (see troubleshooting). It is not a wildcard.
+
+Paths stay inside the data directory. The server rejects null bytes and any path that escapes that directory, and diagram writes must be `.mmd` files.
+
 ## Troubleshooting
 
 ### Port already in use
@@ -406,10 +434,10 @@ Then `npm run dev`, or `npm run build` and `npm start`. `git pull` updates track
 If the API port is taken, the server exits and prints:
 
 ```text
-Error: listen EADDRINUSE: address already in use :::8787
+Error: listen EADDRINUSE: address already in use 127.0.0.1:8787
 ```
 
-A previous `npm run dev` or `npm start` is usually still running in another terminal. Switch to that terminal and press Ctrl+C, then start the app again. Do not run `npm run dev` and `npm start` at the same time. They both listen on 8787.
+A previous `npm run dev` or `npm start` is usually still running in another terminal. Switch to that terminal and press Ctrl+C, then start the app again. Do not run `npm run dev` and `npm start` at the same time. They both listen on 127.0.0.1 port 8787.
 
 If Vite's port is taken, it does not exit. It prints:
 
@@ -418,7 +446,7 @@ Port 5173 is in use, trying another one...
   ➜  Local:   http://localhost:5174/
 ```
 
-Open the URL in that line. The API still has to be on port 8787, because the dev proxy forwards `/api` there.
+Open the URL in that line. The API still has to be on port 8787, because the dev proxy forwards `/api` to `http://127.0.0.1:8787`. Saving a diagram from that fallback port also needs the new origin on the allow-list. From the project root, stop the app, then start it again with `NERDGRAM_CORS_ORIGINS` set to the origin Vite printed (macOS or Linux: `NERDGRAM_CORS_ORIGINS=http://localhost:5174 npm run dev`; Command Prompt: `set NERDGRAM_CORS_ORIGINS=http://localhost:5174`; PowerShell: `$env:NERDGRAM_CORS_ORIGINS = "http://localhost:5174"`). Add `http://127.0.0.1:5174` as well, separated by a comma, if you open the UI that way. Do not set a wildcard.
 
 ### Wrong Node.js version
 
@@ -455,12 +483,13 @@ The production build has not been created. From the project root run `npm run bu
 ## Project layout
 
 ```
-client/       React + Vite UI (dev server on port 5173)
-server/       Express filesystem API (port 8787)
+client/       React + Vite UI (dev server on localhost port 5173)
+server/       Express filesystem API (loopback port 8787)
 diagrams/     Default local workspace (*.mmd files)
 reference/    Offline Mermaid syntax dictionary (manifest + pages)
 screenshots/  UI captures checked into the repo
-package.json  Root scripts: install:all, dev, build, start
+.github/      GitHub Actions CI (install, lint, build, test)
+package.json  Root scripts: install:all, dev, build, start, test
 ```
 
 ## License
