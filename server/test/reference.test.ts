@@ -7,6 +7,7 @@ import {
   getReferencePage,
   listReference,
   referenceWriteLayout,
+  rewriteReferenceLinks,
   syncReference,
 } from "../src/syntaxReference.js";
 import { makeTempDataDir } from "./helpers.js";
@@ -75,6 +76,38 @@ describe("reference sync layout", () => {
     await expect(fs.access(path.join(temp.dir, ".meta", "reference", "manifest.json"))).rejects.toThrow();
     const page = await getReferencePage("flowchart");
     expect(page.content).not.toContain(TOKEN);
+  });
+
+  it("rewrites retired Mermaid doc URLs so a sync cannot put them back", async () => {
+    const retired =
+      "See [Getting Started](https://mermaid.js.org/getting-started.html#_4-calling-the-mermaid-javascript-api) and [Flowchart](https://mermaid.js.org/flowchart.html#links-between-nodes).";
+    const rewritten = rewriteReferenceLinks(retired);
+    expect(rewritten).toContain(
+      "https://mermaid.js.org/intro/getting-started.html#_4-calling-the-mermaid-javascript-api",
+    );
+    expect(rewritten).toContain("https://mermaid.js.org/syntax/flowchart.html#links-between-nodes");
+    expect(rewritten).not.toContain("https://mermaid.js.org/getting-started.html");
+    expect(rewritten).not.toContain("](https://mermaid.js.org/flowchart.html");
+
+    const temp = await makeTempDataDir();
+    cleanup = temp.cleanup;
+    globalThis.fetch = async () =>
+      new Response(
+        `<!doctype html><html><head><title>Diagram | Mermaid</title></head><body><main class="vp-doc"><p><a href="https://mermaid.js.org/getting-started.html">Start</a> <a href="https://mermaid.js.org/pie.html">Pie</a></p><p>${TOKEN}</p></main></body></html>`,
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    await syncReference();
+    const synced = await fs.readFile(
+      path.join(temp.dir, ".meta", "reference", "pages", "flowchart.md"),
+      "utf8",
+    );
+    expect(synced).toContain("https://mermaid.js.org/intro/getting-started.html");
+    expect(synced).toContain("https://mermaid.js.org/syntax/pie.html");
+    expect(synced).not.toContain("https://mermaid.js.org/getting-started.html");
+    expect(synced).not.toMatch(/https:\/\/mermaid\.js\.org\/pie\.html/);
+    const served = await getReferencePage("syntax-reference");
+    expect(served.content).toContain("https://mermaid.js.org/intro/getting-started.html");
+    expect(served.content).not.toContain("https://mermaid.js.org/getting-started.html");
   });
 
   it("keeps the repo-root layout when NERDGRAM_DATA_DIR is unset", async () => {

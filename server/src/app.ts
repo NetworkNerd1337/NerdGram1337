@@ -687,6 +687,17 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     }
   });
 
+  app.post("/api/lock/takeover", async (req, res) => {
+    try {
+      const relative = diagramPath(req.body?.path);
+      const sessionId = String(req.body?.sessionId || "");
+      const lock = await locks.takeoverLock(relative, sessionId);
+      res.json(lock);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
   app.get("/api/sync/status", async (_req, res) => {
     try {
       res.json(await sync.getSyncStatus());

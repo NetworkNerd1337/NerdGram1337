@@ -473,6 +473,76 @@ describe("trash, history, conflicts, and locks", () => {
     expect(recovered.status).toBe(200);
   });
 
+  it("refuses to take over a lock another window is still refreshing", async () => {
+    await writeNew("Notes.mmd", "loaded\n");
+    const first = await request(app)
+      .post("/api/lock")
+      .set(json)
+      .send({ path: "Notes.mmd", sessionId: "tab-one" });
+    expect(first.status).toBe(200);
+
+    const takeover = await request(app)
+      .post("/api/lock/takeover")
+      .set(json)
+      .send({ path: "Notes.mmd", sessionId: "tab-two" });
+    expect(takeover.status).toBe(423);
+    expect(takeover.body.code).toBe("locked");
+    expect(takeover.body.lock.staleAfterMs).toBeGreaterThan(0);
+
+    const held = await request(app).put("/api/file").set(json).send({
+      path: "Notes.mmd",
+      content: "still-mine\n",
+      force: true,
+      lockToken: first.body.token,
+    });
+    expect(held.status).toBe(200);
+    expect(await fs.readFile(path.join(dir, "Notes.mmd"), "utf8")).toBe("still-mine\n");
+  });
+
+  it("lets a confirmed takeover replace a lock after the heartbeat expires", async () => {
+    await writeNew("Notes.mmd", "loaded\n");
+    const first = await request(app)
+      .post("/api/lock")
+      .set(json)
+      .send({ path: "Notes.mmd", sessionId: "tab-one" });
+    const lockPath = path.join(dir, ".meta", "locks", `${encodeStorageKey("Notes.mmd")}.json`);
+    const record = JSON.parse(await fs.readFile(lockPath, "utf8")) as { heartbeatAt: string; pid: number };
+    record.heartbeatAt = new Date(Date.now() - 120_000).toISOString();
+    record.pid = process.pid;
+    await fs.writeFile(lockPath, JSON.stringify(record));
+
+    const takeover = await request(app)
+      .post("/api/lock/takeover")
+      .set(json)
+      .send({ path: "Notes.mmd", sessionId: "tab-two" });
+    expect(takeover.status).toBe(200);
+    expect(takeover.body.token).toBeTruthy();
+    expect(takeover.body.token).not.toBe(first.body.token);
+    expect(takeover.body.sessionId).toBe("tab-two");
+
+    const oldWrite = await request(app).put("/api/file").set(json).send({
+      path: "Notes.mmd",
+      content: "old-tab\n",
+      force: true,
+      lockToken: first.body.token,
+    });
+    expect(oldWrite.status).toBe(423);
+    const saved = await request(app).put("/api/file").set(json).send({
+      path: "Notes.mmd",
+      content: "taken\n",
+      force: true,
+      lockToken: takeover.body.token,
+    });
+    expect(saved.status).toBe(200);
+    expect(await fs.readFile(path.join(dir, "Notes.mmd"), "utf8")).toBe("taken\n");
+
+    const live = await request(app)
+      .post("/api/lock")
+      .set(json)
+      .send({ path: "Notes.mmd", sessionId: "tab-three" });
+    expect(live.status).toBe(423);
+  });
+
   it("refuses a folder change while a diagram inside it is open", async () => {
     await writeNew("Lab/One.mmd", "flowchart LR\n  A-->B\n");
     const lock = await request(app)

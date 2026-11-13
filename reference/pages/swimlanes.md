@@ -269,7 +269,7 @@ Circle
 
 Connector or marker
 
-For the complete shape catalog, icons, images, markdown strings, classes, and styling options, see [Flowchart syntax](https://mermaid.js.org/flowchart.html).
+For the complete shape catalog, icons, images, markdown strings, classes, and styling options, see [Flowchart syntax](https://mermaid.js.org/syntax/flowchart.html).
 
 ### Edges [​](#edges)
 
@@ -324,7 +324,7 @@ Dotted arrow
 
 Thick arrow
 
-For the full edge syntax, including multi-directional arrows and minimum link length, see [Flowchart syntax](https://mermaid.js.org/flowchart.html#links-between-nodes).
+For the full edge syntax, including multi-directional arrows and minimum link length, see [Flowchart syntax](https://mermaid.js.org/syntax/flowchart.html#links-between-nodes).
 
 ### Accessibility [​](#accessibility)
 
@@ -511,4 +511,4 @@ Ctrl + Enter|Run ▶
 
 ## When to Use Another Diagram [​](#when-to-use-another-diagram)
 
-Use a regular [flowchart](https://mermaid.js.org/flowchart.html) when ownership is not important and you only need to show sequence or branching. Use a [sequence diagram](https://mermaid.js.org/sequenceDiagram.html) when the focus is messages over time between participants. Use a [state diagram](https://mermaid.js.org/stateDiagram.html) when the focus is how one thing changes state.
+Use a regular [flowchart](https://mermaid.js.org/syntax/flowchart.html) when ownership is not important and you only need to show sequence or branching. Use a [sequence diagram](https://mermaid.js.org/syntax/sequenceDiagram.html) when the focus is messages over time between participants. Use a [state diagram](https://mermaid.js.org/syntax/stateDiagram.html) when the focus is how one thing changes state.

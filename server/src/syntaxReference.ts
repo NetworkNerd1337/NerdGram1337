@@ -32,6 +32,28 @@ const ATTRIBUTION =
 
 const BASE = "https://mermaid.js.org";
 
+/**
+ * Retired docs URLs that still appear in older Mermaid pages. A sync copies
+ * them through as absolute links, so rewrite them on the way in and on read.
+ * The hash, when present, is left in place.
+ */
+const RETIRED_DOC_LINKS: ReadonlyArray<readonly [string, string]> = [
+  [`${BASE}/getting-started.html`, `${BASE}/intro/getting-started.html`],
+  [`${BASE}/flowchart.html`, `${BASE}/syntax/flowchart.html`],
+  [`${BASE}/sequenceDiagram.html`, `${BASE}/syntax/sequenceDiagram.html`],
+  [`${BASE}/stateDiagram.html`, `${BASE}/syntax/stateDiagram.html`],
+  [`${BASE}/pie.html`, `${BASE}/syntax/pie.html`],
+  [`${BASE}/sankey.html`, `${BASE}/syntax/sankey.html`],
+];
+
+export function rewriteReferenceLinks(markdown: string): string {
+  let next = markdown;
+  for (const [from, to] of RETIRED_DOC_LINKS) {
+    next = next.split(from).join(to);
+  }
+  return next;
+}
+
 /** Allowlisted docs pages: intro syntax reference + all syntax diagram pages. */
 export const REFERENCE_SOURCES: { id: string; sourceUrl: string; title: string }[] = [
   {
@@ -255,7 +277,7 @@ export async function getReferencePage(id: string): Promise<ReferencePagePayload
     throw Object.assign(new Error("Reference page not found"), { status: 404 });
   }
   const filename = meta.filename || `${pageId}.md`;
-  const content = await fs.readFile(pageFile(root, filename), "utf8");
+  const content = rewriteReferenceLinks(await fs.readFile(pageFile(root, filename), "utf8"));
   const overrides = await readOverrides();
   return {
     id: meta.id,
@@ -389,17 +411,19 @@ export async function syncReference(): Promise<ReferenceManifest> {
       const markdownBody = turndown.turndown(extracted.html).trim();
       const title = source.title || extracted.title;
       const filename = `${source.id}.md`;
-      const header = [
-        `<!-- Source: ${source.sourceUrl} -->`,
-        `<!-- License: MIT (Mermaid documentation) -->`,
-        "",
-        `# ${title}`,
-        "",
-        `> Offline mirror for NerdGram1337. Upstream: [${source.sourceUrl}](${source.sourceUrl})`,
-        "",
-        markdownBody,
-        "",
-      ].join("\n");
+      const header = rewriteReferenceLinks(
+        [
+          `<!-- Source: ${source.sourceUrl} -->`,
+          `<!-- License: MIT (Mermaid documentation) -->`,
+          "",
+          `# ${title}`,
+          "",
+          `> Offline mirror for NerdGram1337. Upstream: [${source.sourceUrl}](${source.sourceUrl})`,
+          "",
+          markdownBody,
+          "",
+        ].join("\n"),
+      );
 
       await fs.writeFile(path.join(stagingRoot, "pages", filename), header, "utf8");
       pages.push({

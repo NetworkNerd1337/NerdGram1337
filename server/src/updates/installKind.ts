@@ -18,7 +18,7 @@ export type InstallProbe = {
  *
  * `NERDGRAM_INSTALL=docker` (set by the image in #12) is docker even when a
  * `.git` directory was copied in by mistake. A git install is only the app
- * checkout at the repo root. The diagram sync mirror `<data>/.nerdgram-git`
+ * checkout at the repo root. The diagram sync mirror `.nerdgram-git` under the data directory
  * is not this repo and is never consulted.
  */
 export function detectInstallKind(probe: InstallProbe = {}): InstallKind {

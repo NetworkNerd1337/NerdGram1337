@@ -66,6 +66,7 @@ function lockedError(record: LockRecord): Error {
     lock: {
       acquiredAt: record.acquiredAt,
       heartbeatAt: record.heartbeatAt,
+      staleAfterMs: LOCK_STALE_MS,
     },
   });
 }
@@ -155,6 +156,26 @@ export async function heartbeatLock(
     throw httpFail(423, "The editor lock is no longer held by this window.", "locked");
   }
   return publicLock(next);
+}
+
+/**
+ * Replace a missing or stale lock after the reader confirms. A lock that is
+ * still being refreshed by another window is left alone.
+ */
+export async function takeoverLock(
+  relativePath: string,
+  sessionId: string,
+): Promise<ReturnType<typeof publicLock>> {
+  const normalized = normalizeRelative(relativePath);
+  const existing = await readLock(normalized);
+  if (
+    existing &&
+    !existing.stale &&
+    !(existing.sessionId === sessionId && existing.pid === process.pid)
+  ) {
+    throw lockedError(existing);
+  }
+  return acquireLock(relativePath, sessionId);
 }
 
 export async function releaseLock(relativePath: string, token: string): Promise<void> {

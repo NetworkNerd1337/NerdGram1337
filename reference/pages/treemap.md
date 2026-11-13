@@ -335,9 +335,9 @@ Treemap diagrams are commonly used for:
 
 If treemap diagrams don't suit your needs, consider these alternatives:
 
--   [**Pie Charts**](https://mermaid.js.org/pie.html): For simple proportion comparisons without hierarchy
+-   [**Pie Charts**](https://mermaid.js.org/syntax/pie.html): For simple proportion comparisons without hierarchy
 -   **Sunburst Diagrams**: For hierarchical data with a radial layout (yet to be released in Mermaid).
--   [**Sankey Diagrams**](https://mermaid.js.org/sankey.html): For flow-based hierarchical data
+-   [**Sankey Diagrams**](https://mermaid.js.org/syntax/sankey.html): For flow-based hierarchical data
 
 ## Notes [​](#notes)
 
