@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { readDataSource } from "../../../server/src/diagramData.ts";
 import { indexDiagramLinks, insertDiagramLink, linksFor } from "../../../server/src/diagramLinks.ts";
 import { ApiError, api } from "../api";
 import { Brand } from "../components/Brand";
@@ -9,6 +10,7 @@ import { ConflictDialog } from "../components/ConflictDialog";
 import { DiagramInfoPanel, type DiagramLinkRow } from "../components/DiagramInfoPanel";
 import { DrillTrail } from "../components/DrillTrail";
 import { LinkNodeDialog } from "../components/LinkNodeDialog";
+import { RefreshDiffDialog, type RefreshDiff } from "../components/RefreshDiffDialog";
 import { EditorLockBanner, TakeoverDialog } from "../components/EditorLockBanner";
 import { HistoryDialog } from "../components/HistoryDialog";
 import { MermaidCodeEditor } from "../components/MermaidCodeEditor";
@@ -118,6 +120,14 @@ export function EditorPage() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [linkMessage, setLinkMessage] = useState<{ path: string; text: string } | null>(null);
+  const [refresh, setRefresh] = useState<{
+    dataPath: string;
+    diff: RefreshDiff;
+    mermaid: string;
+    warnings: { row: number; message: string }[];
+    error: string | null;
+    rowErrors: { row: number; message: string }[];
+  } | null>(null);
   const [linkNodeOpen, setLinkNodeOpen] = useState(false);
   const [linkedFrom, setLinkedFrom] = useState<{ path: string; target: string; line: number }[]>([]);
   const [presentPath, setPresentPath] = useState(filePath);
@@ -747,11 +757,42 @@ export function EditorPage() {
     const next = migrateInitDirectives(code);
     if (next.ok && next.migrated) setCode(next.source);
   };
+  const dataSource = useMemo(() => readDataSource(code), [code]);
+  const refreshFromData = () => {
+    if (readOnly || !dataSource) return;
+    const emptyDiff: RefreshDiff = {
+      nodes: { added: [], removed: [], changed: [] },
+      edges: { added: [], removed: [], changed: [] },
+    };
+    void api
+      .refreshGenerate({ path: filePath, diagramText: code })
+      .then((result) => {
+        setRefresh({
+          dataPath: result.dataPath,
+          diff: result.diff,
+          mermaid: result.mermaid,
+          warnings: result.warnings ?? [],
+          error: null,
+          rowErrors: [],
+        });
+      })
+      .catch((err: unknown) => {
+        setRefresh({
+          dataPath: dataSource.file,
+          diff: emptyDiff,
+          mermaid: code,
+          warnings: [],
+          error: err instanceof Error ? err.message : "Could not refresh this diagram.",
+          rowErrors: err instanceof ApiError ? (err.errors ?? []) : [],
+        });
+      });
+  };
   useCommandHost({
     route: "editor",
     actions: {
       editDiagramInfo: () => setInfoOpen(true),
       linkNode: readOnly ? undefined : () => setLinkNodeOpen(true),
+      refreshFromData: readOnly || !dataSource ? undefined : refreshFromData,
       openHistory: () => setHistoryOpen(true),
       toggleAutoUpdate: () => setAutoUpdate((current) => !current),
       setTheme: (theme) => commitInfo({ theme }),
@@ -830,6 +871,17 @@ export function EditorPage() {
           >
             Diagram info
           </button>
+          {dataSource && !readOnly ? (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ color: "#e8eef5" }}
+              onClick={refreshFromData}
+              disabled={!loaded}
+            >
+              Refresh from data
+            </button>
+          ) : null}
           <button
             type="button"
             className="btn btn-ghost"
@@ -1121,6 +1173,20 @@ export function EditorPage() {
             const title = displayName(diagramPath);
             setCode(insertDiagramLink(code, nodeId, diagramPath, `Open ${title}`));
             setLinkNodeOpen(false);
+          }}
+        />
+      ) : null}
+      {refresh ? (
+        <RefreshDiffDialog
+          dataPath={refresh.dataPath}
+          diff={refresh.diff}
+          warnings={refresh.warnings}
+          error={refresh.error}
+          rowErrors={refresh.rowErrors}
+          onClose={() => setRefresh(null)}
+          onApply={() => {
+            setCode(refresh.mermaid);
+            setRefresh(null);
           }}
         />
       ) : null}

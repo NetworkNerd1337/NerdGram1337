@@ -54,20 +54,33 @@ export function assertSafeMirror(mirror: string, dataRoot: string): void {
   }
 }
 
-export function isUserDiagram(relativePath: string): boolean {
+function safeWorkspacePath(relativePath: string): boolean {
   if (!relativePath || relativePath.includes("\0")) return false;
   const parts = relativePath.split("/");
-  if (parts.some((part) => part.length === 0 || part === "." || part === ".." || part.startsWith("."))) {
-    return false;
-  }
-  return parts[parts.length - 1]?.toLowerCase().endsWith(".mmd") ?? false;
+  return !parts.some((part) => part.length === 0 || part === "." || part === ".." || part.startsWith("."));
+}
+
+export function isUserDiagram(relativePath: string): boolean {
+  if (!safeWorkspacePath(relativePath)) return false;
+  return relativePath.split("/").pop()?.toLowerCase().endsWith(".mmd") ?? false;
+}
+
+/** CSV or JSON stored next to a generated diagram. Synced with the `.mmd` files. */
+export function isDataFile(relativePath: string): boolean {
+  if (!safeWorkspacePath(relativePath)) return false;
+  const name = relativePath.split("/").pop()?.toLowerCase() ?? "";
+  return name.endsWith(".csv") || name.endsWith(".json");
+}
+
+export function isSyncedFile(relativePath: string): boolean {
+  return isUserDiagram(relativePath) || isDataFile(relativePath);
 }
 
 export function isBoilerplate(relativePath: string): boolean {
   return BOILERPLATE.has(relativePath);
 }
 
-/** `.mmd` files under `root`, skipping dot paths, symlinks, and non-diagrams. */
+/** Diagrams and their CSV/JSON data files, skipping dot paths, symlinks, and other files. */
 export async function listUserFiles(root: string): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   await walkUserFiles(root, root, out);
@@ -90,9 +103,9 @@ async function walkUserFiles(root: string, dir: string, out: Map<string, string>
       await walkUserFiles(root, abs, out);
       continue;
     }
-    if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".mmd")) continue;
+    if (!entry.isFile()) continue;
     const rel = path.relative(root, abs).split(path.sep).join("/");
-    if (!isUserDiagram(rel)) continue;
+    if (!isSyncedFile(rel)) continue;
     out.set(rel, await fs.readFile(abs, "utf8"));
   }
 }

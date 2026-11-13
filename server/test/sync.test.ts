@@ -394,6 +394,7 @@ describe("GitHub sync", () => {
     await fs.mkdir(path.join(dir, ".secret"), { recursive: true });
     await fs.mkdir(outside, { recursive: true });
     await fs.writeFile(path.join(dir, "Network", "Core.mmd"), "flowchart LR\n  A-->B\n");
+    await fs.writeFile(path.join(dir, "Network", "Core.csv"), "local,remote\nA,B\n");
     await fs.writeFile(path.join(dir, "Notes.txt"), "do not sync text");
     await fs.writeFile(path.join(dir, ".hidden.mmd"), "flowchart LR\n  hidden-->x\n");
     await fs.writeFile(path.join(dir, ".secret", "Nope.mmd"), "flowchart LR\n  secret-->x\n");
@@ -416,6 +417,7 @@ describe("GitHub sync", () => {
 
     const files = await filesAt(bare);
     expect(files).toContain("Network/Core.mmd");
+    expect(files).toContain("Network/Core.csv");
     expect(files).toContain("README.md");
     expect(files).not.toEqual(expect.arrayContaining([".meta/favorites.json", "Notes.txt", ".hidden.mmd", ".secret/Nope.mmd", "Link.mmd"]));
     expect(files.some((file) => file.split("/").some((part) => part.startsWith(".") && part !== ".gitignore" && part !== ".gitattributes"))).toBe(false);

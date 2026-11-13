@@ -23,6 +23,7 @@ export class ApiError extends Error {
   readonly path?: string;
   readonly suggestedPath?: string;
   readonly files?: string[];
+  readonly errors?: { row: number; message: string }[];
   readonly current?: {
     path?: string;
     content: string;
@@ -40,6 +41,15 @@ export class ApiError extends Error {
     this.suggestedPath = typeof body.suggestedPath === "string" ? body.suggestedPath : undefined;
     this.files = Array.isArray(body.files)
       ? body.files.filter((item): item is string => typeof item === "string")
+      : undefined;
+    this.errors = Array.isArray(body.errors)
+      ? body.errors.flatMap((item) => {
+          if (!item || typeof item !== "object") return [];
+          const row = (item as { row?: unknown }).row;
+          const message = (item as { message?: unknown }).message;
+          if (typeof row !== "number" || typeof message !== "string") return [];
+          return [{ row, message }];
+        })
       : undefined;
     if (body.current && typeof body.current === "object") {
       const current = body.current as Record<string, unknown>;
@@ -154,6 +164,86 @@ export const api = {
     request<{ path: string; type: "file" | "folder" }>("/api/duplicate", {
       method: "POST",
       body: JSON.stringify({ path }),
+    }),
+  previewGenerate: (body: {
+    text: string;
+    format?: string;
+    shape?: string;
+    mapping?: Record<string, string>;
+    edgesText?: string;
+    edgesFormat?: string;
+    edgesMapping?: Record<string, string>;
+    direction?: string;
+    grouping?: boolean;
+    title?: string;
+    sourceFile?: string;
+    edgesFile?: string;
+  }) =>
+    request<{
+      format: "csv" | "json";
+      shape: "links" | "nodes" | "edges" | "graph";
+      headers: string[];
+      edgesHeaders: string[];
+      mapping: Record<string, string>;
+      edgesMapping: Record<string, string>;
+      errors: { row: number; message: string }[];
+      warnings: { row: number; message: string }[];
+      mermaid: string;
+      counts: { nodes: number; edges: number; groups: number };
+      direction: "TD" | "TB" | "LR" | "RL" | "BT";
+      grouping: boolean;
+    }>("/api/generate/preview", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  createGenerate: (body: {
+    text: string;
+    path: string;
+    format?: string;
+    shape?: string;
+    mapping?: Record<string, string>;
+    edgesText?: string;
+    edgesMapping?: Record<string, string>;
+    direction?: string;
+    grouping?: boolean;
+    title?: string;
+    description?: string;
+    sourceFile?: string;
+    storeData?: boolean;
+    dataName?: string;
+  }) =>
+    request<{ path: string; dataPath: string; edgesPath: string; mermaid: string }>("/api/generate", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  refreshGenerate: (body: {
+    path: string;
+    diagramText?: string;
+    text?: string;
+    edgesText?: string;
+    writeData?: boolean;
+  }) =>
+    request<{
+      path: string;
+      dataPath: string;
+      mermaid: string;
+      warnings: { row: number; message: string }[];
+      counts: { nodes: number; edges: number; groups: number };
+      diff: {
+        nodes: {
+          added: { id: string; label: string }[];
+          removed: { id: string; label: string }[];
+          changed: { id: string; label: string; before: string; after: string; fields: string[] }[];
+        };
+        edges: {
+          added: { source: string; target: string; label: string }[];
+          removed: { source: string; target: string; label: string }[];
+          changed: { source: string; target: string; before: string; after: string }[];
+        };
+      };
+    }>("/api/generate/refresh", {
+      method: "POST",
+      body: JSON.stringify(body),
     }),
   importFiles: (
     folder: string,

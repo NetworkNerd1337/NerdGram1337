@@ -20,7 +20,8 @@ import { getMetaPath } from "./paths.js";
  * `evaluateWrite`, and `resolveAvailablePath` instead of calling
  * `fs.writeFile` on a diagram directly. Creating a diagram from a bundled
  * template (#17) uses the same helpers. GitHub sync (#14) copies `.mmd`
- * files only. It does not copy `.meta` (favorites, syntax overrides, trash,
+ * files and the `.csv` / `.json` data files stored next to a generated
+ * diagram. It does not copy `.meta` (favorites, syntax overrides, trash,
  * revisions, locks, thumbnails, the search index, or tokens). Bundled
  * templates live outside this directory, in the repo `templates/` folder,
  * and are not part of the mirror.
@@ -183,9 +184,13 @@ function insertSuffix(relativePath: string, suffix: string): string {
   const slash = normalized.lastIndexOf("/");
   const dir = slash >= 0 ? normalized.slice(0, slash) : "";
   const base = slash >= 0 ? normalized.slice(slash + 1) : normalized;
-  const renamed = base.toLowerCase().endsWith(".mmd")
+  const lower = base.toLowerCase();
+  const dataExt = lower.endsWith(".csv") ? ".csv" : lower.endsWith(".json") ? ".json" : "";
+  const renamed = lower.endsWith(".mmd")
     ? `${base.slice(0, -".mmd".length)}${suffix}.mmd`
-    : `${base}${suffix}`;
+    : dataExt
+      ? `${base.slice(0, -dataExt.length)}${suffix}${base.slice(-dataExt.length)}`
+      : `${base}${suffix}`;
   return dir ? `${dir}/${renamed}` : renamed;
 }
 

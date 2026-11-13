@@ -1,0 +1,4 @@
+Local Device,Local Port,Remote Device,Remote Port,Local Group,Remote Group,Local Type,Remote Type,Remote Diagram
+Core,Gi0/0,Atlanta,Gi0/1,HQ,Sites,router,site,Sites/Atlanta.mmd
+Core,Gi0/1,Remote,Gi0/0,HQ,Sites,router,site,
+Atlanta,Gi0/2,Remote,Gi0/1,Sites,Sites,site,site,
