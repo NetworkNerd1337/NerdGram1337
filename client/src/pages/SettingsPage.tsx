@@ -6,6 +6,7 @@ import { CommandsButton } from "../components/CommandPalette";
 import { useCommandHost } from "../components/commandPaletteContext";
 import { Modal } from "../components/Modal";
 import { LintSettings } from "../components/LintSettings";
+import { TokenSettings } from "../components/TokenSettings";
 import { UpdateSettingsFields } from "../components/UpdateHost";
 import type { SyncStatus } from "../types";
 
@@ -376,6 +377,7 @@ export function SettingsPage() {
             ))}
           </section>
         ) : null}
+        <TokenSettings />
         <LintSettings />
         <section className="sync-card">
           <h2>App updates</h2>

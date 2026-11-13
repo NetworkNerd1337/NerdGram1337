@@ -18,6 +18,8 @@ A short screen recording of the dashboard and editor is in [screenshots/nerdgram
 - [Features](#features)
 - [Generate from data](#generate-from-data)
 - [Configuration](#configuration)
+- [Automation API](#automation-api)
+- [Command-line tool](#command-line-tool)
 - [Security model](#security-model)
 - [Data and backups](#data-and-backups)
 - [Upgrading](#upgrading)
@@ -596,13 +598,122 @@ An empty custom directory is seeded once with the sample diagrams, including the
 
 `HOST=127.0.0.1 npm start` listens on IPv4 loopback only (Command Prompt: `set HOST=127.0.0.1` then `npm start`; PowerShell: `$env:HOST = "127.0.0.1"`). `HOST=::1` listens on IPv6 loopback only. If `http://localhost:8787` does not open, use `http://127.0.0.1:8787`. The same variable applies to `npm run dev`. Set `NODE_ENV=development` or `NODE_ENV=production` only when you need to override the inferred mode.
 
+## Automation API
+
+`/api/v1` is for scripts, CI, and other tools. The browser UI keeps using `/api` and does not send a token. Create a token under **Automation tokens** on the settings page (`/settings`). The token is shown once. The server stores a SHA-256 hash in `<data>/.meta/api-tokens.json` (mode `0600`) and compares it in constant time. Revoke a token on that same page. A revoked token stops working immediately.
+
+A token is `read` or `read-write`. Read can list, search, fetch source, export, lint, and render. Read-write can also create, update, rename, move, trash, generate, and refresh. A read token that tries to write gets **403**. A missing, wrong, or revoked token gets **401**.
+
+The OpenAPI document is `GET /api/v1/openapi.json`. That one route does not require a token. Every other `/api/v1` route does. Host and Origin checks still apply, including on token routes. A foreign `Host` is **403**. A mutating call still needs `Content-Type: application/json`, and a foreign `Origin` is **403**. A token does not turn those checks off.
+
+```bash
+curl -fsS "http://127.0.0.1:8787/api/v1/diagrams" \
+  -H "Authorization: Bearer ng_your_token"
+
+curl -fsS "http://127.0.0.1:8787/api/v1/diagrams/content?path=Welcome.mmd" \
+  -H "Authorization: Bearer ng_your_token"
+
+curl -fsS -X POST "http://127.0.0.1:8787/api/v1/render" \
+  -H "Authorization: Bearer ng_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"Welcome.mmd","format":"svg"}' \
+  -o Welcome.svg
+```
+
+Rename and move update `click` links the same way the editor does after you confirm. Pass `"updateLinks": false` to refuse the change when another diagram links there (**409**, with the file list). Delete moves the item to the trash. An editor lock returns **423**. Paths stay inside the data directory.
+
+Lint reuses the same checks as the editor:
+
+```bash
+curl -fsS "http://127.0.0.1:8787/api/v1/lint?path=Welcome.mmd" \
+  -H "Authorization: Bearer ng_your_token"
+```
+
+Generate and refresh use the same CSV and JSON pipeline as [Generate from data](#generate-from-data). `save: true` writes the refreshed diagram. Without it, the response is the new source and the diff, and the file stays as it was.
+
+```bash
+curl -fsS -X POST "http://127.0.0.1:8787/api/v1/generate" \
+  -H "Authorization: Bearer ng_your_token" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"Campus.mmd","text":"Local Device,Remote Device\nCore,Atlanta\n"}'
+```
+
+Render runs headless Chrome (the `chrome-headless-shell` build, not the full browser) so SVG and PNG match the editor. A DOM emulator was not accurate enough for layout. The shell adds about 260 MB unpacked, plus the shared libraries the image installs for it. That is the size cost of a correct picture. Render is limited to 30 calls a minute per token (**429**, `Retry-After`). Posted source is limited to 512 KB, and the SVG is sanitized the same way cached thumbnails are.
+
+The server still binds to `127.0.0.1` and `::1` when `HOST` is unset. A token does not make it safe to publish port 8787. The browser routes under `/api` stay open on purpose, for the UI on this machine. Anyone who can reach a published port can use those routes without a token.
+
+## Command-line tool
+
+`nerdgram` is the client for that API. It is the `nerdgram` bin in `server/package.json`, and the `cli/` package (`name` is `nerdgram`) launches the same program from a checkout. The Docker image puts it on `PATH`.
+
+From a checkout, after `npm run build`:
+
+```bash
+node server/dist/cli.js --help
+```
+
+```bash
+npm exec --prefix server -- nerdgram --help
+```
+
+Inside the running container:
+
+```bash
+docker exec -e NERDGRAM_TOKEN=ng_your_token nerdgram1337 nerdgram list
+```
+
+`NERDGRAM_URL` defaults to `http://127.0.0.1:8787`. `NERDGRAM_TOKEN` is the token from Settings. `--url` and `--token` override them. `--json` prints one JSON object and nothing else. The process exits `1` when the command fails.
+
+```bash
+export NERDGRAM_URL=http://127.0.0.1:8787
+export NERDGRAM_TOKEN=ng_your_token
+
+nerdgram list
+nerdgram search Atlanta
+nerdgram get Welcome.mmd -o Welcome.mmd
+nerdgram put Notes.mmd ./Notes.mmd
+nerdgram export Examples -o ./exported
+nerdgram lint Welcome.mmd
+nerdgram generate --path Campus.mmd --data docs/samples/campus-links.csv
+nerdgram refresh Campus.mmd
+nerdgram render Welcome.mmd -o Welcome.svg
+nerdgram render Welcome.mmd -o Welcome.png
+```
+
+`render` of a `.mmd` file that exists on disk does not need a server. `lint` of a local file does not either. `--server` sends `render` to the API instead. `lint` exits `1` when a diagnostic is an error. `--strict` also exits `1` for warnings.
+
+A CI job can render every diagram in the repo without a token, because that path is offline:
+
+```yaml
+name: diagrams
+on: [push]
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci --prefix server
+      - run: npm run build --prefix server
+      - name: Render
+        run: |
+          mkdir -p out
+          find diagrams -name '*.mmd' -print0 | while IFS= read -r -d '' file; do
+            node server/dist/cli.js render "$file" -o "out/$(basename "$file" .mmd).svg"
+          done
+```
+
+To render from a running server instead, create a read token, store it as a secret, and set `NERDGRAM_URL` and `NERDGRAM_TOKEN`.
+
 ## Security model
 
-NerdGram1337 is a local, single-user personal tool. It has no accounts and no authentication, by design. Diagrams are plain `.mmd` files. An in-app login would not protect anything the operating system does not already protect. Your OS account and the permissions on the data directory are the access control.
+NerdGram1337 is a local, single-user personal tool. It has no accounts and no login, by design. Diagrams are plain `.mmd` files. An in-app login would not protect anything the operating system does not already protect. Your OS account and the permissions on the data directory are the access control. Automation tokens, described in [Automation API](#automation-api), apply only to `/api/v1`. They do not cover the browser routes.
 
 Shared servers, a computer offered as a service, and NAS deployments are unsupported. Do not forward port 8787 or 5173, and do not publish `8787:8787`.
 
-**What the process binds to.** With `HOST` unset, the API listens on `127.0.0.1` and then `::1` on the same port. If `::1` is unavailable, IPv4 loopback still serves, and the log says to use `http://127.0.0.1:<port>` when `localhost` does not open. Vite's dev server listens on `localhost` only. The image sets `HOST=0.0.0.0` so the published port works, and the log prints a warning that this is not loopback, that there is no authentication, and that the only intended use is a container whose host publish is `127.0.0.1:8787:8787`. That warning is expected in the container.
+**What the process binds to.** With `HOST` unset, the API listens on `127.0.0.1` and then `::1` on the same port. If `::1` is unavailable, IPv4 loopback still serves, and the log says to use `http://127.0.0.1:<port>` when `localhost` does not open. Vite's dev server listens on `localhost` only. The image sets `HOST=0.0.0.0` so the published port works, and the log prints a warning that this is not loopback, that the browser API has no authentication, and that the only intended use is a container whose host publish is `127.0.0.1:8787:8787`. That warning is expected in the container. A bearer token on `/api/v1` does not change it. Publishing `8787:8787` still exposes the browser routes to anyone who can open the port.
 
 **Checks on every request.** The `Host` header has to be a loopback name the server allows: `localhost`, `127.0.0.1`, or `::1`, including the API port. Any other `Host` is **403** (`Forbidden host`). That blocks a public DNS name that points back at your machine. `NERDGRAM_ALLOWED_HOSTS` adds extra hostnames. Adding one does not make shared-server use supported.
 

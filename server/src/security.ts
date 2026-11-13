@@ -181,8 +181,9 @@ export function formatExposedBindWarning(listenAddresses: readonly string[]): st
   return [
     "********************************************************************************",
     `WARNING: NerdGram1337 is listening on ${exposed.join(", ")}, which is NOT loopback.`,
-    "This API has NO authentication. Anyone who can reach this port can read,",
-    "create, overwrite, and delete your diagrams.",
+    "The browser API has NO authentication. Anyone who can reach this port can read,",
+    "create, overwrite, and delete your diagrams. A bearer token on /api/v1 does not",
+    "protect those browser routes.",
     "Exposing NerdGram1337 beyond this machine is UNSUPPORTED. Do not use this",
     "on a shared host, a LAN, or a NAS.",
     "Bare metal should leave HOST unset (loopback only). The only intended reason",

@@ -2166,7 +2166,8 @@ a {
 }
 
 .sync-card input[type="text"],
-.sync-card input:not([type="checkbox"]) {
+.sync-card input:not([type="checkbox"]),
+.sync-card select {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -2184,6 +2185,30 @@ a {
 
 .sync-check input {
   margin-top: 0.2rem;
+}
+
+.token-once {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  line-height: 1.45;
+  word-break: break-all;
+  background: var(--bg-muted);
+  border-radius: 12px;
+  padding: 0.8rem 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.token-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  padding: 0.7rem 0;
+}
+
+.token-row p {
+  margin: 0.2rem 0 0;
 }
 
 .sync-code {

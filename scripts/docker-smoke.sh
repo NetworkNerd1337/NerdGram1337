@@ -124,6 +124,32 @@ node -e 'const b=JSON.parse(process.argv[1]); if (!Array.isArray(b.templates) ||
 WELCOME="$(curl -fsS "http://127.0.0.1:${PORT}/api/file?path=Welcome.mmd" -H "Host: 127.0.0.1:${PORT}")"
 node -e 'const b=JSON.parse(process.argv[1]); if (typeof b.content !== "string" || b.content.length < 1) process.exit(1)' "$WELCOME"
 
+TOKEN_JSON="$(curl -fsS -X POST "http://127.0.0.1:${PORT}/api/tokens" \
+  -H "Host: 127.0.0.1:${PORT}" \
+  -H "Origin: http://127.0.0.1:${PORT}" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"smoke","scope":"read-write"}')"
+SMOKE_TOKEN="$(node -e 'const b=JSON.parse(process.argv[1]); if (!b.token || !b.token.startsWith("ng_")) process.exit(1); process.stdout.write(b.token)' "$TOKEN_JSON")"
+test "$(code_of "http://127.0.0.1:${PORT}/api/v1/diagrams" -H "Host: 127.0.0.1:${PORT}")" = "401"
+curl -fsS "http://127.0.0.1:${PORT}/api/v1/openapi.json" -H "Host: 127.0.0.1:${PORT}" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const b=JSON.parse(s); if (b.openapi !== "3.0.3" || !b.paths["/api/v1/diagrams"]) process.exit(1)})'
+curl -fsS -X POST "http://127.0.0.1:${PORT}/api/v1/render" \
+  -H "Host: 127.0.0.1:${PORT}" \
+  -H "Authorization: Bearer ${SMOKE_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"Welcome.mmd","format":"svg"}' \
+  -o /tmp/nerdgram-smoke.svg
+grep -q "<svg" /tmp/nerdgram-smoke.svg
+curl -fsS -X POST "http://127.0.0.1:${PORT}/api/v1/render" \
+  -H "Host: 127.0.0.1:${PORT}" \
+  -H "Authorization: Bearer ${SMOKE_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"path":"Welcome.mmd","format":"png"}' \
+  -o /tmp/nerdgram-smoke.png
+node -e 'const fs=require("fs"); const b=fs.readFileSync("/tmp/nerdgram-smoke.png"); if (b.subarray(0,8).toString("hex")!=="89504e470d0a1a0a") process.exit(1)'
+docker exec -e NERDGRAM_URL=http://127.0.0.1:8787 -e NERDGRAM_TOKEN="$SMOKE_TOKEN" "$NAME" nerdgram list --json \
+  | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const b=JSON.parse(s); if (b.ok!==true || !Array.isArray(b.files)) process.exit(1)})'
+docker exec "$NAME" nerdgram --help | grep -q "nerdgram"
+
 CREATE="$(curl -fsS -X PUT "http://127.0.0.1:${PORT}/api/file" \
   -H "Host: 127.0.0.1:${PORT}" \
   -H "Origin: http://127.0.0.1:${PORT}" \

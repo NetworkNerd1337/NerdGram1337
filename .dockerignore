@@ -12,6 +12,7 @@ dist
 coverage
 **/.vite
 **/.cache
+**/.puppeteer
 
 # Local workspace data, tokens, and the GitHub sync mirror.
 **/.meta
