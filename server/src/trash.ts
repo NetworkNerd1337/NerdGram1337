@@ -231,7 +231,17 @@ export async function restoreTrashItem(
   );
   await addFavorites(favorites);
   await fs.rm(itemDir(id), { recursive: true, force: true });
-  return { path: toRelativePath(destAbs), type: manifest.type };
+  const restored = toRelativePath(destAbs);
+  noteSync({ kind: "structural", summary: `Restore ${restored}` });
+  return { path: restored, type: manifest.type };
+}
+
+function noteSync(change: { kind: "content" | "structural"; summary: string }): void {
+  void import("./sync/hooks.js")
+    .then((mod) => mod.noteLocalChange(change))
+    .catch(() => {
+      console.error("GitHub sync could not record a local change");
+    });
 }
 
 export async function purgeTrashItem(id: string): Promise<void> {

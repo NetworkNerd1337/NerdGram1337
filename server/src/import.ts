@@ -239,5 +239,21 @@ export async function importDiagrams(
   for (const file of files) {
     results.push(await importOne(destination, file, reserved));
   }
+  const saved = results.filter(
+    (result) => result.status === "created" || result.status === "renamed" || result.status === "replaced",
+  );
+  if (saved.length === 1 && saved[0]?.path) {
+    noteSync({ kind: "structural", summary: `Import ${saved[0].path}` });
+  } else if (saved.length > 1) {
+    noteSync({ kind: "structural", summary: `Import ${saved.length} diagrams` });
+  }
   return { folder: destination, results };
+}
+
+function noteSync(change: { kind: "content" | "structural"; summary: string }): void {
+  void import("./sync/hooks.js")
+    .then((mod) => mod.noteLocalChange(change))
+    .catch(() => {
+      console.error("GitHub sync could not record a local change");
+    });
 }
