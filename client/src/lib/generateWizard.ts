@@ -3,17 +3,21 @@ import {
   SHAPE_FIELDS,
   suggestMapping,
   type ColumnMapping,
+  type DataFormat,
   type DataShape,
   type FieldSpec,
   type FlowDirection,
+  type GroupBy,
   type RowIssue,
 } from "../../../server/src/diagramData.ts";
 import { ensureMmd, joinPath } from "./paths";
 
 export type WizardStep = "input" | "map" | "preview";
 
+export type WizardFormat = "auto" | DataFormat;
+
 export type WizardInspection = {
-  format: "csv" | "json";
+  format: DataFormat;
   shape: DataShape;
   headers: string[];
   edgesHeaders: string[];
@@ -33,12 +37,14 @@ export type WizardState = {
   fileName: string;
   edgesText: string;
   edgesFileName: string;
-  format: "auto" | "csv" | "json";
+  format: WizardFormat;
   shape: "auto" | DataShape;
   mapping: ColumnMapping;
   edgesMapping: ColumnMapping;
   direction: FlowDirection;
   grouping: boolean;
+  groupBy: GroupBy;
+  localDevice: string;
   diagramName: string;
   folder: string;
   title: string;
@@ -49,6 +55,7 @@ export type WizardState = {
   mermaid: string;
   counts: { nodes: number; edges: number; groups: number };
   detectedShape: DataShape | "";
+  detectedFormat: DataFormat | "";
   fatal: string | null;
 };
 
@@ -56,6 +63,8 @@ export type WizardAction =
   | { type: "text"; text: string; fileName?: string }
   | { type: "edges"; text: string; fileName?: string }
   | { type: "format"; format: WizardState["format"] }
+  | { type: "localDevice"; localDevice: string }
+  | { type: "groupBy"; groupBy: GroupBy }
   | { type: "shape"; shape: WizardState["shape"] }
   | { type: "mapping"; field: string; column: string }
   | { type: "edgesMapping"; field: string; column: string }
@@ -79,6 +88,8 @@ export function initialWizardState(folder = ""): WizardState {
     edgesMapping: {},
     direction: "LR",
     grouping: true,
+    groupBy: "platform",
+    localDevice: "",
     diagramName: "Untitled",
     folder,
     title: "",
@@ -89,6 +100,7 @@ export function initialWizardState(folder = ""): WizardState {
     mermaid: "",
     counts: { nodes: 0, edges: 0, groups: 0 },
     detectedShape: "",
+    detectedFormat: "",
     fatal: null,
   };
 }
@@ -98,10 +110,12 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
     case "text": {
       const stem = stemFromFile(action.fileName);
       const untouched = state.diagramName === "Untitled" || state.diagramName === stemFromFile(state.fileName);
+      const guessed = state.format === "auto" ? formatFromName(action.fileName) : null;
       return {
         ...state,
         text: action.text,
         fileName: action.fileName ?? state.fileName,
+        format: guessed ?? state.format,
         diagramName: action.fileName && untouched && stem ? stem : state.diagramName,
         title: state.title || stem || state.title,
         fatal: null,
@@ -116,6 +130,10 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
       };
     case "format":
       return { ...state, format: action.format, fatal: null };
+    case "localDevice":
+      return { ...state, localDevice: action.localDevice, fatal: null };
+    case "groupBy":
+      return { ...state, groupBy: action.groupBy, fatal: null };
     case "shape":
       return {
         ...state,
@@ -154,6 +172,7 @@ export function wizardReducer(state: WizardState, action: WizardAction): WizardS
         direction: action.result.direction,
         grouping: action.result.grouping,
         shape: state.shape === "auto" ? action.result.shape : state.shape,
+        detectedFormat: action.result.format,
         fatal: null,
       };
     case "fatal":
@@ -204,21 +223,31 @@ export function previewRequest(state: WizardState): {
   edgesMapping: ColumnMapping;
   direction: FlowDirection;
   grouping: boolean;
+  groupBy: GroupBy;
+  localDevice?: string;
   title: string;
   sourceFile: string;
 } {
   return {
     text: state.text,
     format: state.format,
-    shape: state.shape,
+    shape: isNeighborSource(state) ? "links" : state.shape,
     mapping: state.mapping,
-    edgesText: state.edgesText.trim() ? state.edgesText : undefined,
+    edgesText: isNeighborSource(state) || !state.edgesText.trim() ? undefined : state.edgesText,
     edgesMapping: state.edgesMapping,
     direction: state.direction,
     grouping: state.grouping,
+    groupBy: state.groupBy,
+    localDevice: state.localDevice.trim() || undefined,
     title: state.title.trim() || state.diagramName.trim() || "Diagram",
     sourceFile: dataFilePath(state),
   };
+}
+
+export function isNeighborSource(state: WizardState): boolean {
+  if (state.format === "cdp" || state.format === "lldp") return true;
+  if (state.format === "auto") return state.detectedFormat === "cdp" || state.detectedFormat === "lldp";
+  return false;
 }
 
 export function diagramFilePath(state: WizardState): string {
@@ -226,7 +255,13 @@ export function diagramFilePath(state: WizardState): string {
 }
 
 export function dataFilePath(state: WizardState): string {
-  const ext = state.format === "json" || state.fileName.toLowerCase().endsWith(".json") ? "json" : "csv";
+  const selected = state.format === "auto" ? state.detectedFormat : state.format;
+  const ext =
+    selected === "json" || selected === "cdp" || selected === "lldp"
+      ? selected
+      : state.fileName.toLowerCase().endsWith(".json")
+        ? "json"
+        : "csv";
   const stem = (state.diagramName.trim() || "data").replace(/\.mmd$/i, "");
   return joinPath(state.folder.trim(), `${stem}.${ext}`);
 }
@@ -248,5 +283,14 @@ function setColumn(mapping: ColumnMapping, field: string, column: string): Colum
 function stemFromFile(fileName: string | undefined): string {
   if (!fileName) return "";
   const base = fileName.split(/[/\\]/).pop() ?? "";
-  return base.replace(/\.(csv|json|txt)$/i, "").trim();
+  return base.replace(/\.(csv|json|txt|cdp|lldp)$/i, "").trim();
+}
+
+function formatFromName(fileName: string | undefined): WizardFormat | null {
+  const lower = fileName?.toLowerCase() ?? "";
+  if (lower.endsWith(".cdp")) return "cdp";
+  if (lower.endsWith(".lldp")) return "lldp";
+  if (lower.endsWith(".json")) return "json";
+  if (lower.endsWith(".csv")) return "csv";
+  return null;
 }

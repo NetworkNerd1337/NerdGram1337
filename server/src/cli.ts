@@ -38,6 +38,7 @@ Usage
   nerdgram export <folder> -o dir/
   nerdgram lint [path|file] [--strict]
   nerdgram generate --path Diagram.mmd --data data.csv
+  nerdgram generate --path Diagram.mmd --data neighbors.lldp --format lldp --local-device edge-sw
   nerdgram refresh <path> [--data data.csv]
 
 A local .mmd file is rendered and linted in this process. Anything else uses
@@ -314,7 +315,9 @@ async function lintCommand(parsed: Parsed, io: Io): Promise<number> {
 async function generateCommand(parsed: Parsed, io: Io): Promise<void> {
   const diagramPath = flagString(parsed.flags, "path") ?? parsed.positionals[0];
   const dataFile = flagString(parsed.flags, "data");
-  if (!diagramPath || !dataFile) throw new CliError("generate needs --path Diagram.mmd and --data file.csv.");
+  if (!diagramPath || !dataFile) {
+    throw new CliError("generate needs --path Diagram.mmd and --data file.csv, file.json, file.cdp, or file.lldp.");
+  }
   const text = await fs.readFile(dataFile, "utf8");
   const { base, token } = configOf(parsed.flags, io.env);
   const result = await callApi(base, requireToken(token), "POST", "/api/v1/generate", {
@@ -324,6 +327,8 @@ async function generateCommand(parsed: Parsed, io: Io): Promise<void> {
     shape: flagString(parsed.flags, "shape"),
     direction: flagString(parsed.flags, "direction"),
     title: flagString(parsed.flags, "title"),
+    localDevice: flagString(parsed.flags, "local-device"),
+    groupBy: flagString(parsed.flags, "group-by"),
   });
   const body = result.json as { path: string; dataPath?: string; counts?: unknown };
   writeOut(io, isJson(parsed.flags), body, `Created ${body.path}${body.dataPath ? ` from ${body.dataPath}` : ""}`);

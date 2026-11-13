@@ -2,6 +2,12 @@
 
 Release notes for GitHub Releases. The heading for a release is `## X.Y.Z "Code name" - YYYY-MM-DD`. It has to match the root `package.json` version. `npm run version:check` requires the quoted code name to match the `codenames` map. The notes script also accepts `## X.Y.Z` and `## [X.Y.Z]`, with an optional code name and date. The `vX.Y.Z` tag is the version the update check reads. The GitHub Release title is `vX.Y.Z "Code name"`, from that tag and the map.
 
+## Unreleased
+
+### Diagrams from data
+
+Phase 2 of #36. **From data** accepts Cisco CDP (`show cdp neighbors detail` on IOS, IOS-XE, and NX-OS) and LLDP neighbor detail from any vendor. LLDP is one parser over the standard TLVs, including Linux `lldpctl` text, keyvalue, and JSON. Links seen from both ends become one edge, interface names are normalized, and devices can be grouped by platform or capability. The raw output is stored next to the diagram (`.cdp` or `.lldp`) and **Refresh from data** parses it again. Sample output is in `docs/samples/neighbors/`.
+
 ## 1.1.0 "Atlas" - 2026-11-13
 
 First minor release on the Atlas line. The code name stays Atlas. This adds the v1.1 features and the fixes from a fresh-clone smoke test of main at `2ee2952`.
@@ -33,7 +39,7 @@ From #42 (#37). `/api/v1` takes a bearer token for list, search, get, put, expor
 
 ### Not in this release
 
-- #36 phase 2: a NetBox connector, and pasted `show lldp neighbors detail` or `show cdp neighbors detail` output.
+- #36 phase 2 (CDP and LLDP neighbor import) is not in 1.1.0.
 - #43: publishing the `nerdgram` package to npm.
 - #44: repairing `click` links after a rename or move made outside the app.
 - #45: lint rules for diagram types other than flowchart, sequence, and state.

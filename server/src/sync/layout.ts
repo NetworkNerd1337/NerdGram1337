@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { ensureDataRoot, getMetaPath } from "../paths.js";
+import { isDataFileName } from "../dataFiles.js";
 import { httpFail } from "../storage.js";
 import {
   BOILERPLATE,
@@ -65,11 +66,11 @@ export function isUserDiagram(relativePath: string): boolean {
   return relativePath.split("/").pop()?.toLowerCase().endsWith(".mmd") ?? false;
 }
 
-/** CSV or JSON stored next to a generated diagram. Synced with the `.mmd` files. */
+/** CSV, JSON, CDP, or LLDP stored next to a generated diagram. Synced with the `.mmd` files. */
 export function isDataFile(relativePath: string): boolean {
   if (!safeWorkspacePath(relativePath)) return false;
-  const name = relativePath.split("/").pop()?.toLowerCase() ?? "";
-  return name.endsWith(".csv") || name.endsWith(".json");
+  const name = relativePath.split("/").pop() ?? "";
+  return isDataFileName(name);
 }
 
 export function isSyncedFile(relativePath: string): boolean {
@@ -80,7 +81,7 @@ export function isBoilerplate(relativePath: string): boolean {
   return BOILERPLATE.has(relativePath);
 }
 
-/** Diagrams and their CSV/JSON data files, skipping dot paths, symlinks, and other files. */
+/** Diagrams and their data files, skipping dot paths, symlinks, and other files. */
 export async function listUserFiles(root: string): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   await walkUserFiles(root, root, out);

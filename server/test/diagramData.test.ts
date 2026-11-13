@@ -92,9 +92,8 @@ describe("diagram data import", () => {
     expect(lintDiagram(result.mermaid)).toEqual([]);
   });
 
-  it("refuses NetBox and LLDP until that follow-up exists", () => {
-    expect(() => importDiagramData({ text: "device,port\n", format: "netbox" })).toThrow(/CSV or JSON/);
-    expect(() => importDiagramData({ text: "show lldp", format: "lldp" })).toThrow(/CSV or JSON/);
+  it("rejects an unknown data source", () => {
+    expect(() => importDiagramData({ text: "device,port\n", format: "yaml" })).toThrow(/Cisco CDP output, or LLDP/);
   });
 
   it("refuses data larger than 512 KB", () => {

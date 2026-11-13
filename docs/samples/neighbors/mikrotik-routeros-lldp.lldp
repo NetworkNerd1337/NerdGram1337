@@ -1,0 +1,9 @@
+[admin@edge] > /ip neighbor print detail
+Flags: X - disabled, I - invalid
+ 0 interface=ether1 mac-address=00:11:22:33:44:55 identity=core-sw
+   platform=Arista version="" unpack=none age=2s
+   system-description="Arista Networks EOS version 4.28.3M"
+   interface-name=Ethernet49
+ 1 interface=ether2 mac-address=00:11:22:33:44:77 identity=dist-sw
+   system-description="Cisco IOS Software, C9300-48P, Version 17.9.4a"
+   interface-name=GigabitEthernet1/0/24

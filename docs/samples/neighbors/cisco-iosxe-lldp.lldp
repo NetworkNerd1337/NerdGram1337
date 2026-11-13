@@ -1,0 +1,25 @@
+core-sw#show lldp neighbors detail
+------------------------------------------------
+Local Intf: Twe1/0/1
+Chassis id: 001a.2b3c.4d5e
+Port id: Te1/1/1
+Port Description: to-dist
+System Name: dist-sw
+System Description: Cisco IOS Software [Cupertino], Catalyst L3 Switch Software (CAT9K_IOSXE), Version 17.9.4a
+Time remaining: 95 seconds
+System Capabilities: B,R
+Enabled Capabilities: B,R
+Management Addresses:
+    IP: 10.2.0.2
+------------------------------------------------
+Local Intf: Gi1/0/24
+Chassis id: 001a.2b3c.4d5f
+Port id: Gi0/0/0
+Port Description: to-wan
+System Name: wan-rtr
+System Description: Cisco IOS XE Software, Version 17.6.5, ISR4451
+Time remaining: 90 seconds
+System Capabilities: R
+Enabled Capabilities: R
+Management Addresses:
+    IP: 10.2.0.1

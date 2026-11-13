@@ -377,9 +377,37 @@ Two shapes are accepted. A links table has a local device, a local port, a remot
 
 Sample files are [docs/samples/campus-links.csv](docs/samples/campus-links.csv) and [docs/samples/campus.json](docs/samples/campus.json). The CSV is a links table. The JSON is nodes, edges, and a link from Atlanta to `Sites/Atlanta.mmd`.
 
-The data file is saved next to the diagram (`Campus.mmd` and `Campus.csv`). GitHub sync copies both. The diagram's front matter records the file, the column mapping, and the direction under `nerdgram.source`. That path is from the workspace root. Moving or duplicating the diagram does not move the data file, so refresh keeps reading the original path. Generated lines sit between `%% nerdgram:generated` and `%% nerdgram:generated end`. **Refresh from data** in the editor reads that file, shows nodes and edges added, removed, and changed, and writes the generated block only after you apply it. Notes, the theme, and anything outside the markers stay, including a node you added by hand.
+The data file is saved next to the diagram (`Campus.mmd` and `Campus.csv`, or `Core.mmd` and `Core.lldp`). GitHub sync copies both. The diagram's front matter records the file, the column mapping, and the direction under `nerdgram.source`. CDP and LLDP also record `groupBy` and, when you typed one, the local device name. That path is from the workspace root. Moving or duplicating the diagram does not move the data file, so refresh keeps reading the original path. Generated lines sit between `%% nerdgram:generated` and `%% nerdgram:generated end`. **Refresh from data** in the editor reads that file, shows nodes and edges added, removed, and changed, and writes the generated block only after you apply it. Notes, the theme, and anything outside the markers stay, including a node you added by hand.
 
-A file can be up to 512 KB, with at most 5,000 rows, 2,000 nodes, and 5,000 edges. A bad row names its row number and does not create the diagram. Labels are escaped so a cell cannot close a Mermaid string or add a directive. NetBox, and pasted `show lldp neighbors detail` or `show cdp neighbors detail` output, are not imported yet. The parser is the same pipeline those sources will use.
+A file can be up to 512 KB, with at most 5,000 rows, 2,000 nodes, and 5,000 edges. A bad row, or a neighbor block that cannot be parsed, names its row or line and does not create the diagram. Labels are escaped so a cell or a hostname cannot close a Mermaid string or add a directive.
+
+#### Cisco CDP and LLDP
+
+**From data** also accepts pasted or uploaded command output. Choose **Cisco CDP** or **LLDP neighbors**. CDP is Cisco IOS, IOS-XE, and NX-OS. LLDP is vendor-agnostic: the parser reads the standard LLDP fields (local port, chassis ID, port ID, port description, system name, system description, system capabilities, and management address) whatever order or spelling the CLI uses. A link seen from both ends becomes one edge. `Gi1/0/1` and `GigabitEthernet1/0/1` are the same interface. Grouping can follow platform or capability. The raw output is the data file (`.cdp` or `.lldp`), and **Refresh from data** parses it again.
+
+The hostname comes from the CLI prompt. If the paste has no prompt, type the local device name. You can paste several devices one after another.
+
+| Platform | Command |
+| --- | --- |
+| Cisco IOS | `show cdp neighbors detail` and `show lldp neighbors detail` |
+| Cisco IOS-XE | `show cdp neighbors detail` and `show lldp neighbors detail` |
+| Cisco NX-OS | `show cdp neighbors detail` and `show lldp neighbors detail` |
+| Arista EOS | `show lldp neighbors detail` |
+| Juniper Junos | `show lldp neighbors interface <interface>` |
+| ArubaOS-CX | `show lldp neighbor-info detail` |
+| Aruba ProVision / AOS-Switch | `show lldp info remote-device detail` |
+| HPE Comware | `display lldp neighbor-information verbose` |
+| Dell OS10 | `show lldp neighbors detail` |
+| Extreme EXOS | `show lldp neighbors detailed` |
+| MikroTik RouterOS | `/ip neighbor print detail` |
+| Linux lldpd | `lldpctl`, `lldpctl -f keyvalue`, or `lldpctl -f json` |
+
+`lldpctl -f json` has no hostname in the file, so type the local device name. On Junos, paste one `show lldp neighbors interface <interface>` block per interface, in the same file. Sample output for each of these is under [docs/samples/neighbors](docs/samples/neighbors).
+
+```bash
+nerdgram generate --path Core.mmd --data docs/samples/neighbors/cisco-ios-cdp.cdp --format cdp
+nerdgram generate --path Edge.mmd --data docs/samples/neighbors/lldpd.json --format lldp --local-device edge
+```
 
 ### Thumbnails, find, and shortcuts
 
@@ -456,7 +484,7 @@ GitHub sync is optional. The folder on this computer stays the copy NerdGram edi
 
 NerdGram does not ship a client ID or a client secret. You register an OAuth app in your own GitHub account. There is no operating-system keychain in a typical container. The token file mode `0600` is the stored secret.
 
-**What is copied.** Synced files are the `.mmd` diagrams, the `.csv` and `.json` data files stored next to a generated diagram, and the folders that contain them. The commit also includes a short README, `.gitignore`, and `.gitattributes` so the GitHub repository can be read on its own. A one-file commit is `Update Network/Core.mmd`.
+**What is copied.** Synced files are the `.mmd` diagrams, the `.csv`, `.json`, `.cdp`, and `.lldp` data files stored next to a generated diagram, and the folders that contain them. The commit also includes a short README, `.gitignore`, and `.gitattributes` so the GitHub repository can be read on its own. A one-file commit is `Update Network/Core.mmd`.
 
 These stay on this computer and are not pushed:
 
@@ -677,6 +705,7 @@ nerdgram put Notes.mmd ./Notes.mmd
 nerdgram export Examples -o ./exported
 nerdgram lint Welcome.mmd
 nerdgram generate --path Campus.mmd --data docs/samples/campus-links.csv
+nerdgram generate --path Core.mmd --data docs/samples/neighbors/cisco-ios-lldp.lldp --format lldp
 nerdgram refresh Campus.mmd
 nerdgram render Welcome.mmd -o Welcome.svg
 nerdgram render Welcome.mmd -o Welcome.png

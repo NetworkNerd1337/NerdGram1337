@@ -195,6 +195,17 @@ describe("nerdgram CLI", () => {
       expect(await main(["generate", "--path", "Campus.mmd", "--data", csv, ...flags], io)).toBe(0);
       expect(JSON.parse(stdout.join("")).path).toBe("Campus.mmd");
 
+      const lldp = path.join(dir, "neighbors.lldp");
+      await fs.writeFile(
+        lldp,
+        "core-sw#show lldp neighbors detail\nLocal Intf: Gi1/0/1\nPort id: Gi1/0/2\nSystem Name: dist-sw\nSystem Description: Cisco IOS Software\n",
+      );
+      stdout.length = 0;
+      expect(
+        await main(["generate", "--path", "Neighbors.mmd", "--data", lldp, "--format", "lldp", "--group-by", "platform", ...flags], io),
+      ).toBe(0);
+      expect(JSON.parse(stdout.join("")).dataPath).toBe("Neighbors.lldp");
+
       stdout.length = 0;
       expect(await main(["refresh", "Campus.mmd", ...flags], io)).toBe(0);
       expect(JSON.parse(stdout.join("")).saved).toBe(true);

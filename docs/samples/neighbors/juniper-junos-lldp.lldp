@@ -1,0 +1,43 @@
+user@spine> show lldp neighbors interface ge-0/0/0
+LLDP Neighbor Information:
+Local Information:
+Index: 1 Time to live: 120 Time mark: Mon Nov 13 12:00:00 2026 Age: 22 secs
+Local Interface    : ge-0/0/0
+Parent Interface   : -
+Local Port ID      : 510
+Ageout Count       : 0
+
+Neighbour Information:
+Chassis type       : Mac address
+Chassis ID         : 00:11:22:33:44:55
+Port type          : Interface name
+Port ID            : ge-0/0/1
+Port description   : to-spine
+System name        : leaf-1
+
+System Description : Juniper Networks, Inc. qfx5120-48y-8c Ethernet Switch, kernel JUNOS 21.4R3.15, Build date: 2022-09-28 10:00:00 UTC
+
+System capabilities
+        Supported      : Bridge Router
+        Enabled        : Bridge Router
+Management address
+        Address Type    : IPv4(1)
+        Address         : 10.5.0.2
+
+user@spine> show lldp neighbors interface ge-0/0/1
+LLDP Neighbor Information:
+Local Information:
+Local Interface    : ge-0/0/1
+Local Port ID      : 511
+
+Neighbour Information:
+Chassis type       : Mac address
+Chassis ID         : 00:11:22:33:44:66
+Port type          : Interface name
+Port ID            : xe-0/0/0
+Port description   : to-spine
+System name        : leaf-2
+System Description : Juniper Networks, Inc. ex4400 Ethernet Switch, kernel JUNOS 22.4R2
+System capabilities
+        Supported      : Bridge Router
+        Enabled        : Bridge

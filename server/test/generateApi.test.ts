@@ -98,7 +98,7 @@ describe("generate API", () => {
     expect(await fs.readFile(path.join(dir, "Campus.mmd"), "utf8")).toBe(original);
   });
 
-  it("rejects a non-JSON body and a deferred source", async () => {
+  it("rejects a non-JSON body and an unknown source", async () => {
     const server = app();
     const form = await request(server)
       .post("/api/generate/preview")
@@ -107,11 +107,58 @@ describe("generate API", () => {
       .send("local,remote");
     expect(form.status).toBe(415);
 
-    const deferred = await request(server)
+    const unknown = await request(server)
       .post("/api/generate/preview")
       .set(json)
-      .send({ text: "Device ID, Local Intf", format: "lldp" });
-    expect(deferred.status).toBe(400);
-    expect(deferred.body.code).toBe("deferred");
+      .send({ text: "Device ID, Local Intf", format: "yaml" });
+    expect(unknown.status).toBe(400);
+    expect(unknown.body.code).toBe("invalid");
+    expect(String(unknown.body.error).toLowerCase()).not.toContain("netbox");
+  });
+
+  it("stores raw LLDP output and refreshes it by parsing that file again", async () => {
+    const server = app();
+    const lldp = `core-sw#show lldp neighbors detail
+------------------------------------------------
+Local Intf: Gi1/0/1
+Port id: Gi1/0/48
+System Name: dist-sw
+System Description: Cisco IOS Software, C3750E Software
+System Capabilities: B
+Enabled Capabilities: B
+------------------------------------------------
+Local Intf: Gi1/0/2
+Port id: Fa0/1
+System Name: access-sw
+System Description: Cisco IOS Software, C2960 Software
+Enabled Capabilities: B
+`;
+    const created = await request(server)
+      .post("/api/generate")
+      .set(json)
+      .send({ text: lldp, format: "lldp", path: "Network/Core.mmd", title: "Core", groupBy: "platform" });
+    expect(created.status).toBe(201);
+    expect(created.body.dataPath).toBe("Network/Core.lldp");
+    const diagram = await fs.readFile(path.join(dir, "Network", "Core.mmd"), "utf8");
+    const stored = await fs.readFile(path.join(dir, "Network", "Core.lldp"), "utf8");
+    expect(stored).toBe(lldp);
+    expect(diagram).toContain("format: lldp");
+    expect(diagram).toContain("%% nerdgram:generated");
+    expect(diagram).toContain('["dist-sw"]');
+
+    const updated = lldp.replace("Enabled Capabilities: B\n", "Enabled Capabilities: B\n").replace(
+      "System Name: access-sw",
+      "System Name: access-east",
+    );
+    const refreshed = await request(server)
+      .post("/api/generate/refresh")
+      .set(json)
+      .send({ path: "Network/Core.mmd", text: updated, writeData: true });
+    expect(refreshed.status).toBe(200);
+    expect(refreshed.body.diff.nodes.added.map((node: { label: string }) => node.label)).toContain("access-east");
+    expect(refreshed.body.diff.nodes.removed.map((node: { label: string }) => node.label)).toContain("access-sw");
+    expect(refreshed.body.mermaid).toContain("%% nerdgram:generated");
+    expect(await fs.readFile(path.join(dir, "Network", "Core.lldp"), "utf8")).toBe(updated);
+    expect(await fs.readFile(path.join(dir, "Network", "Core.mmd"), "utf8")).toBe(diagram);
   });
 });

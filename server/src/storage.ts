@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { dataFileExtension } from "./dataFiles.js";
 import { getMetaPath } from "./paths.js";
 
 /**
@@ -20,7 +21,7 @@ import { getMetaPath } from "./paths.js";
  * `evaluateWrite`, and `resolveAvailablePath` instead of calling
  * `fs.writeFile` on a diagram directly. Creating a diagram from a bundled
  * template (#17) uses the same helpers. GitHub sync (#14) copies `.mmd`
- * files and the `.csv` / `.json` data files stored next to a generated
+ * files and the `.csv`, `.json`, `.cdp`, and `.lldp` data files stored next to a generated
  * diagram. It does not copy `.meta` (favorites, syntax overrides, trash,
  * revisions, locks, thumbnails, the search index, or tokens). Bundled
  * templates live outside this directory, in the repo `templates/` folder,
@@ -185,7 +186,7 @@ function insertSuffix(relativePath: string, suffix: string): string {
   const dir = slash >= 0 ? normalized.slice(0, slash) : "";
   const base = slash >= 0 ? normalized.slice(slash + 1) : normalized;
   const lower = base.toLowerCase();
-  const dataExt = lower.endsWith(".csv") ? ".csv" : lower.endsWith(".json") ? ".json" : "";
+  const dataExt = dataFileExtension(base);
   const renamed = lower.endsWith(".mmd")
     ? `${base.slice(0, -".mmd".length)}${suffix}.mmd`
     : dataExt

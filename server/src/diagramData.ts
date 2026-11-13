@@ -1,21 +1,22 @@
 import { Document, isMap, parseDocument } from "yaml";
+import { extensionForFormat, isDataFileName } from "./dataFiles.js";
 import { clickTargetKind, resolveDiagramTarget } from "./diagramLinks.js";
 import { matchFrontMatter, type FrontMatterMatch } from "./frontMatter.js";
+import { detectNeighborKind, parseNeighborSource } from "./neighbors/index.js";
+import type { NormalizedNeighbor } from "./neighbors/types.js";
 
 /**
  * File-based diagram import.
  *
- * A source (CSV or JSON) is normalized into nodes and edges, then rendered as
- * native Mermaid. NetBox and pasted LLDP/CDP output are the same pipeline and
- * are rejected until that follow-up is built. Generated lines sit between
+ * A source is normalized into nodes and edges, then rendered as native
+ * Mermaid. CSV and JSON are tables. Cisco CDP and vendor-agnostic LLDP
+ * neighbor output become the same links table. Generated lines sit between
  * `%% nerdgram:generated` markers so a refresh can replace them and leave
  * hand edits outside the markers alone.
  */
 
 export const GENERATED_START = "%% nerdgram:generated";
 export const GENERATED_END = "%% nerdgram:generated end";
-
-export const DEFERRED_SOURCES = ["netbox", "lldp", "cdp"] as const;
 
 export const DATA_LIMITS = {
   maxChars: 512 * 1024,
@@ -53,9 +54,10 @@ export const DATA_FIELDS = [
 
 export type DataField = (typeof DATA_FIELDS)[number];
 export type ColumnMapping = Partial<Record<DataField, string>>;
-export type DataFormat = "csv" | "json";
+export type DataFormat = "csv" | "json" | "cdp" | "lldp";
 export type DataShape = "links" | "nodes" | "edges" | "graph";
 export type FlowDirection = "TD" | "TB" | "LR" | "RL" | "BT";
+export type GroupBy = "platform" | "capability";
 
 export type RowIssue = {
   row: number;
@@ -93,6 +95,10 @@ export type DataSourceConfig = {
   direction: FlowDirection;
   grouping: boolean;
   diagramType: "flowchart";
+  /** Set for CDP and LLDP. Refresh groups devices the same way. */
+  groupBy?: GroupBy;
+  /** Fallback hostname when neighbor output has no CLI prompt. */
+  localDevice?: string;
 };
 
 export type ImportInput = {
@@ -109,6 +115,8 @@ export type ImportInput = {
   description?: string;
   sourceFile?: string;
   edgesFile?: string;
+  localDevice?: string;
+  groupBy?: string;
 };
 
 export type ImportResult = {
@@ -258,10 +266,6 @@ export function dataFail(
   return Object.assign(new Error(message), { status, code, details });
 }
 
-export function isDeferredSource(format: string): boolean {
-  return (DEFERRED_SOURCES as readonly string[]).includes(format.trim().toLowerCase());
-}
-
 export function suggestMapping(headers: readonly string[], shape: DataShape): ColumnMapping {
   const fields = shape === "graph" ? SHAPE_FIELDS.nodes : SHAPE_FIELDS[shape];
   const used = new Set<string>();
@@ -283,16 +287,10 @@ export function suggestEdgeMapping(headers: readonly string[]): ColumnMapping {
 export function importDiagramData(input: ImportInput): ImportResult {
   const text = requireText(input.text, "Data");
   const requestedFormat = typeof input.format === "string" ? input.format.trim().toLowerCase() : "auto";
-  if (isDeferredSource(requestedFormat)) {
-    throw dataFail(
-      400,
-      "NetBox and LLDP/CDP import are not in this version. Use a CSV or JSON file.",
-      "deferred",
-    );
-  }
   const format = requestedFormat === "" || requestedFormat === "auto" ? detectFormat(text) : requestedFormat;
+  if (format === "cdp" || format === "lldp") return importNeighborFormat(input, format, text);
   if (format !== "csv" && format !== "json") {
-    throw dataFail(400, "Use a CSV or JSON file.", "invalid");
+    throw dataFail(400, "Use a CSV or JSON file, Cisco CDP output, or LLDP neighbor output.", "invalid");
   }
 
   const primary = format === "csv" ? tableFromCsv(text) : tableFromJson(text);
@@ -305,10 +303,11 @@ export function importDiagramData(input: ImportInput): ImportResult {
   if (typeof input.edgesText === "string" && input.edgesText.trim()) {
     const edgesText = requireText(input.edgesText, "Edges");
     const requestedEdges = typeof input.edgesFormat === "string" ? input.edgesFormat.trim().toLowerCase() : "auto";
-    if (isDeferredSource(requestedEdges)) {
-      throw dataFail(400, "NetBox and LLDP/CDP import are not in this version. Use a CSV or JSON file.", "deferred");
+    const detectedEdges = requestedEdges === "" || requestedEdges === "auto" ? detectFormat(edgesText) : requestedEdges;
+    if (detectedEdges === "cdp" || detectedEdges === "lldp") {
+      throw dataFail(400, "The edges file has to be CSV or JSON.", "invalid");
     }
-    edgesFormat = requestedEdges === "" || requestedEdges === "auto" ? detectFormat(edgesText) : (requestedEdges as DataFormat);
+    edgesFormat = detectedEdges as DataFormat;
     if (edgesFormat !== "csv" && edgesFormat !== "json") {
       throw dataFail(400, "The edges file has to be CSV or JSON.", "invalid");
     }
@@ -706,13 +705,13 @@ export function isSafeDataPath(relativePath: string): boolean {
   if (!normalized) return false;
   const parts = normalized.split("/");
   if (parts.some((part) => part.length === 0 || part === "." || part === ".." || part.startsWith("."))) return false;
-  const lower = normalized.toLowerCase();
-  return lower.endsWith(".csv") || lower.endsWith(".json");
+  const base = normalized.split("/").pop() ?? "";
+  return isDataFileName(base);
 }
 
 export function assertDataPath(relativePath: string): string {
   if (!isSafeDataPath(relativePath)) {
-    throw dataFail(400, "Data files have to be a .csv or .json path inside the workspace.", "invalid");
+    throw dataFail(400, "Data files have to be a .csv, .json, .cdp, or .lldp path inside the workspace.", "invalid");
   }
   return relativePath.replace(/\\/g, "/").replace(/^\/+|\/+$/g, "");
 }
@@ -743,14 +742,136 @@ function requireText(value: unknown, label: string): string {
   if (value.length > DATA_LIMITS.maxChars) {
     throw dataFail(400, `${label} is larger than 512 KB.`, "invalid");
   }
-  if (!value.trim()) throw dataFail(400, `Paste or upload a CSV or JSON ${label.toLowerCase()} file.`, "invalid");
+  if (!value.trim()) throw dataFail(400, `Paste or upload a CSV, JSON, CDP, or LLDP ${label.toLowerCase()} file.`, "invalid");
   return value.replace(/^\uFEFF/, "");
 }
 
 function detectFormat(text: string): DataFormat {
+  const neighbor = detectNeighborKind(text);
+  if (neighbor) return neighbor;
   const trimmed = text.trim();
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) return "json";
   return "csv";
+}
+
+function resolveGroupBy(value: string | undefined): GroupBy {
+  if (value == null || value.trim() === "" || value.trim().toLowerCase() === "platform") return "platform";
+  if (value.trim().toLowerCase() === "capability") return "capability";
+  throw dataFail(400, "Group by must be platform or capability.", "invalid");
+}
+
+function cleanLocalDevice(value: string | undefined): string {
+  if (!value) return "";
+  const cleaned = value.replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
+  return [...cleaned].slice(0, 200).join("");
+}
+
+function importNeighborFormat(input: ImportInput, format: "cdp" | "lldp", text: string): ImportResult {
+  const direction = resolveDirection(input.direction, "links");
+  const grouping = input.grouping !== false;
+  const groupBy = resolveGroupBy(input.groupBy);
+  const localDevice = cleanLocalDevice(input.localDevice);
+  const parsed = parseNeighborSource(format, text, { localDevice });
+  const errors = [...parsed.errors];
+  const warnings = [...parsed.warnings];
+  let model: GraphModel = { nodes: [], edges: [] };
+  if (errors.length === 0) {
+    const rows = neighborRows(parsed.links, grouping, groupBy);
+    model = buildModel("links", rows.table, rows.mapping, null, {}, errors, warnings);
+  }
+  if (errors.length === 0 && model.nodes.length === 0 && model.edges.length === 0) {
+    errors.push({ row: 0, message: "No nodes or links were found." });
+  }
+  const usable = errors.length === 0 ? model : { nodes: [], edges: [] };
+  const sourceFile = cleanStoredName(input.sourceFile) || defaultSourceName(format);
+  const source: DataSourceConfig = {
+    file: sourceFile,
+    format,
+    shape: "links",
+    mapping: {},
+    direction,
+    grouping,
+    diagramType: "flowchart",
+    groupBy,
+  };
+  if (localDevice) source.localDevice = localDevice;
+  const mermaid =
+    errors.length === 0
+      ? renderNewDiagram({
+          model: usable,
+          source,
+          title: clipTitle(input.title),
+          description: clipTitle(input.description) || (source.file ? `Generated from ${source.file}` : undefined),
+        })
+      : "";
+  return {
+    format,
+    shape: "links",
+    headers: [],
+    edgesHeaders: [],
+    mapping: {},
+    edgesMapping: {},
+    errors,
+    warnings,
+    model: usable,
+    mermaid,
+    counts: countModel(usable),
+    direction,
+    grouping,
+    source,
+  };
+}
+
+function neighborRows(links: readonly NormalizedNeighbor[], grouping: boolean, groupBy: GroupBy): {
+  table: { headers: string[]; rows: { row: number; cells: string[] }[] };
+  mapping: ColumnMapping;
+} {
+  const headers = [
+    "localDevice",
+    "localPort",
+    "remoteDevice",
+    "remotePort",
+    "localGroup",
+    "remoteGroup",
+    "localType",
+    "remoteType",
+    "localClass",
+    "remoteClass",
+  ];
+  const mapping: ColumnMapping = {
+    localDevice: "localDevice",
+    localPort: "localPort",
+    remoteDevice: "remoteDevice",
+    remotePort: "remotePort",
+    localGroup: "localGroup",
+    remoteGroup: "remoteGroup",
+    localType: "localType",
+    remoteType: "remoteType",
+    localClass: "localClass",
+    remoteClass: "remoteClass",
+  };
+  const group = (platform: string, capability: string) => (grouping ? (groupBy === "capability" ? capability : platform) : "");
+  return {
+    mapping,
+    table: {
+      headers,
+      rows: links.map((link) => ({
+        row: link.line,
+        cells: [
+          link.localDevice,
+          link.localPort,
+          link.remoteDevice,
+          link.remotePort,
+          group(link.localPlatform, link.localCapability),
+          group(link.remotePlatform, link.remoteCapability),
+          link.localPlatform,
+          link.remotePlatform,
+          link.localCapability,
+          link.remoteCapability,
+        ],
+      })),
+    },
+  };
 }
 
 function resolveDirection(value: string | undefined, shape: DataShape): FlowDirection {
@@ -1359,13 +1480,15 @@ function sourceToPlain(source: DataSourceConfig): Record<string, unknown> {
   if (source.edgesFile) plain.edgesFile = source.edgesFile;
   if (source.edgesFormat) plain.edgesFormat = source.edgesFormat;
   if (source.edgesMapping && Object.keys(source.edgesMapping).length > 0) plain.edgesMapping = source.edgesMapping;
+  if (source.groupBy) plain.groupBy = source.groupBy;
+  if (source.localDevice) plain.localDevice = source.localDevice;
   return plain;
 }
 
 function configFromPlain(block: Record<string, unknown>): DataSourceConfig | null {
   const file = typeof block.file === "string" ? block.file : "";
   if (!isSafeDataPath(file)) return null;
-  if (block.format !== "csv" && block.format !== "json") return null;
+  if (block.format !== "csv" && block.format !== "json" && block.format !== "cdp" && block.format !== "lldp") return null;
   if (typeof block.shape !== "string" || !SHAPES.has(block.shape as DataShape)) return null;
   const direction = typeof block.direction === "string" ? block.direction.toUpperCase() : "TD";
   if (!DIRECTIONS.has(direction as FlowDirection)) return null;
@@ -1388,6 +1511,13 @@ function configFromPlain(block: Record<string, unknown>): DataSourceConfig | nul
   const edgesMapping = mappingFromPlain(block.edgesMapping);
   if (block.edgesMapping != null && !edgesMapping) return null;
   if (edgesMapping && Object.keys(edgesMapping).length > 0) config.edgesMapping = edgesMapping;
+  if (block.groupBy != null && block.groupBy !== "") {
+    if (block.groupBy !== "platform" && block.groupBy !== "capability") return null;
+    config.groupBy = block.groupBy;
+  }
+  if (typeof block.localDevice === "string" && block.localDevice.trim()) {
+    config.localDevice = block.localDevice.trim();
+  }
   return config;
 }
 
@@ -1410,7 +1540,7 @@ function cleanStoredName(value: string | undefined): string {
 }
 
 function defaultSourceName(format: DataFormat): string {
-  return format === "json" ? "data.json" : "data.csv";
+  return `data.${extensionForFormat(format)}`;
 }
 
 function defaultEdgesName(format: DataFormat): string {

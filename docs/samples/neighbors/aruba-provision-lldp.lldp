@@ -1,0 +1,29 @@
+agg-sw# show lldp info remote-device detail
+
+ LLDP Remote Device Information Detail
+
+  Local Port   : 1
+  ChassisType  : mac-address
+  ChassisId    : 00 11 22 33 44 55
+  PortType     : local
+  PortId       : 49
+  SysName      : core-sw
+  System Descr : Aruba JL072A 3810M-24G-PoE+-1-slot Switch
+  PortDescr    : 49
+
+  System Capabilities Supported  : bridge, router
+  System Capabilities Enabled    : bridge
+
+  Remote Management Address
+     Type    : ipv4
+     Address : 10.8.0.1
+
+  Local Port   : 2
+  ChassisType  : mac-address
+  ChassisId    : aa bb cc dd ee ff
+  PortType     : interface-name
+  PortId       : 1
+  SysName      : access-sw
+  System Descr : Aruba JL323A 2930M-24G Switch
+  PortDescr    : uplink
+  System Capabilities Enabled    : bridge

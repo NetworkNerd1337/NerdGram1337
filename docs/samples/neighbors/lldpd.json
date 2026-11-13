@@ -1,0 +1,41 @@
+{
+  "lldp": {
+    "interface": {
+      "eth0": {
+        "via": "LLDP",
+        "rid": "1",
+        "age": "0 day, 00:00:20",
+        "chassis": {
+          "core-sw": {
+            "id": { "type": "mac", "value": "00:11:22:33:44:55" },
+            "descr": "Arista Networks EOS version 4.28.3M",
+            "mgmt-ip": "10.1.1.1",
+            "capability": [
+              { "type": "Bridge", "enabled": true },
+              { "type": "Router", "enabled": false }
+            ]
+          }
+        },
+        "port": {
+          "id": { "type": "ifname", "value": "Ethernet49" },
+          "descr": "uplink"
+        }
+      },
+      "eth1": {
+        "via": "LLDP",
+        "rid": "2",
+        "chassis": {
+          "dist-sw": {
+            "id": { "type": "mac", "value": "00:11:22:33:44:66" },
+            "descr": "Cisco IOS Software, C9300-48P",
+            "capability": { "type": "Bridge", "enabled": true }
+          }
+        },
+        "port": {
+          "id": { "type": "ifname", "value": "Gi1/0/24" },
+          "descr": "downlink"
+        }
+      }
+    }
+  }
+}

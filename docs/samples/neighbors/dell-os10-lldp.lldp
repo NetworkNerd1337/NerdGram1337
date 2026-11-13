@@ -1,0 +1,19 @@
+core-sw# show lldp neighbors detail
+------------------------------------------------
+Local Interface: ethernet1/1/1
+Remote Chassis ID: 00:11:22:33:44:55
+Remote Port ID: ethernet1/1/49
+Remote Port Description: uplink
+Remote System Name: leaf-1
+Remote System Description: Dell EMC Networking OS10 Enterprise.
+Remote System Capabilities: BR
+Existing System Capabilities: BR
+Remote Management Address: 10.9.0.11
+------------------------------------------------
+Local Interface: ethernet1/1/2
+Remote Chassis ID: 00:11:22:33:44:66
+Remote Port ID: ethernet1/1/1
+Remote Port Description: downlink
+Remote System Name: leaf-2
+Remote System Description: Dell EMC Networking OS10 Enterprise.
+Existing System Capabilities: B

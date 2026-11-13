@@ -55,7 +55,7 @@ export type CommandActions = {
   editDiagramInfo?: () => void;
   /** Insert a Mermaid click link from a node to another diagram. */
   linkNode?: () => void;
-  /** Regenerate the open diagram from its stored CSV or JSON source. */
+  /** Regenerate the open diagram from its stored data file. */
   refreshFromData?: () => void;
   openHistory?: () => void;
   setTheme?: (theme: string | null) => void;
