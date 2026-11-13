@@ -3,6 +3,7 @@ import { CommandPaletteRoot } from "./components/CommandPalette";
 import { UpdateHost } from "./components/UpdateHost";
 import { DashboardPage } from "./pages/DashboardPage";
 import { EditorPage } from "./pages/EditorPage";
+import { GeneratePage } from "./pages/GeneratePage";
 import { NewDiagramPage } from "./pages/NewDiagramPage";
 import { PresentPage } from "./pages/PresentPage";
 import { ReferencePage } from "./pages/ReferencePage";
@@ -18,6 +19,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/new" element={<NewDiagramPage />} />
+          <Route path="/generate" element={<GeneratePage />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/templates/present/:id" element={<TemplatePresentPage />} />
         <Route path="/edit/*" element={<EditorPage />} />

@@ -24,6 +24,8 @@ import * as templates from "./templates.js";
 import * as thumbnails from "./thumbnails.js";
 import * as updates from "./updates/service.js";
 import { getVersionInfo } from "./updates/versionInfo.js";
+import { importDiagramData } from "./diagramData.js";
+import { createGeneratedDiagram, importInputFromBody, refreshGeneratedDiagram } from "./diagramDataFiles.js";
 import { lintDiagram, normalizeLintRules, type LintRuleId } from "./diagramLint.js";
 
 export type ListenPort = { port: number };
@@ -474,6 +476,79 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       }
       const result = await store.duplicateItem(itemPath);
       res.status(201).json(result);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/generate/preview", (req, res) => {
+    try {
+      if (!jsonObject(req, res)) return;
+      const result = importDiagramData(importInputFromBody(req.body));
+      res.json(result);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/generate", async (req, res) => {
+    try {
+      if (!jsonObject(req, res)) return;
+      if (typeof req.body.path !== "string" || !req.body.path.trim()) {
+        res.status(400).json({ error: "path is required", code: "invalid" });
+        return;
+      }
+      if (req.body.storeData != null && typeof req.body.storeData !== "boolean") {
+        res.status(400).json({ error: "storeData must be a boolean", code: "invalid" });
+        return;
+      }
+      if (req.body.dataName != null && typeof req.body.dataName !== "string") {
+        res.status(400).json({ error: "dataName must be a string", code: "invalid" });
+        return;
+      }
+      const created = await createGeneratedDiagram({
+        ...importInputFromBody(req.body),
+        path: req.body.path,
+        storeData: req.body.storeData,
+        dataName: req.body.dataName,
+      });
+      res.status(201).json(created);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/generate/refresh", async (req, res) => {
+    try {
+      if (!jsonObject(req, res)) return;
+      if (typeof req.body.path !== "string" || !req.body.path.trim()) {
+        res.status(400).json({ error: "path is required", code: "invalid" });
+        return;
+      }
+      if (req.body.diagramText != null && typeof req.body.diagramText !== "string") {
+        res.status(400).json({ error: "diagramText must be a string", code: "invalid" });
+        return;
+      }
+      if (req.body.text != null && typeof req.body.text !== "string") {
+        res.status(400).json({ error: "text must be a string", code: "invalid" });
+        return;
+      }
+      if (req.body.edgesText != null && typeof req.body.edgesText !== "string") {
+        res.status(400).json({ error: "edgesText must be a string", code: "invalid" });
+        return;
+      }
+      if (req.body.writeData != null && typeof req.body.writeData !== "boolean") {
+        res.status(400).json({ error: "writeData must be a boolean", code: "invalid" });
+        return;
+      }
+      const refreshed = await refreshGeneratedDiagram({
+        path: req.body.path,
+        diagramText: req.body.diagramText,
+        text: req.body.text,
+        edgesText: req.body.edgesText,
+        writeData: req.body.writeData,
+      });
+      res.json(refreshed);
     } catch (err) {
       sendError(res, err);
     }

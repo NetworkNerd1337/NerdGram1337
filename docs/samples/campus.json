@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    { "id": "core", "label": "Core", "group": "HQ", "type": "router" },
+    { "id": "atlanta", "label": "Atlanta", "group": "Sites", "type": "site", "diagram": "Sites/Atlanta.mmd" },
+    { "id": "remote", "label": "Remote", "group": "Sites", "type": "site" }
+  ],
+  "edges": [
+    { "source": "core", "target": "atlanta", "label": "TenGigE0/0/1" },
+    { "source": "core", "target": "remote", "label": "TenGigE0/0/2" },
+    { "source": "atlanta", "target": "remote", "label": "Gi0/2" }
+  ]
+}

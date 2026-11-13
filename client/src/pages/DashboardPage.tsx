@@ -744,6 +744,9 @@ export function DashboardPage() {
               <Link className="btn btn-ghost" to={`/templates?folder=${encodeURIComponent(folder)}`}>
                 Templates
               </Link>
+              <Link className="btn btn-ghost" to={`/generate?folder=${encodeURIComponent(folder)}`}>
+                From data
+              </Link>
               <button type="button" className="btn btn-ghost" onClick={openCreateFolder}>
                 New folder
               </button>

@@ -16,6 +16,7 @@ A short screen recording of the dashboard and editor is in [screenshots/nerdgram
 
 - [Quick start](#quick-start)
 - [Features](#features)
+- [Generate from data](#generate-from-data)
 - [Configuration](#configuration)
 - [Security model](#security-model)
 - [Data and backups](#data-and-backups)
@@ -364,6 +365,18 @@ The sample pair is `WAN.mmd` and `Sites/Atlanta.mmd`. Click Atlanta on the overv
 
 Only `nerdgram:`, `diagram:`, and a relative `.mmd` path navigate inside the app. An `http` or `https` address opens in a new tab and does not keep a handle back to this window. `javascript:` and any other scheme are blocked. A path that would leave the data directory is blocked the same way as a file operation.
 
+### Generate from data
+
+A CSV or JSON file can build the diagram. **From data** on the dashboard opens `/generate`. Paste the file or upload it, map columns, choose a flowchart direction and whether groups become subgraphs, preview the Mermaid, then create the diagram. The same action is **Generate diagram from data** in the command palette.
+
+Two shapes are accepted. A links table has a local device, a local port, a remote device, and a remote port. A node list has an id and a label, and an optional second file of edges with source, target, and label. JSON can carry both lists in one object (`nodes` and `edges`) or a `links` array. Optional columns are group, type, style class, and a child diagram path. A group becomes a Mermaid `subgraph`. A type or style class becomes a `classDef` and a `class` line. A child diagram path becomes a `click` line such as `click Atlanta "nerdgram:Sites/Atlanta.mmd"`. The path has to be a `.mmd` file inside the workspace. `javascript:` and a path that leaves the workspace are rejected, and the error names the row.
+
+Sample files are [docs/samples/campus-links.csv](docs/samples/campus-links.csv) and [docs/samples/campus.json](docs/samples/campus.json). The CSV is a links table. The JSON is nodes, edges, and a link from Atlanta to `Sites/Atlanta.mmd`.
+
+The data file is saved next to the diagram (`Campus.mmd` and `Campus.csv`). GitHub sync copies both. The diagram's front matter records the file, the column mapping, and the direction under `nerdgram.source`. That path is from the workspace root. Moving or duplicating the diagram does not move the data file, so refresh keeps reading the original path. Generated lines sit between `%% nerdgram:generated` and `%% nerdgram:generated end`. **Refresh from data** in the editor reads that file, shows nodes and edges added, removed, and changed, and writes the generated block only after you apply it. Notes, the theme, and anything outside the markers stay, including a node you added by hand.
+
+A file can be up to 512 KB, with at most 5,000 rows, 2,000 nodes, and 5,000 edges. A bad row names its row number and does not create the diagram. Labels are escaped so a cell cannot close a Mermaid string or add a directive. NetBox, and pasted `show lldp neighbors detail` or `show cdp neighbors detail` output, are not imported yet. The parser is the same pipeline those sources will use.
+
 ### Thumbnails, find, and shortcuts
 
 Dashboard cards keep a thumbnail of each diagram. The first time a card is on screen, the app draws it. After that, the picture is saved under `.meta/thumbs` and reused until the diagram changes. Scrolling a large folder only draws the cards you are about to see. A diagram that cannot be drawn shows “Preview unavailable” and the rest of the grid stays up.
@@ -387,7 +400,7 @@ The find panel can match case, whole words, or a regular expression, and it can 
 
 On Windows, AltGr is reported as Ctrl+Alt. On a layout where AltGr+G types a character, Ctrl+Alt+G can type that character instead of opening Go to line. Use **Go to line** in the command palette.
 
-The palette lists the actions already in the app: new diagram, paste, folder, import, search, open, rename, move, duplicate, trash, restore, diagram info, link node to diagram, history, theme, export, present, find, go to line, templates, GitHub sync, About, and check for updates. Template, sync, and update commands do not add a shortcut. The app also leaves Ctrl+D for the browser bookmark and does not bind F11.
+The palette lists the actions already in the app: new diagram, paste, folder, import, generate from data, refresh from data, search, open, rename, move, duplicate, trash, restore, diagram info, link node to diagram, history, theme, export, present, find, go to line, templates, GitHub sync, About, and check for updates. Template, sync, and update commands do not add a shortcut. The app also leaves Ctrl+D for the browser bookmark and does not bind F11.
 
 ### Search
 
@@ -439,7 +452,7 @@ GitHub sync is optional. The folder on this computer stays the copy NerdGram edi
 
 NerdGram does not ship a client ID or a client secret. You register an OAuth app in your own GitHub account. There is no operating-system keychain in a typical container. The token file mode `0600` is the stored secret.
 
-**What is copied.** Synced files are the `.mmd` diagrams and the folders that contain them. The commit also includes a short README, `.gitignore`, and `.gitattributes` so the GitHub repository can be read on its own. A one-file commit is `Update Network/Core.mmd`.
+**What is copied.** Synced files are the `.mmd` diagrams, the `.csv` and `.json` data files stored next to a generated diagram, and the folders that contain them. The commit also includes a short README, `.gitignore`, and `.gitattributes` so the GitHub repository can be read on its own. A one-file commit is `Update Network/Core.mmd`.
 
 These stay on this computer and are not pushed:
 

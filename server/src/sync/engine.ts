@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
+import { writeDataFile } from "../diagramDataFiles.js";
 import { deleteItem, readFile, writeFile } from "../fsStore.js";
 import { assertWriteAllowed } from "../locks.js";
 import { ensureDataRoot, getDataRoot, getMetaPath, resolveSafePath } from "../paths.js";
@@ -37,6 +38,8 @@ import { clearRememberedSecrets } from "./redact.js";
 import {
   configPath,
   conflictsPath,
+  isDataFile,
+  isSyncedFile,
   listUserFiles,
   mirrorPath,
   removePrivateFile,
@@ -415,16 +418,16 @@ export async function resolveConflicts(choices: { path: string; choice: SyncChoi
         if (!conflict) continue;
         if (choice.choice === "local") continue;
         if (choice.choice === "remote") {
-          if (conflict.remoteContent == null) await deleteItem(conflict.path);
-          else await writeFile(conflict.path, conflict.remoteContent, { force: true });
-          if (conflict.remoteContent != null) await invalidateDiagram(conflict.path);
+          if (conflict.remoteContent == null) await deleteWorkspaceFile(conflict.path);
+          else await writeWorkspaceFile(conflict.path, conflict.remoteContent, { force: true });
+          if (conflict.remoteContent != null && !isDataFile(conflict.path)) await invalidateDiagram(conflict.path);
           continue;
         }
         const desired = githubCopyPath(conflict.path);
         const taken = async (candidate: string) => pathExists(resolveSafePath(candidate));
         const dest = await resolveAvailablePath(desired, taken);
-        await writeFile(dest, conflict.remoteContent ?? "", {});
-        await invalidateDiagram(dest);
+        await writeWorkspaceFile(dest, conflict.remoteContent ?? "", {});
+        if (!isDataFile(dest)) await invalidateDiagram(dest);
       }
     });
     const remaining = file.conflicts.filter((conflict) => !choices.some((choice) => choice.path === conflict.path));
@@ -696,10 +699,14 @@ async function applyPlan(actions: MergeAction[]): Promise<void> {
   await withoutSyncNotes(async () => {
     for (const action of actions) {
       if (action.type === "delete") {
-        await deleteItem(action.path);
+        await deleteWorkspaceFile(action.path);
         continue;
       }
       if (action.type === "write") {
+        if (isDataFile(action.path)) {
+          await writeDataFile(action.path, action.content);
+          continue;
+        }
         let expectedHash: string | undefined;
         try {
           expectedHash = (await readFile(action.path)).hash;
@@ -926,7 +933,27 @@ function preview(content: string | null): string | null {
 }
 
 function githubCopyPath(relativePath: string): string {
-  return relativePath.replace(/\.mmd$/i, " (from GitHub).mmd");
+  return relativePath.replace(/(\.[^./]+)$/i, " (from GitHub)$1");
+}
+
+async function writeWorkspaceFile(
+  relativePath: string,
+  content: string,
+  options?: { expectedHash?: string; force?: boolean },
+): Promise<void> {
+  if (isDataFile(relativePath)) {
+    await writeDataFile(relativePath, content);
+    return;
+  }
+  await writeFile(relativePath, content, options ?? {});
+}
+
+async function deleteWorkspaceFile(relativePath: string): Promise<void> {
+  if (isDataFile(relativePath)) {
+    await fsp.rm(resolveSafePath(relativePath), { force: true });
+    return;
+  }
+  await deleteItem(relativePath);
 }
 
 async function loadConflicts(): Promise<ConflictFile | null> {
@@ -1013,7 +1040,7 @@ function startWatch(root: string): void {
       if (filename) {
         const rel = String(filename).split(path.sep).join("/");
         if (rel.split("/").some((part) => part.startsWith("."))) return;
-        if (!rel.toLowerCase().endsWith(".mmd")) return;
+        if (!isSyncedFile(rel)) return;
       }
       noteLocalChange({ kind: "content", summary: "" });
     });

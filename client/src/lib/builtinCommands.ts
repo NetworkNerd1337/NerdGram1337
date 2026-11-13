@@ -49,6 +49,23 @@ const builtin: PaletteCommand[] = [
     },
   },
   {
+    id: "file.generate",
+    title: "Generate diagram from data",
+    section: "File",
+    keywords: ["csv", "json", "import", "links", "refresh"],
+    order: 35,
+    run: (ctx) => ctx.navigate("/generate"),
+  },
+  {
+    id: "file.refreshData",
+    title: "Refresh diagram from data",
+    section: "File",
+    keywords: ["csv", "json", "regenerate", "diff"],
+    order: 36,
+    when: (ctx) => ctx.route === "editor" && !ctx.readOnly && !ctx.conflictOpen && !!ctx.actions.refreshFromData,
+    run: (ctx) => ctx.actions.refreshFromData?.(),
+  },
+  {
     id: "file.import",
     title: "Import diagrams",
     section: "File",

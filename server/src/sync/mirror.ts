@@ -7,7 +7,7 @@ import type { GitHttpRequest } from "isomorphic-git/http/node";
 import { httpFail } from "../storage.js";
 import { BRANCH, githubTimeoutMs } from "./constants.js";
 import { assertCleanRemoteUrl, classifyNetworkError } from "./github.js";
-import { isBoilerplate, isUserDiagram, listUserFiles } from "./layout.js";
+import { isBoilerplate, isSyncedFile, listUserFiles } from "./layout.js";
 import { readToken } from "./secrets.js";
 import { rememberSecret, scrubError } from "./redact.js";
 
@@ -81,7 +81,7 @@ const README = `# NerdGram diagrams
 
 This repository is a copy of diagrams from NerdGram1337.
 
-The files are Mermaid \`.mmd\` diagrams. Favorites, syntax overrides, trash, version history, thumbnails, the search index, and the GitHub token stay on the computer that runs NerdGram. They are not in this repository.
+The files are Mermaid \`.mmd\` diagrams, plus \`.csv\` and \`.json\` data files stored next to a generated diagram. Favorites, syntax overrides, trash, version history, thumbnails, the search index, and the GitHub token stay on the computer that runs NerdGram. They are not in this repository.
 
 Editing a file on GitHub does not change NerdGram until you pull in the app. NerdGram will not force-push over commits made here.
 `;
@@ -91,6 +91,8 @@ const GITIGNORE = `# Tokens, trash, history, and caches are not copied into this
 `;
 
 const GITATTRIBUTES = `*.mmd text eol=lf
+*.csv text eol=lf
+*.json text eol=lf
 `;
 
 export async function ensureBoilerplate(dir: string): Promise<void> {
@@ -244,7 +246,7 @@ export async function readUserFilesAt(dir: string, ref: string): Promise<Map<str
     return out;
   }
   for (const filepath of files) {
-    if (!isUserDiagram(filepath)) continue;
+    if (!isSyncedFile(filepath)) continue;
     const { blob } = await git.readBlob({ fs: nodeFs, dir, oid, filepath });
     out.set(filepath, Buffer.from(blob).toString("utf8"));
   }
@@ -268,7 +270,7 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 function mirrorFile(dir: string, relativePath: string): string {
-  if (!isUserDiagram(relativePath)) {
+  if (!isSyncedFile(relativePath)) {
     throw httpFail(400, "Invalid path", "invalid");
   }
   return path.join(dir, ...relativePath.split("/"));
@@ -315,7 +317,7 @@ async function deleteExtra(mirror: string, dir: string, desired: Map<string, str
       continue;
     }
     if (isBoilerplate(rel)) continue;
-    if (entry.name.startsWith(".") || !isUserDiagram(rel) || !desired.has(rel)) {
+    if (entry.name.startsWith(".") || !isSyncedFile(rel) || !desired.has(rel)) {
       await fsp.rm(abs, { force: true });
     }
   }
