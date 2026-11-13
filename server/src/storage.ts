@@ -13,6 +13,7 @@ import { getMetaPath } from "./paths.js";
  * - `.meta/trash/items/<id>/` — one soft-deleted file or folder
  * - `.meta/versions/p_<encoded-path>/` — previous contents of one diagram
  * - `.meta/locks/p_<encoded-path>.json` — single-editor lock for one path
+ * - `.meta/thumbs/p_<encoded-path>.json` — cached dashboard thumbnail SVG
  *
  * Move, duplicate, and import (#9) should reuse `atomicWriteText`,
  * `evaluateWrite`, and `resolveAvailablePath` instead of calling

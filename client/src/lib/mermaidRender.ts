@@ -13,6 +13,14 @@ function enqueue<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
+/** Mermaid parks a temporary SVG on document.body. Drop it after every render. */
+function removeMermaidTemp(id: string): void {
+  if (typeof document === "undefined") return;
+  for (const elementId of [id, `d${id}`, `i${id}`]) {
+    document.getElementById(elementId)?.remove();
+  }
+}
+
 function initializeFor(code: string, fallbackTheme: string): void {
   const config = diagramInitConfig(code, fallbackTheme);
   mermaid.initialize(config as Parameters<typeof mermaid.initialize>[0]);
@@ -46,7 +54,11 @@ export async function renderMermaid(
     }
     initializeFor(trimmed, fallbackTheme);
     const id = `nerdgram-${++renderSeq}`;
-    const { svg } = await mermaid.render(id, trimmed);
-    return { svg, id };
+    try {
+      const { svg } = await mermaid.render(id, trimmed);
+      return { svg, id };
+    } finally {
+      removeMermaidTemp(id);
+    }
   });
 }

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { addFavorites, favoritePathsFor, getFavorites, takeFavorites } from "./favorites.js";
 import { archiveHistory, unarchiveHistory } from "./history.js";
+import { archiveThumbnails, unarchiveThumbnails } from "./thumbnails.js";
 import { assertUnlocked, discardLocks } from "./locks.js";
 import { ensureDataRoot, resolveSafePath, toRelativePath } from "./paths.js";
 import {
@@ -48,6 +49,10 @@ function versionsArchive(id: string): string {
   return path.join(itemDir(id), "versions");
 }
 
+function thumbsArchive(id: string): string {
+  return path.join(itemDir(id), "thumbs");
+}
+
 function toPublic(manifest: TrashManifest): TrashItem {
   return {
     id: manifest.id,
@@ -84,6 +89,7 @@ export async function relativePathTaken(relativePath: string): Promise<boolean> 
 async function finishMove(manifest: TrashManifest): Promise<TrashItem> {
   const isDir = manifest.type === "folder";
   await archiveHistory(manifest.originalPath, isDir, versionsArchive(manifest.id));
+  await archiveThumbnails(manifest.originalPath, isDir, thumbsArchive(manifest.id));
   await discardLocks(manifest.originalPath, isDir);
   const taken = await takeFavorites(manifest.originalPath, isDir);
   const favorites = [...new Set([...manifest.favorites, ...taken])];
@@ -208,6 +214,12 @@ export async function restoreTrashItem(
   await fs.rename(payloadFile(id, manifest.type), destAbs);
   await unarchiveHistory(
     versionsArchive(id),
+    manifest.originalPath,
+    destination,
+    manifest.type === "folder",
+  );
+  await unarchiveThumbnails(
+    thumbsArchive(id),
     manifest.originalPath,
     destination,
     manifest.type === "folder",

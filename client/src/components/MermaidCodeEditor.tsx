@@ -16,7 +16,8 @@ import {
 import { oneDark } from "@codemirror/theme-one-dark";
 import CodeMirror from "@uiw/react-codemirror";
 import { mermaid } from "codemirror-lang-mermaid";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
+import { bindEditorView, editorSearchExtensions } from "../lib/editorCommands";
 import { mermaidCompletionSource } from "../lib/mermaidCompletions";
 import { commentEdit } from "../lib/mermaidComments";
 import { lintMermaidDoc } from "../lib/mermaidLint";
@@ -54,6 +55,8 @@ export function MermaidCodeEditor({
   readOnly = false,
   "aria-label": ariaLabel = "Mermaid source editor",
 }: MermaidCodeEditorProps) {
+  useEffect(() => () => bindEditorView(null), []);
+
   const extensions = useMemo(
     () => [
       lineNumbers(),
@@ -67,6 +70,7 @@ export function MermaidCodeEditor({
       history(),
       foldGutter(),
       highlightSelectionMatches(),
+      ...editorSearchExtensions(),
       mermaid(),
       oneDark,
       lintGutter(),
@@ -103,6 +107,7 @@ export function MermaidCodeEditor({
         readOnly={readOnly}
         extensions={extensions}
         onChange={onChange}
+        onCreateEditor={(view) => bindEditorView(view)}
       />
     </div>
   );

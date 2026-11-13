@@ -45,6 +45,7 @@ describe("front matter parsing", () => {
     expect(diagramInitConfig(source, "dark")).toEqual({
       startOnLoad: false,
       securityLevel: "loose",
+      suppressErrorRendering: true,
       theme: "dark",
       fontFamily: DEFAULT_FONT_FAMILY,
     });
@@ -197,6 +198,20 @@ describe("front matter parsing", () => {
     if (!theme.ok || !look.ok || !layout.ok || !title.ok) return;
     const keys = [base, theme.source, look.source, layout.source, title.source].map(thumbnailCacheKey);
     expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it("changes the thumbnail cache key when only variables, CSS, font, or hand-drawn seed change", () => {
+    const base = `---\nconfig:\n  theme: dark\n---\n${BODY}`;
+    const variables = `---\nconfig:\n  theme: dark\n  themeVariables:\n    primaryColor: "#ff0000"\n---\n${BODY}`;
+    const css = `---\nconfig:\n  theme: dark\n  themeCSS: ".node rect { fill: #fff }"\n---\n${BODY}`;
+    const font = `---\nconfig:\n  theme: dark\n  fontFamily: Georgia\n---\n${BODY}`;
+    const seed = `---\nconfig:\n  theme: dark\n  handDrawnSeed: 7\n---\n${BODY}`;
+    const notes = applyDiagramPatch(base, { notes: "lab write-up" });
+    expect(notes.ok).toBe(true);
+    if (!notes.ok) return;
+    const keys = [base, variables, css, font, seed, notes.source].map(thumbnailCacheKey);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(thumbnailCacheKey(base)).toBe(thumbnailCacheKey(base));
   });
 
   it("migrates a deprecated init directive and keeps an unknown key", () => {

@@ -11,6 +11,7 @@ import {
   toRelativePath,
 } from "./paths.js";
 import { moveToTrash } from "./trash.js";
+import { dropThumbnail, relocateThumbnails } from "./thumbnails.js";
 import {
   atomicWriteText,
   evaluateWrite,
@@ -251,6 +252,7 @@ export async function writeFile(
 
   await fs.mkdir(path.dirname(abs), { recursive: true });
   await atomicWriteText(abs, content);
+  await dropThumbnail(relative);
   const stat = await fs.stat(abs);
   return {
     path: relative,
@@ -330,6 +332,7 @@ export async function renameItem(fromPath: string, toPath: string): Promise<{ pa
   await rewriteFavoritePaths(fromRel, toRel, fromStat.isDirectory());
   await relocateHistory(fromRel, toRel, fromStat.isDirectory());
   await relocateLocks(fromRel, toRel, fromStat.isDirectory());
+  await relocateThumbnails(fromRel, toRel, fromStat.isDirectory());
   return { path: toRel };
 }
 

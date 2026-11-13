@@ -400,6 +400,14 @@ Description, notes, and tags live under `nerdgram:` because Mermaid has no field
 
 An older `%%{init: ...}%%` line still renders. The editor can move that config into the front matter. If the header is not valid YAML, the editor shows the error and leaves the file text alone.
 
+## Thumbnails, find, and commands
+
+Dashboard cards keep a thumbnail of each diagram. The first time a card is on screen, the app draws it. After that, the picture is saved under `.meta/thumbs` in the data folder and reused until the diagram changes. Scrolling a large folder only draws the cards you are about to see. A diagram that cannot be drawn shows “Preview unavailable” and the rest of the grid stays up.
+
+In the editor, Ctrl+F (Cmd+F on a Mac) opens find and replace. The panel can match case, whole words, or a regular expression, and it can replace one match or all of them. Ctrl+G finds the next match. Go to line is Ctrl+Alt+G (Cmd+Alt+G on a Mac), so Ctrl+L / Cmd+L still focuses the address bar. These shortcuts apply while the code pane is focused.
+
+Ctrl+K (Cmd+K on a Mac) opens the command palette. It lists the actions already in the app: new diagram, paste, folder, import, search, open, rename, move, duplicate, trash, restore, diagram info, history, theme, export, find, and go to line. If the browser address bar takes that shortcut, use the **Commands** button. Ctrl+/ (Cmd+/ on a Mac) still comments the selected lines.
+
 ## Trash, version history, and editing locks
 
 Delete on the dashboard moves a diagram or a folder into the trash. It does not erase the files. Open **Trash** in the sidebar to restore an item or delete it permanently. **Empty trash** removes everything in the trash for good.
@@ -556,6 +564,7 @@ The production build has not been created. From the project root run `npm run bu
 - Split code + live preview editor with autosave (500 ms) and Auto-Update preview
 - Mermaid syntax highlighting, autocomplete (diagram types, keywords, arrows, snippets, existing node IDs), bracket matching, and inline parse-error diagnostics in the code pane
 - Per-diagram title, description, notes, and tags in Mermaid front matter, with theme, look, and layout written into the file. The dashboard shows the title and can filter by tag. Ctrl+/ or Cmd+/ toggles a `%%` comment
+- Cached dashboard thumbnails, editor find and replace, go to line (Ctrl+Alt+G or Cmd+Alt+G), and a command palette (Ctrl+K or Cmd+K)
 - Export to SVG, PNG, JPG, and PDF (PDF is built client-side from the live SVG so the current theme is preserved)
 - Offline Mermaid syntax reference library with sync from mermaid.js.org
 

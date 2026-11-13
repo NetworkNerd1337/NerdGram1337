@@ -23,6 +23,7 @@ describe("client front matter helper", () => {
     expect(diagramInitConfig(source, "dark")).toEqual({
       startOnLoad: false,
       securityLevel: "loose",
+      suppressErrorRendering: true,
       theme: "dark",
       fontFamily: DEFAULT_FONT_FAMILY,
     });
@@ -79,6 +80,16 @@ describe("client front matter helper", () => {
     expect(parseDiagram(tagged.source).theme).toBe("base");
     expect(tagged.source.endsWith(BODY)).toBe(true);
     expect(thumbnailCacheKey(source)).not.toBe(thumbnailCacheKey(themed.source));
+  });
+
+  it("changes the thumbnail cache key for a variables-only edit", () => {
+    const base = `---\nconfig:\n  theme: dark\n---\n${BODY}`;
+    const variables = `---\nconfig:\n  theme: dark\n  themeVariables:\n    primaryColor: "#ff0000"\n---\n${BODY}`;
+    const font = `---\nconfig:\n  theme: dark\n  fontFamily: Georgia\n---\n${BODY}`;
+    const css = `---\nconfig:\n  theme: dark\n  themeCSS: ".edge { stroke: red }"\n---\n${BODY}`;
+    const seed = `---\nconfig:\n  theme: dark\n  handDrawnSeed: 4\n---\n${BODY}`;
+    const keys = [base, variables, font, css, seed].map(thumbnailCacheKey);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 
   it("ranks the file name ahead of the title and still matches notes", () => {
