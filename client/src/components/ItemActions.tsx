@@ -2,6 +2,7 @@ type ItemActionsProps = {
   label: string;
   favorited?: boolean;
   onFavorite?: () => void;
+  onPresent?: () => void;
   onRename: () => void;
   onMove: () => void;
   onDuplicate: () => void;
@@ -12,6 +13,7 @@ export function ItemActions({
   label,
   favorited = false,
   onFavorite,
+  onPresent,
   onRename,
   onMove,
   onDuplicate,
@@ -22,6 +24,11 @@ export function ItemActions({
       {onFavorite ? (
         <button type="button" className="btn btn-ghost" onClick={onFavorite}>
           {favorited ? "Unfavorite" : "Favorite"}
+        </button>
+      ) : null}
+      {onPresent ? (
+        <button type="button" className="btn btn-ghost" onClick={onPresent} aria-label={`Present ${label}`}>
+          Present
         </button>
       ) : null}
       <button type="button" className="btn btn-ghost" onClick={onRename}>

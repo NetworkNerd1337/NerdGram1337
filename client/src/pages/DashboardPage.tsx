@@ -35,7 +35,9 @@ import {
   ensureMmd,
   formatRelativeTime,
   joinPath,
+  presentHref,
 } from "../lib/paths";
+import { startPresentation } from "../lib/presentationFullscreen";
 import type { DiagramMeta, DiagramSearchHit, TrashItem, TreeNode } from "../types";
 
 type OverTarget =
@@ -51,6 +53,9 @@ function sameOver(current: OverTarget | null, next: OverTarget | null): boolean 
 
 export function DashboardPage() {
   const navigate = useNavigate();
+  const presentFile = (path: string) => {
+    startPresentation(() => navigate(presentHref(path)));
+  };
   const { tree, favorites, loading, error, refresh, toggleFavorite } = useWorkspace();
   const [folder, setFolder] = useState("");
   const [search, setSearch] = useState("");
@@ -781,6 +786,7 @@ export function DashboardPage() {
                     onDragOver={rejectFileDrop}
                     onDrop={dropOnFile}
                     onFavorite={() => void toggleFavorite(hit.path)}
+                    onPresent={() => presentFile(hit.path)}
                     onRename={() => openRename(hit.path, false)}
                     onMove={() => setMoveTarget({ path: hit.path, isFolder: false })}
                     onDuplicate={() => void duplicateItem(hit.path)}
@@ -807,6 +813,7 @@ export function DashboardPage() {
                     onDragOver={rejectFileDrop}
                     onDrop={dropOnFile}
                     onFavorite={() => void toggleFavorite(hit.path)}
+                    onPresent={() => presentFile(hit.path)}
                     onRename={() => openRename(hit.path, false)}
                     onMove={() => setMoveTarget({ path: hit.path, isFolder: false })}
                     onDuplicate={() => void duplicateItem(hit.path)}
@@ -869,6 +876,7 @@ export function DashboardPage() {
                     onDragOver={rejectFileDrop}
                     onDrop={dropOnFile}
                     onFavorite={() => void toggleFavorite(file.path)}
+                    onPresent={() => presentFile(file.path)}
                     onRename={() => openRename(file.path, false)}
                     onMove={() => setMoveTarget({ path: file.path, isFolder: false })}
                     onDuplicate={() => void duplicateItem(file.path)}
@@ -892,6 +900,7 @@ export function DashboardPage() {
                     onDragOver={rejectFileDrop}
                     onDrop={dropOnFile}
                     onFavorite={() => void toggleFavorite(file.path)}
+                    onPresent={() => presentFile(file.path)}
                     onRename={() => openRename(file.path, false)}
                     onMove={() => setMoveTarget({ path: file.path, isFolder: false })}
                     onDuplicate={() => void duplicateItem(file.path)}
@@ -1064,6 +1073,7 @@ function DiagramCard({
   onDragOver,
   onDrop,
   onFavorite,
+  onPresent,
   onRename,
   onMove,
   onDuplicate,
@@ -1082,6 +1092,7 @@ function DiagramCard({
   onDragOver: (event: DragPayload) => void;
   onDrop: (event: DragPayload) => void;
   onFavorite: () => void;
+  onPresent: () => void;
   onRename: () => void;
   onMove: () => void;
   onDuplicate: () => void;
@@ -1118,6 +1129,7 @@ function DiagramCard({
           label={label}
           favorited={favorited}
           onFavorite={onFavorite}
+          onPresent={onPresent}
           onRename={onRename}
           onMove={onMove}
           onDuplicate={onDuplicate}
@@ -1142,6 +1154,7 @@ function ListRow({
   onDragOver,
   onDrop,
   onFavorite,
+  onPresent,
   onRename,
   onMove,
   onDuplicate,
@@ -1160,6 +1173,7 @@ function ListRow({
   onDragOver: (event: DragPayload) => void;
   onDrop: (event: DragPayload) => void;
   onFavorite: () => void;
+  onPresent: () => void;
   onRename: () => void;
   onMove: () => void;
   onDuplicate: () => void;
@@ -1195,6 +1209,7 @@ function ListRow({
         label={label}
         favorited={favorited}
         onFavorite={onFavorite}
+        onPresent={onPresent}
         onRename={onRename}
         onMove={onMove}
         onDuplicate={onDuplicate}
