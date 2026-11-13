@@ -254,7 +254,7 @@ The dashboard lists folders and diagrams in a tree, with search and grid or list
 
 Paths in this document use two placeholders, always in code formatting so GitHub does not treat the angle brackets as HTML tags. `<data>` is the data directory: `NERDGRAM_DATA_DIR` when that variable is set, and `diagrams/` inside the project when it is not. `<repo>` is the project folder, the git clone or the extracted ZIP.
 
-The editor is split code and live preview, with autosave about **500 ms** after you stop typing and an **Auto-Update** preview. The code pane has Mermaid syntax highlighting, autocomplete (diagram types, keywords, arrows, snippets, and existing node IDs), bracket matching, and inline parse errors. Export is SVG, PNG, JPG, or PDF. PDF is built in the browser from the live SVG so the current theme is kept.
+The editor is split code and live preview, with autosave about **500 ms** after you stop typing and an **Auto-Update** preview. The code pane has Mermaid syntax highlighting, autocomplete (diagram types, keywords, arrows, snippets, and existing node IDs), bracket matching, and inline parse errors. A parse error underlines the line and column Mermaid reported, and the last diagram that rendered stays on screen, marked out of date. Export is SVG, PNG, JPG, or PDF. PDF is built in the browser from the live SVG so the current theme is kept. [Diagram checks](#diagram-checks) lists the warnings and the quick fixes.
 
 ### Editing
 
@@ -323,6 +323,26 @@ The dashboard shows the title when the file has one, and the file name otherwise
 Description, notes, and tags live under `nerdgram:` because Mermaid has no field for them. Mermaid still reads `title` and `config` from the same header. A diagram with no front matter previews the same way as before. An older `%%{init: ...}%%` line still renders. The editor can move that config into the front matter. If the header is not valid YAML, the editor shows the error and leaves the file text alone.
 
 `%%` at the start of a line is a Mermaid comment. In the code pane, Ctrl+/ (Cmd+/ on a Mac) comments or uncomments the selected lines.
+
+### Diagram checks
+
+The code pane checks the diagram while you type. The check waits about **400 ms** after the last key so a large file does not lag. Mermaid's parser supplies the syntax error, including the line and column. The other checks are warnings. They do not block the preview or autosave. A warning is a gutter mark and a row in the problems list under the code. Click a row to jump to that line. The same checks are available to a future `nerdgram lint` command: `POST /api/lint` runs them on one diagram, and `GET /api/diagram-lint` runs them on the workspace.
+
+The problems list can also offer a fix. **Rename** gives a duplicate id a new name. **Remove unused class** deletes a `classDef` nothing uses. **Create class** inserts a `classDef` for a name you already applied. **Jump to definition** moves the cursor to the first definition of a duplicate id. Each of those can be undone with Ctrl+Z (Cmd+Z on a Mac).
+
+Turn a warning off under **Diagram checks** on the GitHub sync page (`/settings`). The switches are saved in this browser. A diagram Mermaid cannot parse is always marked.
+
+| Rule | What it warns about |
+| --- | --- |
+| Duplicate ids | The same id is defined again with a different label. Flowcharts, sequence diagrams, and state diagrams. |
+| Unconnected nodes | A flowchart node is defined but never used in a connection. A single node with no connections is left alone. |
+| Unlabeled endpoints | A connection names a node that was never given a label. That is usually a typo. A flowchart that mostly uses bare ids, such as `A --> B`, is left alone, including when one extra node has a label. |
+| Unused classes | A `classDef` is never applied with `class` or `:::`. `classDef default` is treated as used. |
+| Undefined classes | A `class` or `:::` name has no `classDef`. |
+| Front matter | The YAML header cannot be parsed, or a theme, look, layout, curve, ELK placement, title, description, or tag list is not one the file format accepts. |
+| Broken diagram links | A `click` target that looks like a diagram path (it ends in `.mmd`, starts with `./`, or uses `diagram:`) is not in the workspace. Web links are not checked. |
+
+On the dashboard, open **Workspace problems** to list those warnings for every diagram. A thumbnail whose diagram cannot be drawn shows a **Parse error** badge. A header that cannot be parsed shows **Front matter**.
 
 ### Thumbnails, find, and shortcuts
 
@@ -678,7 +698,7 @@ There is no **Update now** for a ZIP. About shows the hand steps.
 
 Releases are semantic versions: `vX.Y.Z`, three numbers with no prerelease suffix. `X` is the major line, `Y` is the maintenance line, and `Z` is the patch. The root `package.json` `version` is the version of the tree you have. A GitHub Release and its git tag use the same numbers with a leading `v`.
 
-This tree is v1.0.6, code name Atlas. v1.0.5 was the first release on this line, and that tag is already published. The GitHub Release and the container image for a tag show up on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases) once the tag is pushed. Later 1.x.y releases stay Atlas.
+This tree is v1.0.6, code name Atlas. v1.0.5 was the first release on this line, and that tag is already published. Each published tag has a GitHub Release and a container image. Both are listed on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases). Later 1.x.y releases stay Atlas.
 
 ### Version numbers and code names
 
@@ -689,7 +709,7 @@ Each major number has one code name for as long as that line is published. Maint
 | 1 | Atlas | v1.0.5 |
 | 2 | Meridian | v2.0.0 |
 
-v1.0.5 is the first release. Every later 1.x.y release is still Atlas. Meridian begins at v2.0.0 and is the name of every 2.x.y release after that.
+v1.0.5 was the first release. Every later 1.x.y release is still Atlas. v1.0.6 is the current published Atlas tag. Meridian begins at v2.0.0 and is the name of every 2.x.y release after that.
 
 Which number moves:
 
@@ -711,7 +731,7 @@ The running app shows the version and the code name together. A 1.x.y build is A
 
 ### Pin a version or move to another
 
-Install commands elsewhere in this file write the tag as `vX.Y.Z`. Substitute the release you want, for example the first Atlas tag once it has been published. `:latest` is not a version. It is the newest full release the image workflow has pushed.
+Install commands elsewhere in this file write the tag as `vX.Y.Z`. Substitute the release you want. `v1.0.6` is a published Atlas tag, and the full list is on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases). `:latest` is not a version. It is the newest full release the image workflow has pushed.
 
 **Docker, stay on one release.** Use the immutable tag `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z` in `docker run` and as the `image:` line in `compose.yaml`. `docker pull` of that tag gets that release again. Recreate the container on the same `nerdgram-data` volume when you change tags. The steps are [Update a Docker install](#update-a-docker-install). The workflow also pushes `sha-<commit>` for that build. Pin the `sha-` tag when you need that exact image rather than the version tag.
 
@@ -733,7 +753,7 @@ npm start
 
 **Update now** does not run on any other branch. The message tells you to check out `main`. It also does not run when the tree is dirty, when `origin` is not this repository, or when the release is not a fast-forward. The recovery if `npm ci` dies in the middle is in [In-app updates](#in-app-updates).
 
-**ZIP.** Download the tag archive once that tag exists:
+**ZIP.** Download the archive for a published tag:
 
 `https://github.com/NetworkNerd1337/NerdGram1337/archive/refs/tags/vX.Y.Z.zip`
 

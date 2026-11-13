@@ -751,6 +751,7 @@ export function DashboardPage() {
         {dragPath ? (
           <p className="drop-hint">Drop on a folder to move. A highlighted folder can take the item.</p>
         ) : null}
+        {!showTrash ? <WorkspaceProblems /> : null}
 
         {showTrash ? (
           <TrashList
@@ -1079,6 +1080,71 @@ function SearchMatch({ hit }: { hit: DiagramSearchHit }) {
   );
 }
 
+function WorkspaceProblems() {
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<{ path: string; line: number; severity: string; message: string }[] | null>(
+    null,
+  );
+
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    void api.diagramLint().then(
+      (result) => {
+        setItems(
+          result.diagrams.flatMap((diagram) =>
+            diagram.diagnostics.map((item) => ({
+              path: diagram.path,
+              line: item.line,
+              severity: item.severity,
+              message: item.message,
+            })),
+          ),
+        );
+        setLoading(false);
+      },
+      (err: unknown) => {
+        setError(err instanceof Error ? err.message : "Could not check the diagrams");
+        setLoading(false);
+      },
+    );
+  };
+
+  return (
+    <details
+      className="workspace-problems"
+      onToggle={(event) => {
+        const next = event.currentTarget.open;
+        setOpen(next);
+        if (next && items == null && !loading) load();
+      }}
+    >
+      <summary>Workspace problems</summary>
+      <p>
+        Warnings from every diagram. A diagram Mermaid cannot parse keeps a badge on its thumbnail
+        after the card is drawn.
+      </p>
+      {open && loading ? <p>Checking diagrams…</p> : null}
+      {error ? <p>{error}</p> : null}
+      {items && items.length === 0 ? <p>No warnings in the workspace.</p> : null}
+      {items && items.length > 0 ? (
+        <ul>
+          {items.map((item, index) => (
+            <li key={`${item.path}-${item.line}-${index}`}>
+              <Link to={editorHref(item.path, item.line, "")}>{item.path}</Link>
+              <span>
+                {item.severity === "error" ? "Error" : "Warning"} · line {item.line}. {item.message}
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </details>
+  );
+}
+
 function DiagramCard({
   path,
   href = `/edit/${path}`,
@@ -1130,7 +1196,12 @@ function DiagramCard({
       onDrop={onDrop}
     >
       <Link to={href} draggable={false} aria-label={`Open ${label}`}>
-        <MermaidThumbnail path={path} mtimeMs={mtimeMs} cacheKey={meta?.cacheKey ?? null} />
+        <MermaidThumbnail
+          path={path}
+          mtimeMs={mtimeMs}
+          cacheKey={meta?.cacheKey ?? null}
+          frontMatter={meta?.malformed === true}
+        />
       </Link>
       <div className="card-body">
         <h3>

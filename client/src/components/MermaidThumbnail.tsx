@@ -8,6 +8,8 @@ type MermaidThumbnailProps = {
   path: string;
   mtimeMs: number;
   cacheKey?: string | null;
+  /** Shown when the file's header is already known to be broken. */
+  frontMatter?: boolean;
 };
 
 type Status = "pending" | "ready" | "empty" | "failed";
@@ -31,7 +33,7 @@ class ThumbnailBoundary extends Component<{ children: ReactNode }, { failed: boo
   }
 }
 
-function ThumbnailBody({ path, mtimeMs, cacheKey }: MermaidThumbnailProps) {
+function ThumbnailBody({ path, mtimeMs, cacheKey, frontMatter = false }: MermaidThumbnailProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(() => typeof IntersectionObserver === "undefined");
   const [loaded, setLoaded] = useState<{
@@ -156,9 +158,11 @@ function ThumbnailBody({ path, mtimeMs, cacheKey }: MermaidThumbnailProps) {
 
   const message =
     shown.status === "failed" ? "Preview unavailable" : shown.status === "empty" ? "Empty diagram" : "";
+  const badge = shown.status === "failed" ? "Parse error" : frontMatter ? "Front matter" : null;
 
   return (
     <div className="card-thumb" ref={rootRef} aria-busy={shown.status === "pending"}>
+      {badge ? <span className="thumb-badge">{badge}</span> : null}
       {shown.svg ? <SanitizedSvg svg={shown.svg} /> : <span className="empty">{message}</span>}
     </div>
   );

@@ -9,8 +9,11 @@ import { DiagramInfoPanel } from "../components/DiagramInfoPanel";
 import { EditorLockBanner, TakeoverDialog } from "../components/EditorLockBanner";
 import { HistoryDialog } from "../components/HistoryDialog";
 import { MermaidCodeEditor } from "../components/MermaidCodeEditor";
+import { ProblemsPanel } from "../components/ProblemsPanel";
 import { PresentationView } from "../components/PresentationView";
-import { revealEditorMatch, runFind, runGotoLine, runReplace } from "../lib/editorCommands";
+import { getEditorView, revealEditorMatch, runFind, runGotoLine, runReplace } from "../lib/editorCommands";
+import { applyLintFix } from "../lib/lintActions";
+import type { ReportedDiagnostic } from "../lib/mermaidLint";
 import { OTHER_WINDOW_NOTE, STILL_HELD_NOTE, releaseEditorLock } from "../lib/editorLock";
 import { exportDiagram, type ExportFormat } from "../lib/exportDiagram";
 import {
@@ -46,6 +49,7 @@ import {
 } from "../lib/presentationKeys";
 import { rememberThumbnail } from "../lib/thumbnailCache";
 import { displayName, joinPath, parentPath } from "../lib/paths";
+import type { TreeNode } from "../types";
 
 type Access = "loading" | "edit" | "readonly";
 
@@ -91,6 +95,9 @@ export function EditorPage() {
   const [autoUpdate, setAutoUpdate] = useState(true);
   const [svgHtml, setSvgHtml] = useState("");
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [previewStale, setPreviewStale] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<ReportedDiagnostic[] | null>(null);
+  const [diagramPaths, setDiagramPaths] = useState<string[] | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<
     "idle" | "saving" | "saved" | "error" | "paused"
@@ -112,6 +119,7 @@ export function EditorPage() {
 
   const previewRef = useRef<HTMLDivElement>(null);
   const renderedRef = useRef<{ source: string; svg: string } | null>(null);
+  const renderGen = useRef(0);
   const renderTimer = useRef<number | null>(null);
   const skipNextSave = useRef(true);
   const baselineRef = useRef<Baseline | null>(null);
@@ -236,6 +244,12 @@ export function EditorPage() {
     setHistoryOpen(false);
     setLoadError(null);
     setSaveState("idle");
+    renderGen.current += 1;
+    renderedRef.current = null;
+    setSvgHtml("");
+    setRenderError(null);
+    setPreviewStale(false);
+    setDiagnostics(null);
     cancelScheduledLockRelease(filePath);
 
     (async () => {
@@ -427,18 +441,20 @@ export function EditorPage() {
   }, [access, filePath, loaded]);
 
   const runRender = useCallback(async (source: string) => {
+    const generation = renderGen.current;
     try {
       const { svg } = await renderMermaid(source, FALLBACK_THEME);
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || generation !== renderGen.current) return;
       renderedRef.current = { source, svg };
       setSvgHtml(svg);
       setRenderError(null);
+      setPreviewStale(false);
       publishThumbnail(pathRef.current, source, svg);
     } catch (err) {
-      if (!mountedRef.current) return;
+      if (!mountedRef.current || generation !== renderGen.current) return;
       const message = err instanceof Error ? err.message : "Render failed";
       setRenderError(message);
-      setSvgHtml("");
+      setPreviewStale(Boolean(renderedRef.current?.svg));
     }
   }, []);
 
@@ -452,6 +468,19 @@ export function EditorPage() {
       if (renderTimer.current) window.clearTimeout(renderTimer.current);
     };
   }, [code, autoUpdate, loaded, runRender]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.tree().then(
+      (result) => {
+        if (!cancelled) setDiagramPaths(diagramPathsIn(result.tree));
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [filePath]);
 
   useEffect(() => {
     if (!loaded || access !== "edit" || conflict) return;
@@ -653,7 +682,7 @@ export function EditorPage() {
     },
     items: [],
     trashItems: [],
-    hasPreview: Boolean(svgHtml) && !renderError,
+    hasPreview: Boolean(svgHtml),
     autoUpdate,
     readOnly,
     conflictOpen: Boolean(conflict?.open),
@@ -836,9 +865,23 @@ export function EditorPage() {
               value={code}
               onChange={setCode}
               readOnly={readOnly}
+              diagramPaths={diagramPaths}
+              onDiagnostics={setDiagnostics}
               aria-label="Mermaid source editor"
             />
           </div>
+          <ProblemsPanel
+            diagnostics={diagnostics ?? []}
+            pending={diagnostics == null}
+            readOnly={readOnly}
+            onSelect={(diagnostic) => {
+              revealEditorRange(diagnostic.from, diagnostic.to);
+            }}
+            onFix={(fix) => {
+              const view = getEditorView();
+              if (view) applyLintFix(view, fix);
+            }}
+          />
           {!autoUpdate && (
             <div style={{ padding: "0.75rem 1rem" }}>
               <button
@@ -911,9 +954,19 @@ export function EditorPage() {
               </button>
             </div>
           </div>
-          <div className="preview-stage" ref={previewRef}>
-            {renderError ? (
-              <div className="preview-error">{renderError}</div>
+          <div className={`preview-stage${previewStale ? " is-stale" : ""}`} ref={previewRef}>
+            {previewStale && svgHtml ? (
+              <div className="preview-stale">
+                <div className="preview-stale-banner" role="status">
+                  <strong>Out of date.</strong> The last diagram that rendered is still shown.{" "}
+                  {shortRenderError(renderError)}
+                </div>
+                <div className="preview-stale-frame" dangerouslySetInnerHTML={{ __html: svgHtml }} />
+              </div>
+            ) : renderError ? (
+              <div className="preview-error" role="alert">
+                {shortRenderError(renderError)}
+              </div>
             ) : (
               <div dangerouslySetInnerHTML={{ __html: svgHtml }} />
             )}
@@ -952,6 +1005,41 @@ export function EditorPage() {
       )}
     </div>
   );
+}
+
+function diagramPathsIn(nodes: TreeNode[]): string[] {
+  const paths: string[] = [];
+  const walk = (list: TreeNode[]) => {
+    for (const node of list) {
+      if (node.type === "file") paths.push(node.path);
+      else if (node.children) walk(node.children);
+    }
+  };
+  walk(nodes);
+  return paths;
+}
+
+function revealEditorRange(from: number, to: number): void {
+  const view = getEditorView();
+  if (!view) return;
+  view.focus();
+  view.dispatch({
+    selection: { anchor: from, head: Math.max(to, from) },
+    scrollIntoView: true,
+  });
+}
+
+function shortRenderError(message: string | null): string {
+  if (!message) return "The diagram could not be updated.";
+  const line =
+    message
+      .split("\n")
+      .map((item) => item.trim())
+      .find((item) => item && !/^[-^]+$/.test(item)) ?? message;
+  if (/^Parse error on line/i.test(line)) {
+    return "Mermaid could not read the diagram. The problems list marks the line.";
+  }
+  return line.length > 180 ? `${line.slice(0, 177)}…` : line;
 }
 
 function AppearanceSelect({
