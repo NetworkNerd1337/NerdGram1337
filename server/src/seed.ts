@@ -3,7 +3,13 @@ import path from "node:path";
 import { ensureDataRoot, REPO_ROOT } from "./paths.js";
 
 /** Sample diagrams shipped in the repo. Copied once into an empty data directory. */
-const SAMPLE_FILES = ["Welcome.mmd", "NetworkMap.mmd", "Examples/Sequence.mmd"];
+const SAMPLE_FILES = [
+  "Welcome.mmd",
+  "NetworkMap.mmd",
+  "Examples/Sequence.mmd",
+  "WAN.mmd",
+  "Sites/Atlanta.mmd",
+];
 
 /**
  * Copy the sample diagrams into an empty data directory.

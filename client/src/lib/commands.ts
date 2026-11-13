@@ -7,6 +7,7 @@
  *
  * - #13 full search: `diagramHits` on the context (registered below)
  * - #17 new from template: `templateCommands.ts` registers the gallery and each template
+ * - #35 linked diagrams: `Link node to diagram...` is a built-in editor command
  * - #18 Present: `presentCommands.ts` registers it. F5 and Mod-Shift-Enter
  *   are bound in `presentationKeys.ts`, not here.
  * - #19 check for updates: `registerCommands` from the update module
@@ -52,6 +53,8 @@ export type CommandActions = {
   trashItem?: (path: string) => void;
   restoreTrash?: (id: string) => void;
   editDiagramInfo?: () => void;
+  /** Insert a Mermaid click link from a node to another diagram. */
+  linkNode?: () => void;
   openHistory?: () => void;
   setTheme?: (theme: string | null) => void;
   toggleAutoUpdate?: () => void;

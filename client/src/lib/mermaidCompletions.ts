@@ -4,6 +4,7 @@ import {
   type CompletionResult,
   snippetCompletion,
 } from "@codemirror/autocomplete";
+import { relativeDiagramPath } from "../../../server/src/diagramLinks.ts";
 
 const DIAGRAM_TYPES: Completion[] = [
   { label: "flowchart", type: "keyword", detail: "Flowchart diagram" },
@@ -205,9 +206,71 @@ function isReserved(word: string): boolean {
   );
 }
 
+export type DiagramCompletionContext = {
+  diagramPaths?: readonly string[];
+  sourcePath?: string;
+};
+
+/**
+ * Inside a `click` URL, offer workspace diagrams. The range replaces the path
+ * already typed inside the quotes, or inserts a quoted path when the quotes
+ * are not there yet.
+ */
+export function clickPathCompletions(
+  lineText: string,
+  cursorInLine: number,
+  paths: readonly string[],
+  sourcePath: string,
+): { from: number; options: Completion[] } | null {
+  const before = lineText.slice(0, cursorInLine);
+  const quoted = /^\s*click\s+[A-Za-z_][\w-]*\s+(?:href\s+)?"([^"]*)$/i.exec(before);
+  const bare = quoted ? null : /^\s*click\s+[A-Za-z_][\w-]*\s+(?:href\s+)?$/i.exec(before);
+  if (!quoted && !bare) return null;
+  const prefix = quoted?.[1] ?? "";
+  const from = cursorInLine - prefix.length;
+  const options: Completion[] = [];
+  for (const path of paths) {
+    if (path === sourcePath) continue;
+    const absolute = `nerdgram:${path}`;
+    const relative = sourcePath ? relativeDiagramPath(sourcePath, path) : path;
+    const detail = relative === path ? "Diagram in this workspace" : relative;
+    if (quoted) {
+      options.push({ label: absolute, type: "text", detail, boost: 8 });
+      if (relative !== absolute) {
+        options.push({ label: relative, type: "text", detail: "Relative path", boost: 7 });
+      }
+    } else {
+      options.push({
+        label: `"${absolute}"`,
+        type: "text",
+        detail,
+        boost: 8,
+      });
+    }
+  }
+  if (options.length === 0) return null;
+  return { from, options };
+}
+
 export function mermaidCompletionSource(
   context: CompletionContext,
+  extras: DiagramCompletionContext = {},
 ): CompletionResult | null {
+  const line = context.state.doc.lineAt(context.pos);
+  const click = clickPathCompletions(
+    line.text,
+    context.pos - line.from,
+    extras.diagramPaths ?? [],
+    extras.sourcePath ?? "",
+  );
+  if (click) {
+    return {
+      from: line.from + click.from,
+      options: click.options,
+      validFor: /^[^"\n]*$/,
+    };
+  }
+
   const word = context.matchBefore(/[A-Za-z_0-9${}>.=*-]+/);
   if (!word && !context.explicit) return null;
   if (word && word.from === word.to && !context.explicit) return null;

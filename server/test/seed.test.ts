@@ -20,6 +20,8 @@ describe("sample seed", () => {
     const original = await fs.readFile(welcome, "utf8");
     expect(original.length).toBeGreaterThan(0);
     expect(await fs.readFile(path.join(temp.dir, "Examples", "Sequence.mmd"), "utf8")).toContain("sequence");
+    expect(await fs.readFile(path.join(temp.dir, "WAN.mmd"), "utf8")).toContain("nerdgram:Sites/Atlanta.mmd");
+    expect(await fs.readFile(path.join(temp.dir, "Sites", "Atlanta.mmd"), "utf8")).toContain("nerdgram:WAN.mmd");
     await fs.writeFile(welcome, "flowchart LR\n  Edited\n");
     expect(await seedEmptyDataDir()).toBe(false);
     expect(await fs.readFile(welcome, "utf8")).toContain("Edited");

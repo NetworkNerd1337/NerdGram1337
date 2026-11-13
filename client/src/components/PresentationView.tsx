@@ -1,6 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
+import { api } from "../api";
+import { DrillTrail } from "./DrillTrail";
 import { useDiagramView } from "../hooks/useDiagramView";
+import { actionForClickTarget, clickTargetOnElement, openExternalLink } from "../lib/diagramClicks";
+import { sessionJump, sessionOpen, sessionStart, sessionSyncRoot, type DrillSession } from "../lib/drillSession";
 import { diagramHeading, FALLBACK_THEME, parseDiagram } from "../lib/frontMatter";
 import { renderMermaid } from "../lib/mermaidRender";
 import {
@@ -101,6 +105,11 @@ function useStageSize(stage: React.RefObject<HTMLElement | null>): Size | null {
   return size;
 }
 
+function slideFor(path: string, source: string | null, error: string | null) {
+  const title = diagramHeading(source ? parseDiagram(source).title : null, path || "diagram");
+  return { path, title, source, error };
+}
+
 function focusable(root: HTMLElement): HTMLElement[] {
   return [...root.querySelectorAll<HTMLElement>("button:not([disabled]), a[href], input, select, textarea")];
 }
@@ -126,7 +135,11 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
   const barVisibleRef = useRef(true);
   const idleRef = useRef(false);
   const hadSvg = useRef(false);
+  const press = useRef<{ x: number; y: number; dragged: boolean } | null>(null);
 
+  const [session, setSession] = useState<DrillSession>(() => sessionStart(slideFor(path, source, fileError)));
+  const [linkMessage, setLinkMessage] = useState<string | null>(null);
+  const [knownPaths, setKnownPaths] = useState<string[] | null>(null);
   const [svg, setSvg] = useState("");
   const [renderError, setRenderError] = useState<string | null>(null);
   const [content, setContent] = useState<Size | null>(null);
@@ -142,8 +155,9 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
   cameraRef.current = camera;
   onExitRef.current = onExit;
 
-  const parsed = useMemo(() => (source == null ? null : parseDiagram(source)), [source]);
-  const heading = diagramHeading(parsed?.title, path || "diagram");
+  const frame = session.slides[session.index] ?? session.slides[0] ?? slideFor(path, source, fileError);
+  const parsed = useMemo(() => (frame.source == null ? null : parseDiagram(frame.source)), [frame.source]);
+  const heading = frame.title || diagramHeading(parsed?.title, frame.path || "diagram");
   const effectiveTheme = parsed?.malformed ? FALLBACK_THEME : (parsed?.theme ?? FALLBACK_THEME);
   const background =
     backgroundFromSvg(svg) ??
@@ -152,7 +166,8 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
     "#333333";
 
   const notices: string[] = [];
-  if (fileError) notices.push(fileError);
+  if (frame.error) notices.push(frame.error);
+  if (linkMessage) notices.push(linkMessage);
   if (parsed?.malformed) {
     notices.push(
       parsed.error
@@ -161,23 +176,44 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
     );
   }
   if (renderError) notices.push(renderError);
-  if (source != null && !source.trim() && !fileError) notices.push("This diagram has nothing to show.");
+  if (frame.source != null && !frame.source.trim() && !frame.error) notices.push("This diagram has nothing to show.");
   const notice = notices.join(" ");
+
+  useEffect(() => {
+    setSession((current) => sessionSyncRoot(current, slideFor(path, source, fileError)));
+  }, [path, source, fileError]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void api.tree().then(
+      (result) => {
+        if (!cancelled) setKnownPaths(diagramPathsIn(result.tree));
+      },
+      () => {
+        if (!cancelled) setKnownPaths(null);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     hadSvg.current = false;
     setSvg("");
     setRenderError(null);
     setContent(null);
-  }, [path]);
+    setLinkMessage(null);
+  }, [frame.path]);
 
   useEffect(() => {
-    if (source == null) return;
+    const currentSource = frame.source;
+    if (currentSource == null) return;
     let cancelled = false;
     const delay = hadSvg.current ? 280 : 0;
     const timer = window.setTimeout(() => {
-      const parsedSource = parseDiagram(source);
-      const text = parsedSource.malformed ? parsedSource.body : source;
+      const parsedSource = parseDiagram(currentSource);
+      const text = parsedSource.malformed ? parsedSource.body : currentSource;
       if (!text.trim()) {
         if (!cancelled) setRenderError(null);
         return;
@@ -199,7 +235,7 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [source]);
+  }, [frame.source]);
 
   useLayoutEffect(() => {
     const node = canvasRef.current?.querySelector("svg");
@@ -371,8 +407,35 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
     };
   }
 
+  async function openTarget(raw: string) {
+    const action = actionForClickTarget(raw, frame.path, knownPaths);
+    if (action.type === "ignore") return;
+    if (action.type === "external") {
+      setLinkMessage(null);
+      openExternalLink(action.url);
+      return;
+    }
+    if (action.type === "broken") {
+      setLinkMessage(action.message);
+      revealBar();
+      return;
+    }
+    if (action.path === frame.path) return;
+    setLinkMessage(null);
+    try {
+      const file = await api.readFile(action.path);
+      const next = slideFor(file.path, file.content, null);
+      setSession((current) => sessionOpen(current, next));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : `No diagram at ${action.path}.`;
+      setLinkMessage(`${message} This diagram stayed open.`);
+      revealBar();
+    }
+  }
+
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 && event.pointerType === "mouse") return;
+    press.current = { x: event.clientX, y: event.clientY, dragged: false };
     const point = stagePoint(event);
     lastFocal.current = point;
     pointers.current.set(event.pointerId, point);
@@ -398,6 +461,8 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
       return;
     }
     const point = stagePoint(event);
+    const origin = press.current;
+    if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 6) origin.dragged = true;
     pointers.current.set(event.pointerId, point);
     lastFocal.current = point;
     const current = gesture.current;
@@ -475,7 +540,11 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
     viewport != null &&
     (camera.atFit || camera.view.x !== 0 || camera.view.y !== 0 || camera.view.rotation !== 0 || camera.view.scale !== 1);
   const showStatus = !svg && !notice;
-  const status = source == null ? "Loading diagram…" : "Rendering diagram…";
+  const status = frame.source == null ? "Loading diagram…" : "Rendering diagram…";
+  const presentationTrail = {
+    crumbs: session.slides.map((slide) => ({ path: slide.path, title: slide.title })),
+    index: session.index,
+  };
 
   return createPortal(
     <div
@@ -489,9 +558,35 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
       style={{ background }}
       onKeyDown={onTab}
     >
+      <DrillTrail
+        className={`presentation-trail${barVisible ? " is-visible" : ""}`}
+        trail={presentationTrail}
+        onBack={() => {
+          setLinkMessage(null);
+          setSession((current) => sessionJump(current, current.index - 1));
+        }}
+        onForward={() => {
+          setLinkMessage(null);
+          setSession((current) => sessionJump(current, current.index + 1));
+        }}
+        onSelect={(index) => {
+          setLinkMessage(null);
+          setSession((current) => sessionJump(current, index));
+        }}
+      />
       <div
         ref={stageRef}
         className={`presentation-stage${panning ? " is-panning" : ""}`}
+        onClick={(event) => {
+          const anchor = event.target instanceof Element ? event.target.closest("a") : null;
+          if (anchor) event.preventDefault();
+          if (press.current?.dragged) return;
+          const raw = frame.source ? clickTargetOnElement(frame.source, event.target) : null;
+          if (!raw) return;
+          event.preventDefault();
+          event.stopPropagation();
+          void openTarget(raw);
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -574,4 +669,18 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
     </div>,
     document.body,
   );
+}
+
+function diagramPathsIn(nodes: readonly { path: string; type: string; children?: unknown }[]): string[] {
+  const paths: string[] = [];
+  const walk = (list: readonly { path: string; type: string; children?: unknown }[]) => {
+    for (const node of list) {
+      if (node.type === "file") paths.push(node.path);
+      else if (Array.isArray(node.children)) {
+        walk(node.children as { path: string; type: string; children?: unknown }[]);
+      }
+    }
+  };
+  walk(nodes);
+  return paths;
 }

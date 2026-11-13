@@ -189,6 +189,20 @@ describe("click links to diagrams", () => {
     const linked = 'flowchart LR\n  A[One] --> B[Two]\n  click A "./Examples/Sequence.mmd"\n';
     expect(byRule(linked, "broken-click", { diagramPaths: ["Examples/Sequence.mmd"] })).toEqual([]);
   });
+
+  it("resolves nerdgram: and relative paths from the diagram that contains them", () => {
+    const sourcePath = "Sites/WAN.mmd";
+    const paths = ["WAN.mmd", "Sites/WAN.mmd", "Sites/Atlanta.mmd"];
+    const linked =
+      'flowchart LR\n  A[Atlanta] --> B[Overview]\n  click A "nerdgram:Sites/Atlanta.mmd"\n  click B "../WAN.mmd"\n';
+    expect(byRule(linked, "broken-click", { diagramPaths: paths, sourcePath })).toEqual([]);
+    const missing = 'flowchart LR\n  A[Atlanta]\n  click A "Missing.mmd"\n';
+    const hits = byRule(missing, "broken-click", { diagramPaths: paths, sourcePath });
+    expect(hits).toHaveLength(1);
+    expect(hits[0]?.message).toMatch(/does not match/);
+    const escape = 'flowchart LR\n  A[Atlanta]\n  click A "../../secret.mmd"\n';
+    expect(byRule(escape, "broken-click", { diagramPaths: paths, sourcePath })[0]?.message).toMatch(/leaves the workspace/);
+  });
 });
 
 describe("rule switches and samples", () => {
@@ -202,11 +216,18 @@ describe("rule switches and samples", () => {
   });
 
   it("does not flag the sample diagrams", () => {
-    for (const file of ["diagrams/Welcome.mmd", "diagrams/NetworkMap.mmd", "diagrams/Examples/Sequence.mmd"]) {
+    const samples = [
+      "diagrams/Welcome.mmd",
+      "diagrams/NetworkMap.mmd",
+      "diagrams/Examples/Sequence.mmd",
+      "diagrams/WAN.mmd",
+      "diagrams/Sites/Atlanta.mmd",
+    ];
+    const diagramPaths = samples.map((file) => file.slice("diagrams/".length));
+    for (const file of samples) {
       const source = fs.readFileSync(path.join(repoRoot, file), "utf8");
-      expect(lintDiagram(source, { diagramPaths: ["Welcome.mmd", "NetworkMap.mmd", "Examples/Sequence.mmd"] }), file).toEqual(
-        [],
-      );
+      const sourcePath = file.slice("diagrams/".length);
+      expect(lintDiagram(source, { diagramPaths, sourcePath }), file).toEqual([]);
     }
   });
 

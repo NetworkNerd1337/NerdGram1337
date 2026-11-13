@@ -9,6 +9,7 @@ import {
 } from "../lib/organize";
 import { basename, displayName } from "../lib/paths";
 import type { TreeNode } from "../types";
+import { AffectedLinksDialog } from "./AffectedLinksDialog";
 import { FolderPicker } from "./FolderPicker";
 
 type MoveDialogProps = {
@@ -38,6 +39,8 @@ export function MoveDialog({
   const [error, setError] = useState<string | null>(null);
   const [suggestedPath, setSuggestedPath] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [linkFiles, setLinkFiles] = useState<string[] | null>(null);
+  const [pending, setPending] = useState<null | { kind: "move" } | { kind: "rename"; to: string }>(null);
   const taken = useMemo(() => collectPaths(tree), [tree]);
   const blocked = moveBlockReason(itemPath, isFolder, folder);
   const dest = destinationPath(itemPath, folder);
@@ -57,6 +60,11 @@ export function MoveDialog({
       const result = await api.rename(itemPath, renameTarget);
       onMoved(itemPath, result.path);
     } catch (err) {
+      if (err instanceof ApiError && err.code === "links") {
+        setPending({ kind: "rename", to: renameTarget });
+        setLinkFiles(err.files ?? []);
+        return;
+      }
       if (err instanceof ApiError && err.code === "collision" && err.suggestedPath) {
         setSuggestedPath(err.suggestedPath);
       }
@@ -74,6 +82,11 @@ export function MoveDialog({
       const result = await api.move(itemPath, folder);
       onMoved(itemPath, result.path);
     } catch (err) {
+      if (err instanceof ApiError && err.code === "links") {
+        setPending({ kind: "move" });
+        setLinkFiles(err.files ?? []);
+        return;
+      }
       if (err instanceof ApiError && err.code === "collision") {
         if (err.suggestedPath) setSuggestedPath(err.suggestedPath);
         setError("Something already exists at that path. You can move it under a new name.");
@@ -85,7 +98,42 @@ export function MoveDialog({
     }
   };
 
+  const confirmLinks = async () => {
+    if (!pending) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result =
+        pending.kind === "rename"
+          ? await api.rename(itemPath, pending.to, true)
+          : await api.move(itemPath, folder, true);
+      setLinkFiles(null);
+      setPending(null);
+      onMoved(itemPath, result.path);
+    } catch (err) {
+      setError(explainOrganizeError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
+    <>
+    {linkFiles ? (
+      <AffectedLinksDialog
+        title="Update diagram links?"
+        intro="These diagrams have click links that point here. Moving updates those links."
+        files={linkFiles}
+        confirmLabel="Move and update links"
+        busy={busy}
+        onClose={() => {
+          if (busy) return;
+          setLinkFiles(null);
+          setPending(null);
+        }}
+        onConfirm={() => void confirmLinks()}
+      />
+    ) : null}
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <form
         className="modal wide"
@@ -141,5 +189,6 @@ export function MoveDialog({
         </div>
       </form>
     </div>
+    </>
   );
 }

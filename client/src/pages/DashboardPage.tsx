@@ -6,6 +6,7 @@ import { ImportDialog } from "../components/ImportDialog";
 import { ItemActions } from "../components/ItemActions";
 import { HighlightedText } from "../components/HighlightedText";
 import { MermaidThumbnail } from "../components/MermaidThumbnail";
+import { AffectedLinksDialog } from "../components/AffectedLinksDialog";
 import { Modal } from "../components/Modal";
 import { MoveDialog } from "../components/MoveDialog";
 import { Sidebar } from "../components/Sidebar";
@@ -77,6 +78,14 @@ export function DashboardPage() {
   >(null);
   const [nameValue, setNameValue] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [linkPrompt, setLinkPrompt] = useState<{
+    title: string;
+    intro: string;
+    files: string[];
+    confirmLabel: string;
+    run: () => Promise<void>;
+  } | null>(null);
+  const [linkBusy, setLinkBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [showTrash, setShowTrash] = useState(false);
   const [trash, setTrash] = useState<TrashItem[]>([]);
@@ -290,13 +299,41 @@ export function DashboardPage() {
           ? modal.path.slice(0, modal.path.lastIndexOf("/"))
           : "";
         const to = joinPath(parent, nextName);
-        await api.rename(modal.path, to);
-        await refresh();
+        const from = modal.path;
+        try {
+          const result = await api.rename(from, to);
+          await refresh();
+          if (result.updated?.length) setStatus(`Updated links in ${result.updated.join(", ")}.`);
+        } catch (err) {
+          if (err instanceof ApiError && err.code === "links") {
+            setModal(null);
+            setLinkPrompt({
+              title: "Update diagram links?",
+              intro: "These diagrams have click links that point here. Renaming updates those links.",
+              files: err.files ?? [],
+              confirmLabel: "Rename and update links",
+              run: async () => {
+                const result = await api.rename(from, to, true);
+                await refresh();
+                setStatus(result.updated?.length ? `Updated links in ${result.updated.join(", ")}.` : "Renamed.");
+              },
+            });
+            return;
+          }
+          throw err;
+        }
       }
       setModal(null);
     } catch (err) {
       setActionError(err instanceof Error ? err.message : "Action failed");
     }
+  };
+
+  const finishDelete = async (path: string, confirmLinks: boolean) => {
+    await api.delete(path, confirmLinks);
+    if (folder === path || folder.startsWith(`${path}/`)) setFolder("");
+    await refresh();
+    await loadTrash();
   };
 
   const handleDelete = async (path: string) => {
@@ -305,11 +342,20 @@ export function DashboardPage() {
     }
     setActionError(null);
     try {
-      await api.delete(path);
-      if (folder === path || folder.startsWith(`${path}/`)) setFolder("");
-      await refresh();
-      await loadTrash();
+      await finishDelete(path, false);
     } catch (err) {
+      if (err instanceof ApiError && err.code === "linked") {
+        setLinkPrompt({
+          title: "Other diagrams link here",
+          intro: "Moving this to the trash leaves a broken link in these diagrams. The editor will warn about each one.",
+          files: err.files ?? [],
+          confirmLabel: "Move to trash anyway",
+          run: async () => {
+            await finishDelete(path, true);
+          },
+        });
+        return;
+      }
       setActionError(explainOrganizeError(err));
     }
   };
@@ -374,8 +420,23 @@ export function DashboardPage() {
     try {
       const result = await api.move(from, toFolder);
       await afterMove(from, result.path, isFolder);
+      if (result.updated?.length) setStatus(`Updated links in ${result.updated.join(", ")}.`);
     } catch (err) {
       setStatus(null);
+      if (err instanceof ApiError && err.code === "links") {
+        setLinkPrompt({
+          title: "Update diagram links?",
+          intro: "These diagrams have click links that point here. Moving updates those links.",
+          files: err.files ?? [],
+          confirmLabel: "Move and update links",
+          run: async () => {
+            const result = await api.move(from, toFolder, true);
+            await afterMove(from, result.path, isFolder);
+            if (result.updated?.length) setStatus(`Updated links in ${result.updated.join(", ")}.`);
+          },
+        });
+        return;
+      }
       if (err instanceof ApiError && err.code === "collision") {
         setActionError("That folder already has an item with this name. Use Move to… to keep both.");
         return;
@@ -992,6 +1053,29 @@ export function DashboardPage() {
           />
         </Modal>
       )}
+
+      {linkPrompt ? (
+        <AffectedLinksDialog
+          title={linkPrompt.title}
+          intro={linkPrompt.intro}
+          files={linkPrompt.files}
+          confirmLabel={linkPrompt.confirmLabel}
+          busy={linkBusy}
+          onClose={() => {
+            if (!linkBusy) setLinkPrompt(null);
+          }}
+          onConfirm={() => {
+            const prompt = linkPrompt;
+            setLinkBusy(true);
+            setActionError(null);
+            void prompt
+              .run()
+              .then(() => setLinkPrompt(null))
+              .catch((err: unknown) => setActionError(explainOrganizeError(err)))
+              .finally(() => setLinkBusy(false));
+          }}
+        />
+      ) : null}
 
       {moveTarget ? (
         <MoveDialog
