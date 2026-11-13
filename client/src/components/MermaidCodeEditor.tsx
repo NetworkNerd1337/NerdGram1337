@@ -51,6 +51,7 @@ type MermaidCodeEditorProps = {
   onChange: (value: string) => void;
   readOnly?: boolean;
   diagramPaths?: readonly string[];
+  sourcePath?: string;
   onDiagnostics?: (diagnostics: ReportedDiagnostic[]) => void;
   "aria-label"?: string;
 };
@@ -60,6 +61,7 @@ export function MermaidCodeEditor({
   onChange,
   readOnly = false,
   diagramPaths,
+  sourcePath = "",
   onDiagnostics,
   "aria-label": ariaLabel = "Mermaid source editor",
 }: MermaidCodeEditorProps) {
@@ -110,6 +112,7 @@ export function MermaidCodeEditor({
           const items = await lintMermaidDoc(text, {
             rules: readLintRules(),
             diagramPaths: pathsKey ? pathsKey.split("\n") : undefined,
+            sourcePath,
           });
           if (view.state.doc.toString() !== text) return [];
           diagnosticListener?.(items);
@@ -118,7 +121,13 @@ export function MermaidCodeEditor({
         { delay: LINT_DELAY_MS },
       ),
       autocompletion({
-        override: [mermaidCompletionSource],
+        override: [
+          (context) =>
+            mermaidCompletionSource(context, {
+              diagramPaths: pathsKey ? pathsKey.split("\n") : [],
+              sourcePath,
+            }),
+        ],
         activateOnTyping: true,
         icons: true,
       }),
@@ -133,7 +142,7 @@ export function MermaidCodeEditor({
       EditorState.tabSize.of(2),
       EditorState.readOnly.of(readOnly),
     ],
-    [pathsKey, readOnly],
+    [pathsKey, readOnly, sourcePath],
   );
 
   return (

@@ -1,4 +1,5 @@
 import { parseDocument } from "yaml";
+import { diagramTargetExists, isDiagramLink, parseClickLine, resolveDiagramTarget } from "./diagramLinks.js";
 import {
   diagramConfigKey,
   ELK_NODE_PLACEMENTS,
@@ -54,7 +55,8 @@ export const LINT_RULES = [
   {
     id: "broken-click",
     label: "Broken diagram links",
-    description: "A click link points at a diagram path that is not in the workspace.",
+    description:
+      "A click link points at a workspace diagram (nerdgram:, diagram:, or a relative .mmd path) that is not in the workspace.",
   },
 ] as const;
 
@@ -99,6 +101,12 @@ export type LintOptions = {
    * because there is no list to resolve them against.
    */
   diagramPaths?: readonly string[];
+  /**
+   * Diagram the source belongs to. Relative click paths resolve against its
+   * folder. Omitted means the workspace root, which is how a path such as
+   * `./Examples/Sequence.mmd` is checked.
+   */
+  sourcePath?: string;
 };
 
 export type AstFacts = {
@@ -178,7 +186,7 @@ export function lintDiagram(source: string, options: LintOptions = {}): LintDiag
   if (enabled["unused-class"]) diagnostics.push(...unusedClasses(model));
   if (enabled["undefined-class"]) diagnostics.push(...undefinedClasses(source, model));
   if (enabled["broken-click"] && options.diagramPaths) {
-    diagnostics.push(...brokenClicks(model, options.diagramPaths));
+    diagnostics.push(...brokenClicks(model, options.diagramPaths, options.sourcePath ?? ""));
   }
 
   diagnostics.sort((a, b) => a.from - b.from || a.line - b.line || a.ruleId.localeCompare(b.ruleId));
@@ -456,15 +464,20 @@ function undefinedClasses(source: string, model: Model): LintDiagnostic[] {
   return diagnostics;
 }
 
-function brokenClicks(model: Model, paths: readonly string[]): LintDiagnostic[] {
+function brokenClicks(model: Model, paths: readonly string[], sourcePath: string): LintDiagnostic[] {
   const diagnostics: LintDiagnostic[] = [];
   for (const click of model.clicks) {
-    if (diagramPathKnown(click.target, paths)) continue;
+    if (diagramTargetExists(click.target, paths, sourcePath)) continue;
+    const resolved = resolveDiagramTarget(click.target, sourcePath);
+    const message =
+      resolved.ok === false && resolved.reason === "escape"
+        ? `The click link "${click.target}" leaves the workspace and does not match a diagram.`
+        : `The click link "${click.target}" does not match a diagram in this workspace.`;
     diagnostics.push({
       ruleId: "broken-click",
       severity: "warning",
       subject: click.target,
-      message: `The click link "${click.target}" does not match a diagram in this workspace.`,
+      message,
       from: click.from,
       to: click.to,
       line: click.line,
@@ -473,23 +486,6 @@ function brokenClicks(model: Model, paths: readonly string[]): LintDiagnostic[] 
     });
   }
   return diagnostics;
-}
-
-function diagramPathKnown(target: string, paths: readonly string[]): boolean {
-  const wanted = normalizeDiagramRef(target);
-  if (!wanted) return false;
-  return paths.some((path) => {
-    const clean = normalizeDiagramRef(path);
-    return clean === wanted || clean.endsWith(`/${wanted}`);
-  });
-}
-
-function normalizeDiagramRef(raw: string): string {
-  let target = raw.trim().replace(/\\/g, "/");
-  if (target.toLowerCase().startsWith("diagram:")) target = target.slice("diagram:".length);
-  target = target.replace(/^\.\//, "");
-  target = target.split("#")[0]?.split("?")[0] ?? target;
-  return target.replace(/^\/+/, "");
 }
 
 function lintFrontMatter(source: string): LintDiagnostic[] {
@@ -644,32 +640,19 @@ function readClassStatement(line: string, lineStart: number, lineNo: number, mod
 }
 
 function readClick(line: string, lineStart: number, lineNo: number, model: Model): boolean {
-  const match = /^\s*click\s+[A-Za-z_][\w-]*\s+(.*)$/i.exec(line);
-  if (!match || match[1] == null) return false;
-  const rest = match[1];
-  if (/^\s*call\b/i.test(rest)) return true;
-  const quoted = /"([^"]*)"/.exec(rest);
-  if (!quoted || quoted[1] == null) return true;
-  const url = quoted[1].trim();
-  if (!isDiagramLink(url)) return true;
-  const restStart = line.length - rest.length;
-  const quoteAt = restStart + (quoted.index ?? 0);
-  const from = lineStart + quoteAt + 1;
-  model.clicks.push({
-    target: url,
-    from,
-    to: from + url.length,
-    line: lineNo,
-    column: quoteAt + 2,
-  });
+  if (!/^\s*click\b/i.test(line)) return false;
+  const click = parseClickLine(line, lineStart, lineNo);
+  const target = click?.target.trim() ?? "";
+  if (click && target && isDiagramLink(target)) {
+    model.clicks.push({
+      target,
+      from: click.from,
+      to: click.to,
+      line: click.line,
+      column: click.column,
+    });
+  }
   return true;
-}
-
-function isDiagramLink(url: string): boolean {
-  if (!url || url.startsWith("//")) return false;
-  if (/^[a-z][a-z0-9+.-]*:/i.test(url) && !/^diagram:/i.test(url)) return false;
-  const pathPart = url.split(/[?#]/)[0] ?? "";
-  return /^diagram:/i.test(url) || /\.mmd$/i.test(pathPart) || pathPart.startsWith("./") || pathPart.includes("/");
 }
 
 function collectInlineClasses(line: string, lineStart: number, lineNo: number, model: Model): void {

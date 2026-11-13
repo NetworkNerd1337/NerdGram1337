@@ -25,10 +25,19 @@ const THEME_FIELDS: [string, string][] = [
   ["mainBkg", "Main background"],
 ];
 
+export type DiagramLinkRow = {
+  path: string | null;
+  label: string;
+  broken?: boolean;
+};
+
 type DiagramInfoPanelProps = {
   source: string;
   fileName: string;
   readOnly: boolean;
+  linksTo?: readonly DiagramLinkRow[];
+  linkedFrom?: readonly DiagramLinkRow[];
+  onOpenDiagram?: (path: string) => void;
   onChange: (source: string) => void;
   onClose: () => void;
 };
@@ -37,6 +46,9 @@ export function DiagramInfoPanel({
   source,
   fileName,
   readOnly,
+  linksTo = [],
+  linkedFrom = [],
+  onOpenDiagram,
   onChange,
   onClose,
 }: DiagramInfoPanelProps) {
@@ -96,6 +108,47 @@ export function DiagramInfoPanel({
         </button>
       </div>
       <p className="diagram-info-file">File name: {fileName}</p>
+      <section className="info-links" aria-label="Diagram links">
+        <h3>Links to</h3>
+        {linksTo.length === 0 ? (
+          <p>This diagram does not link to another diagram.</p>
+        ) : (
+          <ul>
+            {linksTo.map((link) => (
+              <li key={`${link.label}:${link.path ?? "missing"}`}>
+                {link.path && !link.broken && onOpenDiagram ? (
+                  <button type="button" onClick={() => onOpenDiagram(link.path as string)}>
+                    {link.label}
+                  </button>
+                ) : (
+                  <span>
+                    {link.label}
+                    {link.broken ? " (missing)" : ""}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <h3>Linked from</h3>
+        {linkedFrom.length === 0 ? (
+          <p>No other diagram links here.</p>
+        ) : (
+          <ul>
+            {linkedFrom.map((link) => (
+              <li key={link.path ?? link.label}>
+                {link.path && onOpenDiagram ? (
+                  <button type="button" onClick={() => onOpenDiagram(link.path as string)}>
+                    {link.label}
+                  </button>
+                ) : (
+                  <span>{link.label}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
       {info.malformed && (
         <p className="info-error" role="alert">
           The YAML header could not be parsed{info.error ? `: ${info.error}` : ""}. Edit it in the

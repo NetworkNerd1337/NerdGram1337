@@ -132,6 +132,15 @@ const builtin: PaletteCommand[] = [
     run: (ctx) => ctx.actions.gotoLine?.(),
   },
   {
+    id: "editor.linkNode",
+    title: "Link node to diagram...",
+    section: "Editor",
+    keywords: ["click", "drill", "href", "link"],
+    order: 125,
+    when: (ctx) => ctx.route === "editor" && !ctx.readOnly && !ctx.conflictOpen && !!ctx.actions.linkNode,
+    run: (ctx) => ctx.actions.linkNode?.(),
+  },
+  {
     id: "editor.info",
     title: "Edit diagram info",
     section: "Editor",

@@ -282,7 +282,8 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       }
       const diagramPaths = readDiagramPaths(req.body?.diagramPaths);
       const rules = readLintRulesBody(req.body?.rules);
-      res.json({ diagnostics: lintDiagram(source, { diagramPaths, rules }) });
+      const sourcePath = typeof req.body?.sourcePath === "string" ? req.body.sourcePath : undefined;
+      res.json({ diagnostics: lintDiagram(source, { diagramPaths, rules, sourcePath }) });
     } catch (err) {
       sendError(res, err);
     }
@@ -295,7 +296,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const diagrams: { path: string; diagnostics: ReturnType<typeof lintDiagram> }[] = [];
       for (const file of files) {
         const content = await store.readFile(file.path);
-        const diagnostics = lintDiagram(content.content, { diagramPaths });
+        const diagnostics = lintDiagram(content.content, { diagramPaths, sourcePath: file.path });
         if (diagnostics.length > 0) diagrams.push({ path: file.path, diagnostics });
       }
       res.json({ checked: files.length, diagrams });
@@ -420,6 +421,20 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     }
   });
 
+  app.get("/api/diagram-links", async (req, res) => {
+    try {
+      const itemPath = String(req.query.path || "");
+      if (!itemPath) {
+        res.status(400).json({ error: "path is required", code: "invalid" });
+        return;
+      }
+      const result = await store.diagramLinks(itemPath);
+      res.json(result);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
   app.patch("/api/rename", async (req, res) => {
     try {
       const from = String(req.body?.from || "");
@@ -428,7 +443,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
         res.status(400).json({ error: "from and to are required" });
         return;
       }
-      const result = await store.renameItem(from, to);
+      const result = await store.renameItem(from, to, { updateLinks: req.body?.updateLinks === true });
       res.json(result);
     } catch (err) {
       sendError(res, err);
@@ -443,7 +458,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
         res.status(400).json({ error: "from is required" });
         return;
       }
-      const result = await store.moveItem(from, toFolder);
+      const result = await store.moveItem(from, toFolder, { updateLinks: req.body?.updateLinks === true });
       res.json(result);
     } catch (err) {
       sendError(res, err);
@@ -485,7 +500,8 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
         res.status(400).json({ error: "path is required" });
         return;
       }
-      await store.deleteItem(itemPath);
+      const confirmLinks = req.query.confirmLinks === "1" || req.body?.confirmLinks === true;
+      await store.deleteItem(itemPath, { confirmLinks });
       res.status(204).send();
     } catch (err) {
       sendError(res, err);

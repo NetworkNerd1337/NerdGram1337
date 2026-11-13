@@ -14,5 +14,8 @@ diagrams/**/*
 !diagrams/NetworkMap.mmd
 !diagrams/Examples/
 !diagrams/Examples/**
+!diagrams/WAN.mmd
+!diagrams/Sites/
+!diagrams/Sites/Atlanta.mmd
 reference.staging/
 reference.bak/

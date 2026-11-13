@@ -22,6 +22,7 @@ export class ApiError extends Error {
   readonly code?: string;
   readonly path?: string;
   readonly suggestedPath?: string;
+  readonly files?: string[];
   readonly current?: {
     path?: string;
     content: string;
@@ -37,6 +38,9 @@ export class ApiError extends Error {
     this.code = typeof body.code === "string" ? body.code : undefined;
     this.path = typeof body.path === "string" ? body.path : undefined;
     this.suggestedPath = typeof body.suggestedPath === "string" ? body.suggestedPath : undefined;
+    this.files = Array.isArray(body.files)
+      ? body.files.filter((item): item is string => typeof item === "string")
+      : undefined;
     if (body.current && typeof body.current === "object") {
       const current = body.current as Record<string, unknown>;
       if (
@@ -90,11 +94,17 @@ export const api = {
       body: JSON.stringify({ path, cacheKey, svg }),
     }),
   diagramMeta: () => request<{ diagrams: DiagramMeta[] }>("/api/diagram-meta"),
-  lintSource: (source: string, diagramPaths?: string[]) =>
+  lintSource: (source: string, diagramPaths?: string[], sourcePath?: string) =>
     request<{ diagnostics: LintDiagnostic[] }>("/api/lint", {
       method: "POST",
-      body: JSON.stringify({ source, diagramPaths }),
+      body: JSON.stringify({ source, diagramPaths, sourcePath }),
     }),
+  diagramLinks: (path: string) =>
+    request<{
+      path: string;
+      linksTo: { path: string | null; target: string; line: number; broken: boolean }[];
+      linkedFrom: { path: string; target: string; line: number }[];
+    }>(`/api/diagram-links?path=${encodeURIComponent(path)}`),
   diagramLint: () =>
     request<{ checked: number; diagrams: { path: string; diagnostics: LintDiagnostic[] }[] }>("/api/diagram-lint"),
   search: (query: string, options?: { namesOnly?: boolean; signal?: AbortSignal }) => {
@@ -130,15 +140,15 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ path }),
     }),
-  rename: (from: string, to: string) =>
-    request<{ path: string }>("/api/rename", {
+  rename: (from: string, to: string, updateLinks = false) =>
+    request<{ path: string; updated?: string[] }>("/api/rename", {
       method: "PATCH",
-      body: JSON.stringify({ from, to }),
+      body: JSON.stringify({ from, to, updateLinks }),
     }),
-  move: (from: string, toFolder: string) =>
-    request<{ path: string }>("/api/move", {
+  move: (from: string, toFolder: string, updateLinks = false) =>
+    request<{ path: string; updated?: string[] }>("/api/move", {
       method: "POST",
-      body: JSON.stringify({ from, toFolder }),
+      body: JSON.stringify({ from, toFolder, updateLinks }),
     }),
   duplicate: (path: string) =>
     request<{ path: string; type: "file" | "folder" }>("/api/duplicate", {
@@ -153,10 +163,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ folder, files }),
     }),
-  delete: (path: string) =>
-    request<void>(`/api/item?path=${encodeURIComponent(path)}`, {
-      method: "DELETE",
-    }),
+  delete: (path: string, confirmLinks = false) =>
+    request<void>(
+      `/api/item?path=${encodeURIComponent(path)}${confirmLinks ? "&confirmLinks=1" : ""}`,
+      { method: "DELETE" },
+    ),
   favorites: () => request<{ favorites: string[] }>("/api/favorites"),
   toggleFavorite: (path: string) =>
     request<{ favorites: string[]; favorited: boolean }>(

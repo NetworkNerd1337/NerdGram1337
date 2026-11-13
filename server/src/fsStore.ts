@@ -1,5 +1,12 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import {
+  inboundLinkFiles,
+  indexDiagramLinks,
+  linksFor,
+  planLinkRewrites,
+  type DiagramLinkEnds,
+} from "./diagramLinks.js";
 import { rewriteFavoritePaths } from "./favorites.js";
 import { diagramMetaFrom, type DiagramMeta } from "./frontMatter.js";
 import { readRevision, relocateHistory, snapshotPrevious } from "./history.js";
@@ -294,11 +301,36 @@ export async function createFolder(relativePath: string): Promise<{ path: string
   return { path: created };
 }
 
-export async function renameItem(fromPath: string, toPath: string): Promise<{ path: string }> {
+export type RenameOptions = {
+  /** When other files link here, rewrite those click targets. Without this, the rename is refused. */
+  updateLinks?: boolean;
+};
+
+async function readDiagramSources(): Promise<{ path: string; content: string }[]> {
+  const files = flattenFiles(await buildTree());
+  const sources: { path: string; content: string }[] = [];
+  for (const file of files) {
+    const content = await readFile(file.path);
+    sources.push({ path: content.path, content: content.content });
+  }
+  return sources;
+}
+
+export async function diagramLinks(relativePath: string): Promise<DiagramLinkEnds & { path: string }> {
+  const file = await readFile(relativePath);
+  const ends = linksFor(indexDiagramLinks(await readDiagramSources()), file.path);
+  return { path: file.path, ...ends };
+}
+
+export async function renameItem(
+  fromPath: string,
+  toPath: string,
+  options: RenameOptions = {},
+): Promise<{ path: string; updated: string[] }> {
   const fromAbs = resolveSafePath(fromPath);
   const toAbs = resolveSafePath(toPath);
   if (path.resolve(fromAbs) === path.resolve(toAbs)) {
-    return { path: toRelativePath(fromAbs) };
+    return { path: toRelativePath(fromAbs), updated: [] };
   }
 
   let fromStat: Awaited<ReturnType<typeof fs.stat>>;
@@ -331,6 +363,18 @@ export async function renameItem(fromPath: string, toPath: string): Promise<{ pa
     });
   }
 
+  const rewrites = planLinkRewrites(await readDiagramSources(), fromRel, toRel, fromStat.isDirectory());
+  if (rewrites.length > 0 && !options.updateLinks) {
+    throw httpFail(409, "Other diagrams link here. Confirm to update those links.", "links", {
+      files: rewrites.map((item) => item.path),
+    });
+  }
+  for (const rewrite of rewrites) {
+    const inside =
+      rewrite.path === fromRel || (fromStat.isDirectory() && rewrite.path.startsWith(`${fromRel}/`));
+    if (!inside) await assertUnlocked(rewrite.path, false);
+  }
+
   await assertUnlocked(fromRel, fromStat.isDirectory());
   await fs.mkdir(path.dirname(toAbs), { recursive: true });
   await fs.rename(fromAbs, toAbs);
@@ -341,14 +385,23 @@ export async function renameItem(fromPath: string, toPath: string): Promise<{ pa
   const search = await import("./search.js");
   await search.moveSearchEntries(fromRel, toRel, fromStat.isDirectory());
   noteSync({ kind: "structural", summary: `Rename ${fromRel} to ${toRel}` });
-  return { path: toRel };
+  const updated: string[] = [];
+  for (const rewrite of rewrites) {
+    await writeFile(rewrite.nextPath, rewrite.content, { force: true });
+    updated.push(rewrite.nextPath);
+  }
+  return { path: toRel, updated };
 }
 
-export async function moveItem(fromPath: string, toFolder: string): Promise<{ path: string }> {
+export async function moveItem(
+  fromPath: string,
+  toFolder: string,
+  options: RenameOptions = {},
+): Promise<{ path: string; updated: string[] }> {
   const name = path.posix.basename(normalizeRelative(fromPath));
   const folder = normalizeRelative(toFolder);
   const dest = folder ? `${folder}/${name}` : name;
-  return renameItem(fromPath, dest);
+  return renameItem(fromPath, dest, options);
 }
 
 /**
@@ -422,7 +475,31 @@ async function copyFolderContents(srcAbs: string, destAbs: string): Promise<void
   }
 }
 
-export async function deleteItem(relativePath: string): Promise<void> {
+export async function deleteItem(
+  relativePath: string,
+  options: { confirmLinks?: boolean } = {},
+): Promise<void> {
+  if (!options.confirmLinks) {
+    const abs = resolveSafePath(relativePath);
+    let stat: Awaited<ReturnType<typeof fs.stat>>;
+    try {
+      stat = await fs.stat(abs);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") throw httpFail(404, "Not found", "not_found");
+      throw err;
+    }
+    const rel = toRelativePath(abs);
+    const inbound = inboundLinkFiles(indexDiagramLinks(await readDiagramSources()), rel, stat.isDirectory());
+    if (inbound.length > 0) {
+      throw httpFail(
+        409,
+        "Other diagrams link here. They will show a broken link after this is moved to the trash.",
+        "linked",
+        { files: inbound },
+      );
+    }
+  }
   await moveToTrash(relativePath);
   noteSync({ kind: "structural", summary: `Delete ${normalizeRelative(relativePath)}` });
 }

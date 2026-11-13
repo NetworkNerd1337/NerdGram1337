@@ -4,7 +4,7 @@ NerdGram1337 is a local, single-user app for writing [Mermaid](https://mermaid.j
 
 The **client** is a React app: the dashboard, the paste page, and the split editor. The **server** is an Express API that reads and writes the files. In development they run side by side. A production build, including the Docker image, serves the built client and the API from one process.
 
-You start with three sample diagrams: `Welcome.mmd`, `NetworkMap.mmd`, and `Examples/Sequence.mmd`. Anything you create is another file in that same folder.
+You start with sample diagrams: `Welcome.mmd`, `NetworkMap.mmd`, `Examples/Sequence.mmd`, and a linked pair, `WAN.mmd` and `Sites/Atlanta.mmd`. Anything you create is another file in that same folder.
 
 ![Dashboard listing the sample diagrams](docs/images/dashboard.png)
 
@@ -79,7 +79,7 @@ The container runs as uid **1001**, gid **1001** (user `nerdgram`). A new named 
 sudo chown -R 1001:1001 /path/to/nerdgram-data
 ```
 
-If the directory is owned by root, the process exits and the log says it cannot write the data directory as that uid. An empty data directory is seeded once from the image's `diagrams/` folder. With `NERDGRAM_DATA_DIR=/data` the samples land at `/data/Welcome.mmd`, `/data/NetworkMap.mmd`, and `/data/Examples/Sequence.mmd`. The log says `Seeded empty data directory with the sample diagrams.` A directory that already has any entry is left alone.
+If the directory is owned by root, the process exits and the log says it cannot write the data directory as that uid. An empty data directory is seeded once from the image's `diagrams/` folder. With `NERDGRAM_DATA_DIR=/data` the samples land at `/data/Welcome.mmd`, `/data/NetworkMap.mmd`, `/data/Examples/Sequence.mmd`, `/data/WAN.mmd`, and `/data/Sites/Atlanta.mmd`. The log says `Seeded empty data directory with the sample diagrams.` A directory that already has any entry is left alone.
 
 `templates/` and `reference/` are in the image, not on the volume. With `NERDGRAM_DATA_DIR` set, a syntax-reference sync writes under `/data/.meta/reference` and survives a new container. Templates stay the ones in the image.
 
@@ -272,13 +272,15 @@ A move that would land in the item's current folder, or put a folder inside itse
 
 **Duplicate** copies a diagram or a whole folder. The first copy is `Name (copy).mmd` (or `Name (copy)` for a folder), then `Name (copy 2)`. It never overwrites an existing item. The copy is not favorited, it does not share the source's editor lock, and it starts with no revision history. Hidden files, including anything under `.meta`, are not copied.
 
+Renaming or moving a diagram asks first when other diagrams link to it, then updates those `click` targets and lists the files it changed. A relative link inside a diagram that moved is updated too, so it still points at the same file. See [Linked diagrams](#linked-diagrams).
+
 **Import** copies text you already have into the folder you are viewing, or into a folder you pick. Use **Import**, or drop `.mmd`, `.md`, and `.txt` files onto the dashboard or a folder. `.md` and `.txt` are stored as `.mmd`. Other file types are rejected. Each file can be up to 512 KB, with at most 25 files and 3 MB of text in one import. A dropped folder is not imported as a tree.
 
 If a name is already in that folder, choose **Skip**, **Rename** (`Name 2.mmd`, then `Name 3.mmd`), or **Replace**. Nothing is overwritten unless you choose Replace. Replace keeps the previous text as a revision. A diagram that is open in an editor is not replaced. If Mermaid cannot parse a file, the dialog warns you and still lets you import it. The imported file is a normal diagram, not a link back to the original path.
 
 ### Trash and history
 
-Delete moves a diagram or a folder into the trash. It does not erase the files. **Trash** in the sidebar restores an item or deletes it permanently. **Empty trash** removes everything in the trash for good.
+Delete moves a diagram or a folder into the trash. It does not erase the files. If other diagrams link to it, the app lists those files and asks you to confirm before the move. The links become broken-link warnings; they are not deleted for you. **Trash** in the sidebar restores an item or deletes it permanently. **Empty trash** removes everything in the trash for good.
 
 Restore puts the item back at its original path. If something is already there, the app asks you to restore a copy (`Name (restored).mmd`, or `Name (restored 2)` and so on) or to replace the current item. Replacing moves that current item to the trash first. A folder is one trash entry. Restore puts the whole folder back.
 
@@ -340,9 +342,27 @@ Turn a warning off under **Diagram checks** on the GitHub sync page (`/settings`
 | Unused classes | A `classDef` is never applied with `class` or `:::`. `classDef default` is treated as used. |
 | Undefined classes | A `class` or `:::` name has no `classDef`. |
 | Front matter | The YAML header cannot be parsed, or a theme, look, layout, curve, ELK placement, title, description, or tag list is not one the file format accepts. |
-| Broken diagram links | A `click` target that looks like a diagram path (it ends in `.mmd`, starts with `./`, or uses `diagram:`) is not in the workspace. Web links are not checked. |
+| Broken diagram links | A `click` target that points at a workspace diagram (`nerdgram:`, `diagram:`, or a relative `.mmd` path) is missing, or the path leaves the workspace. Web links are not checked. |
 
 On the dashboard, open **Workspace problems** to list those warnings for every diagram. A thumbnail whose diagram cannot be drawn shows a **Parse error** badge. A header that cannot be parsed shows **Front matter**.
+
+### Linked diagrams
+
+A node can open another diagram. The link is Mermaid's own `click` line, so the file stays valid Mermaid. Outside NerdGram the target is an ordinary link. Inside the preview and in presentation, a `nerdgram:` path or a relative `.mmd` path opens that diagram.
+
+```mermaid
+flowchart LR
+  Core[Core] --> Atlanta[Atlanta]
+  click Atlanta "nerdgram:Sites/Atlanta.mmd" "Open Atlanta"
+```
+
+A path such as `./Rack.mmd` or `../WAN.mmd` is relative to the diagram that contains the line. `nerdgram:Sites/Atlanta.mmd` is the same path counted from the workspace root, which is the data directory. The older `diagram:` prefix is accepted the same way. The strings are in the `.mmd` file, so GitHub sync copies them with the diagram and they still resolve after a pull.
+
+The sample pair is `WAN.mmd` and `Sites/Atlanta.mmd`. Click Atlanta on the overview to open the site. The trail along the top of the preview, and again in presentation, is the path you took, for example **WAN > Atlanta > Rack 3**, with **Back** and **Forward**. Presentation keeps that drill-down in the same full-screen view.
+
+**Link node to diagram...** in the command palette inserts the `click` line. On a `click` line, autocomplete offers the diagrams in the workspace. A missing target is a warning in the problems list. Clicking it shows that message on the current diagram instead of opening a blank page. **Diagram info** lists **Links to** and **Linked from**.
+
+Only `nerdgram:`, `diagram:`, and a relative `.mmd` path navigate inside the app. An `http` or `https` address opens in a new tab and does not keep a handle back to this window. `javascript:` and any other scheme are blocked. A path that would leave the data directory is blocked the same way as a file operation.
 
 ### Thumbnails, find, and shortcuts
 
@@ -367,7 +387,7 @@ The find panel can match case, whole words, or a regular expression, and it can 
 
 On Windows, AltGr is reported as Ctrl+Alt. On a layout where AltGr+G types a character, Ctrl+Alt+G can type that character instead of opening Go to line. Use **Go to line** in the command palette.
 
-The palette lists the actions already in the app: new diagram, paste, folder, import, search, open, rename, move, duplicate, trash, restore, diagram info, history, theme, export, present, find, go to line, templates, GitHub sync, About, and check for updates. Template, sync, and update commands do not add a shortcut. The app also leaves Ctrl+D for the browser bookmark and does not bind F11.
+The palette lists the actions already in the app: new diagram, paste, folder, import, search, open, rename, move, duplicate, trash, restore, diagram info, link node to diagram, history, theme, export, present, find, go to line, templates, GitHub sync, About, and check for updates. Template, sync, and update commands do not add a shortcut. The app also leaves Ctrl+D for the browser bookmark and does not bind F11.
 
 ### Search
 
@@ -380,6 +400,8 @@ The sidebar search box matches file names and paths, titles, tags, descriptions,
 In the editor, use **Present** on the preview toolbar, press **F5**, or press **Ctrl+Shift+Enter** (**Cmd+Shift+Enter** on a Mac). **Present diagram** is also in the command palette. **F5** is the browser reload key. NerdGram uses it for presentation only when a diagram is open and the cursor is not in a form field (search, rename, diagram info, go to line, or the command palette). It does work from the code pane. On the dashboard, the new-diagram page, and the reference, F5 still reloads the page. Ctrl+F5, Alt+F5, and Shift+F5 stay a reload. Pan and zoom keys do not run while you are typing in the editor. They run only during presentation.
 
 **Esc** or **Exit** leaves presentation and returns to the editor or the dashboard. If the browser is showing its own fullscreen and blocks the first Esc, press Esc again or use **Exit**.
+
+A linked node drills into that diagram without leaving full screen. **Back**, **Forward**, and the trail (**WAN > Atlanta > Rack 3**) move through the diagrams you opened. The control bar still hides until you move the pointer or press Tab. Leaving presentation returns to the diagram you started from.
 
 On the dashboard, **Present** on a card or a list row opens that diagram without the editor. The address looks like `/present/Welcome.mmd`. Presentation does not save the file and does not take the editor lock. A template opens at `/templates/present/<id>` and is not copied.
 
@@ -557,7 +579,7 @@ npm run dev
 
 One command, without exporting, is `NERDGRAM_DATA_DIR="$HOME/Documents/nerdgram-diagrams" npm run dev`. That folder is `/Users/you/Documents/nerdgram-diagrams` on macOS and `/home/you/Documents/nerdgram-diagrams` on Linux. Command Prompt: `set NERDGRAM_DATA_DIR=C:\Users\you\Documents\nerdgram-diagrams`. PowerShell: `$env:NERDGRAM_DATA_DIR = "C:\Users\you\Documents\nerdgram-diagrams"`. A concrete default folder is `/Users/you/Projects/NerdGram1337/diagrams` on macOS, `/home/you/Projects/NerdGram1337/diagrams` on Linux, and `C:\Users\you\Projects\NerdGram1337\diagrams` on Windows. Use `NerdGram1337-main` if you installed from the ZIP. The log line `Data directory:` is the path the server resolved. Favorites are `diagrams/.meta/favorites.json` (or `<data>/.meta/favorites.json`). Syntax-reference notes are `diagrams/.meta/syntax-overrides.json`.
 
-An empty custom directory is seeded once with the three sample diagrams. Any existing entry, including a hidden one, means the directory is left alone. The same path as the repo `diagrams/` folder is not copied onto itself.
+An empty custom directory is seeded once with the sample diagrams, including the linked WAN and Atlanta pair. Any existing entry, including a hidden one, means the directory is left alone. The same path as the repo `diagrams/` folder is not copied onto itself.
 
 `HOST=127.0.0.1 npm start` listens on IPv4 loopback only (Command Prompt: `set HOST=127.0.0.1` then `npm start`; PowerShell: `$env:HOST = "127.0.0.1"`). `HOST=::1` listens on IPv6 loopback only. If `http://localhost:8787` does not open, use `http://127.0.0.1:8787`. The same variable applies to `npm run dev`. Set `NODE_ENV=development` or `NODE_ENV=production` only when you need to override the inferred mode.
 
@@ -583,7 +605,7 @@ curl -fsS -X PUT "http://127.0.0.1:8787/api/file" \
 
 Production does not enable cross-origin browser access, because the UI and the API are the same port. Development CORS allows only the origins listed above.
 
-**Files.** Paths stay inside the data directory. The server rejects null bytes, hidden paths such as `.meta`, and any path that escapes that directory. Diagram writes must be `.mmd` files. Editor locks only keep two windows from writing the same diagram.
+**Files.** Paths stay inside the data directory. The server rejects null bytes, hidden paths such as `.meta`, and any path that escapes that directory. Diagram writes must be `.mmd` files. A `click` link is checked with that same rule: `nerdgram:` and relative `.mmd` paths cannot leave the data directory, and `javascript:` is not opened. Editor locks only keep two windows from writing the same diagram.
 
 **GitHub and updates.** The sync token is stored as described in [GitHub sync](#github-sync). Sync and **Update now** use the same Host, Origin, and JSON checks as other changes. Update checks call the public Releases API with no token. Treat the data directory, `.meta`, and `.nerdgram-git` as personal documents: use your OS permissions, and do not share that folder casually.
 
@@ -611,7 +633,7 @@ The archive is the whole `/data` tree, including hidden `.meta` and, when sync h
 
 On a Node install, copy the `diagrams/` folder, or the directory `NERDGRAM_DATA_DIR` points at, the same way you copy any other personal folder. Include the hidden `.meta` directory. The in-app folder tree hides `.meta`. The `.mmd` files themselves stay plain text.
 
-`git` ignores extra files under `diagrams/` and ignores `diagrams/.meta/`. The three sample diagrams are tracked. A custom `NERDGRAM_DATA_DIR` outside the repo is not part of the git checkout.
+`git` ignores extra files under `diagrams/` and ignores `diagrams/.meta/`. The sample diagrams, including `WAN.mmd` and `Sites/Atlanta.mmd`, are tracked. A custom `NERDGRAM_DATA_DIR` outside the repo is not part of the git checkout.
 
 Do not run `docker volume rm` on a volume you still want.
 
@@ -669,7 +691,7 @@ Keep the volume mounted on `/data`.
 
 From the project root, with the app stopped (Ctrl+C):
 
-1. Pull tracked files. Diagrams you created under `diagrams/` stay put, because git ignores those extra files and ignores `diagrams/.meta/`. The three samples are tracked. If you edited `diagrams/Welcome.mmd`, `diagrams/NetworkMap.mmd`, or `diagrams/Examples/Sequence.mmd`, git may stop and ask you to handle those local edits before the pull can finish.
+1. Pull tracked files. Diagrams you created under `diagrams/` stay put, because git ignores those extra files and ignores `diagrams/.meta/`. The sample diagrams are tracked. If you edited one of them, including `diagrams/WAN.mmd` or `diagrams/Sites/Atlanta.mmd`, git may stop and ask you to handle those local edits before the pull can finish.
 
 ```bash
 git pull
@@ -837,7 +859,7 @@ The production build has not been created. From the project root run `npm run bu
 
 ### The container exits immediately, or the volume looks empty
 
-A bind mount owned by root is not writable by uid 1001. `chown` it as in [Docker](#docker). A named volume created by the image is already writable. A fresh volume receives the three sample diagrams once, at `/data/Welcome.mmd`, `/data/NetworkMap.mmd`, and `/data/Examples/Sequence.mmd`, copied from the image's `diagrams/` folder. A volume that already has files is left as it is, including a volume where you deleted the samples.
+A bind mount owned by root is not writable by uid 1001. `chown` it as in [Docker](#docker). A named volume created by the image is already writable. A fresh volume receives the sample diagrams once, at `/data/Welcome.mmd`, `/data/NetworkMap.mmd`, `/data/Examples/Sequence.mmd`, `/data/WAN.mmd`, and `/data/Sites/Atlanta.mmd`, copied from the image's `diagrams/` folder. A volume that already has files is left as it is, including a volume where you deleted the samples.
 
 ### `localhost` opens the dev UI, and `127.0.0.1` does not
 

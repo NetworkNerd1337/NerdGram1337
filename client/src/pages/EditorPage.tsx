@@ -1,17 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { indexDiagramLinks, insertDiagramLink, linksFor } from "../../../server/src/diagramLinks.ts";
 import { ApiError, api } from "../api";
 import { Brand } from "../components/Brand";
 import { CommandsButton } from "../components/CommandPalette";
 import { useCommandHost } from "../components/commandPaletteContext";
 import { ConflictDialog } from "../components/ConflictDialog";
-import { DiagramInfoPanel } from "../components/DiagramInfoPanel";
+import { DiagramInfoPanel, type DiagramLinkRow } from "../components/DiagramInfoPanel";
+import { DrillTrail } from "../components/DrillTrail";
+import { LinkNodeDialog } from "../components/LinkNodeDialog";
 import { EditorLockBanner, TakeoverDialog } from "../components/EditorLockBanner";
 import { HistoryDialog } from "../components/HistoryDialog";
 import { MermaidCodeEditor } from "../components/MermaidCodeEditor";
 import { ProblemsPanel } from "../components/ProblemsPanel";
 import { PresentationView } from "../components/PresentationView";
+import { actionForClickTarget, clickTargetOnElement, openExternalLink } from "../lib/diagramClicks";
+import { drillForward, drillIndex, trailFromState, withCrumbTitle } from "../lib/drillTrail";
 import { getEditorView, revealEditorMatch, runFind, runGotoLine, runReplace } from "../lib/editorCommands";
+import { extractNodeIds } from "../lib/mermaidCompletions";
 import { applyLintFix } from "../lib/lintActions";
 import type { ReportedDiagnostic } from "../lib/mermaidLint";
 import { OTHER_WINDOW_NOTE, STILL_HELD_NOTE, releaseEditorLock } from "../lib/editorLock";
@@ -86,6 +92,8 @@ async function writeCopy(originalPath: string, content: string): Promise<string>
 export function EditorPage() {
   const params = useParams();
   const filePath = params["*"] || "";
+  const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const infoOpen = searchParams.get("info") === "1";
 
@@ -109,6 +117,9 @@ export function EditorPage() {
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
+  const [linkMessage, setLinkMessage] = useState<{ path: string; text: string } | null>(null);
+  const [linkNodeOpen, setLinkNodeOpen] = useState(false);
+  const [linkedFrom, setLinkedFrom] = useState<{ path: string; target: string; line: number }[]>([]);
   const [presentPath, setPresentPath] = useState(filePath);
   if (presentPath !== filePath) {
     setPresentPath(filePath);
@@ -635,6 +646,88 @@ export function EditorPage() {
   const readOnly = access !== "edit";
   const info = useMemo(() => parseDiagram(code), [code]);
   const heading = diagramHeading(info.title, filePath);
+  const trail = useMemo(
+    () => trailFromState(location.state, { path: filePath, title: heading }),
+    [location.state, filePath, heading],
+  );
+  const linkRows = useMemo(() => {
+    const known = diagramPaths ?? [filePath];
+    const indexed = indexDiagramLinks([
+      { path: filePath, content: code },
+      ...known.filter((path) => path !== filePath).map((path) => ({ path, content: "" })),
+    ]);
+    return linksFor(indexed, filePath).linksTo;
+  }, [code, diagramPaths, filePath]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    if (trail.crumbs[trail.index]?.title === heading) return;
+    const next = withCrumbTitle(trail, heading);
+    if (next === trail) return;
+    navigate(`${location.pathname}${location.search}`, { replace: true, state: { drill: next } });
+  }, [loaded, heading, trail, navigate, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!infoOpen || !filePath) return;
+    let cancelled = false;
+    void api.diagramLinks(filePath).then(
+      (result) => {
+        if (!cancelled && result.path === filePath) setLinkedFrom(result.linkedFrom);
+      },
+      () => {
+        if (!cancelled) setLinkedFrom([]);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [infoOpen, filePath, savedCode]);
+
+  const openDiagram = (path: string, title?: string) => {
+    if (!path || path === filePath) return;
+    const next = drillForward(trail, { path, title: title || displayName(path) });
+    const params = new URLSearchParams(searchParams);
+    params.delete("line");
+    params.delete("find");
+    const qs = params.toString();
+    navigate(`/edit/${path}${qs ? `?${qs}` : ""}`, { state: { drill: next } });
+  };
+
+  const followPreviewClick = (event: { target: EventTarget | null; preventDefault: () => void }) => {
+    const raw = clickTargetOnElement(code, event.target);
+    if (!raw) return;
+    event.preventDefault();
+    const action = actionForClickTarget(raw, filePath, diagramPaths ?? null);
+    if (action.type === "ignore") return;
+    if (action.type === "broken") {
+      setLinkMessage({ path: filePath, text: action.message });
+      return;
+    }
+    if (action.type === "external") {
+      setLinkMessage(null);
+      openExternalLink(action.url);
+      return;
+    }
+    setLinkMessage(null);
+    if (access === "edit" && latestCodeRef.current !== lastSavedRef.current) {
+      void flushSave(filePath).then(() => {
+        if (conflictRef.current) return;
+        openDiagram(action.path);
+      });
+      return;
+    }
+    openDiagram(action.path);
+  };
+
+  const linksToRows: DiagramLinkRow[] = linkRows.map((link) => ({
+    path: link.path,
+    label: link.path ? displayName(link.path) : link.target,
+    broken: link.broken,
+  }));
+  const linkedFromRows: DiagramLinkRow[] = linkedFrom.map((link) => ({
+    path: link.path,
+    label: displayName(link.path),
+  }));
 
   const setInfoOpen = (open: boolean) => {
     const next = new URLSearchParams(searchParams);
@@ -658,6 +751,7 @@ export function EditorPage() {
     route: "editor",
     actions: {
       editDiagramInfo: () => setInfoOpen(true),
+      linkNode: readOnly ? undefined : () => setLinkNodeOpen(true),
       openHistory: () => setHistoryOpen(true),
       toggleAutoUpdate: () => setAutoUpdate((current) => !current),
       setTheme: (theme) => commitInfo({ theme }),
@@ -866,6 +960,7 @@ export function EditorPage() {
               onChange={setCode}
               readOnly={readOnly}
               diagramPaths={diagramPaths}
+              sourcePath={filePath}
               onDiagnostics={setDiagnostics}
               aria-label="Mermaid source editor"
             />
@@ -900,6 +995,9 @@ export function EditorPage() {
             source={code}
             fileName={displayName(filePath) || "Untitled"}
             readOnly={readOnly}
+            linksTo={linksToRows}
+            linkedFrom={linkedFromRows}
+            onOpenDiagram={(path) => openDiagram(path)}
             onChange={setCode}
             onClose={() => setInfoOpen(false)}
           />
@@ -954,7 +1052,34 @@ export function EditorPage() {
               </button>
             </div>
           </div>
-          <div className={`preview-stage${previewStale ? " is-stale" : ""}`} ref={previewRef}>
+          <DrillTrail
+            trail={trail}
+            onBack={() => {
+              const next = drillIndex(trail, trail.index - 1);
+              const crumb = next.crumbs[next.index];
+              if (crumb) navigate(`/edit/${crumb.path}`, { state: { drill: next } });
+            }}
+            onForward={() => {
+              const next = drillIndex(trail, trail.index + 1);
+              const crumb = next.crumbs[next.index];
+              if (crumb) navigate(`/edit/${crumb.path}`, { state: { drill: next } });
+            }}
+            onSelect={(index) => {
+              const next = drillIndex(trail, index);
+              const crumb = next.crumbs[next.index];
+              if (crumb) navigate(`/edit/${crumb.path}`, { state: { drill: next } });
+            }}
+          />
+          {linkMessage?.path === filePath ? (
+            <div className="error-banner link-banner" role="alert">
+              {linkMessage.text}
+            </div>
+          ) : null}
+          <div
+            className={`preview-stage${previewStale ? " is-stale" : ""}`}
+            ref={previewRef}
+            onClick={followPreviewClick}
+          >
             {previewStale && svgHtml ? (
               <div className="preview-stale">
                 <div className="preview-stale-banner" role="status">
@@ -986,6 +1111,19 @@ export function EditorPage() {
       {presenting && loaded ? (
         <PresentationView source={code} path={filePath} onExit={() => setPresenting(false)} />
       ) : null}
+      {linkNodeOpen ? (
+        <LinkNodeDialog
+          nodeId={nodeIdAtCursor(code)}
+          paths={diagramPaths ?? []}
+          currentPath={filePath}
+          onClose={() => setLinkNodeOpen(false)}
+          onConfirm={(nodeId, diagramPath) => {
+            const title = displayName(diagramPath);
+            setCode(insertDiagramLink(code, nodeId, diagramPath, `Open ${title}`));
+            setLinkNodeOpen(false);
+          }}
+        />
+      ) : null}
       {historyOpen && (
         <HistoryDialog
           path={filePath}
@@ -1005,6 +1143,15 @@ export function EditorPage() {
       )}
     </div>
   );
+}
+
+function nodeIdAtCursor(source: string): string {
+  const view = getEditorView();
+  const offset = view?.state.selection.main.head ?? source.length;
+  const start = source.lastIndexOf("\n", Math.max(0, offset - 1)) + 1;
+  const endBreak = source.indexOf("\n", offset);
+  const line = source.slice(start, endBreak < 0 ? source.length : endBreak);
+  return extractNodeIds(line)[0] ?? extractNodeIds(source)[0] ?? "";
 }
 
 function diagramPathsIn(nodes: TreeNode[]): string[] {
