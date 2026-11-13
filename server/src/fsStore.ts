@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { rewriteFavoritePaths } from "./favorites.js";
+import { diagramMetaFrom, type DiagramMeta } from "./frontMatter.js";
 import { readRevision, relocateHistory, snapshotPrevious } from "./history.js";
 import { assertUnlocked, assertWriteAllowed, relocateLocks } from "./locks.js";
 import {
@@ -91,6 +92,29 @@ export async function buildTree(relativePath = ""): Promise<TreeNode[]> {
   });
 
   return nodes;
+}
+
+function flattenFiles(nodes: TreeNode[]): TreeNode[] {
+  const files: TreeNode[] = [];
+  for (const node of nodes) {
+    if (node.type === "folder") {
+      if (node.children) files.push(...flattenFiles(node.children));
+    } else {
+      files.push(node);
+    }
+  }
+  return files;
+}
+
+/** Parsed front matter for every diagram. `.meta` and other dot paths are not walked. */
+export async function listDiagramMeta(): Promise<DiagramMeta[]> {
+  const files = flattenFiles(await buildTree());
+  const diagrams: DiagramMeta[] = [];
+  for (const file of files) {
+    const content = await readFile(file.path);
+    diagrams.push(diagramMetaFrom(content.path, content.content));
+  }
+  return diagrams;
 }
 
 export async function listFolder(relativePath = ""): Promise<{

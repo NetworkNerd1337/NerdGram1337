@@ -1,4 +1,5 @@
 import type {
+  DiagramMeta,
   FilePayload,
   FileWriteResult,
   FolderListing,
@@ -73,6 +74,7 @@ export const api = {
     request<FolderListing>(`/api/list?path=${encodeURIComponent(path)}`),
   readFile: (path: string) =>
     request<FilePayload>(`/api/file?path=${encodeURIComponent(path)}`),
+  diagramMeta: () => request<{ diagrams: DiagramMeta[] }>("/api/diagram-meta"),
   writeFile: (
     path: string,
     content: string,

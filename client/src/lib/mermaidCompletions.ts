@@ -116,6 +116,14 @@ const SNIPPETS: Completion[] = [
       detail: "State diagram",
     },
   ),
+  snippetCompletion(
+    "---\ntitle: ${title}\nconfig:\n  theme: ${forest}\n---\nflowchart ${LR}\n  ${A}[${Start}] --> ${B}[${End}]\n",
+    {
+      label: "snippet: front matter",
+      type: "text",
+      detail: "Title and theme header",
+    },
+  ),
 ];
 
 const STATIC: Completion[] = [
@@ -130,10 +138,19 @@ const STATIC: Completion[] = [
 export function extractNodeIds(doc: string): string[] {
   const ids = new Set<string>();
   const lines = doc.split(/\r?\n/);
+  let inFrontMatter = false;
+  let sawDiagram = false;
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("%%") || trimmed.startsWith("---")) continue;
+    if (!sawDiagram && trimmed === "---") {
+      inFrontMatter = !inFrontMatter;
+      if (!inFrontMatter) sawDiagram = false;
+      continue;
+    }
+    if (inFrontMatter) continue;
+    if (!trimmed || trimmed.startsWith("%%")) continue;
+    sawDiagram = true;
 
     // participant / actor Foo or participant Foo as Alias
     const participant = trimmed.match(

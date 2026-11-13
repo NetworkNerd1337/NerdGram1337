@@ -43,6 +43,20 @@ export type RevisionSummary = {
   hash: string;
 };
 
+export type DiagramMeta = {
+  path: string;
+  title: string | null;
+  description: string;
+  notes: string;
+  tags: string[];
+  theme: string | null;
+  look: string | null;
+  layout: string | null;
+  malformed: boolean;
+  error: string | null;
+  cacheKey: string;
+};
+
 export type FolderListing = {
   path: string;
   folders: TreeNode[];

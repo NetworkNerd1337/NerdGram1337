@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "../api";
 import { Brand } from "../components/Brand";
 import { ConflictDialog } from "../components/ConflictDialog";
+import { DiagramInfoPanel } from "../components/DiagramInfoPanel";
 import { HistoryDialog } from "../components/HistoryDialog";
 import { MermaidCodeEditor } from "../components/MermaidCodeEditor";
 import { exportDiagram, type ExportFormat } from "../lib/exportDiagram";
@@ -17,10 +18,18 @@ import {
   writeStoredLock,
 } from "../lib/editorSession";
 import {
-  initMermaid,
-  renderMermaid,
-  type MermaidTheme,
-} from "../lib/mermaidRender";
+  applyDiagramPatch,
+  diagramHeading,
+  FALLBACK_THEME,
+  MERMAID_LAYOUTS,
+  MERMAID_LOOKS,
+  MERMAID_THEMES,
+  migrateInitDirectives,
+  parseDiagram,
+  themeLabel,
+  type DiagramPatch,
+} from "../lib/frontMatter";
+import { renderMermaid } from "../lib/mermaidRender";
 import { displayName, joinPath, parentPath } from "../lib/paths";
 
 type Access = "loading" | "edit" | "readonly";
@@ -58,12 +67,13 @@ async function writeCopy(originalPath: string, content: string): Promise<string>
 export function EditorPage() {
   const params = useParams();
   const filePath = params["*"] || "";
+  const [searchParams, setSearchParams] = useSearchParams();
+  const infoOpen = searchParams.get("info") === "1";
 
   const [code, setCode] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [access, setAccess] = useState<Access>("loading");
   const [autoUpdate, setAutoUpdate] = useState(true);
-  const [theme, setTheme] = useState<MermaidTheme>("dark");
   const [svgHtml, setSvgHtml] = useState("");
   const [renderError, setRenderError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -107,10 +117,6 @@ export function EditorPage() {
       mountedRef.current = false;
     };
   }, []);
-
-  useEffect(() => {
-    initMermaid(theme);
-  }, [theme]);
 
   const flushSave = useCallback(async (scheduledPath: string) => {
     while (mountedRef.current && pathRef.current === scheduledPath) {
@@ -357,9 +363,9 @@ export function EditorPage() {
     return () => window.clearInterval(timer);
   }, [access, filePath, loaded]);
 
-  const runRender = useCallback(async (source: string, nextTheme: MermaidTheme) => {
+  const runRender = useCallback(async (source: string) => {
     try {
-      const { svg } = await renderMermaid(source, nextTheme);
+      const { svg } = await renderMermaid(source, FALLBACK_THEME);
       setSvgHtml(svg);
       setRenderError(null);
     } catch (err) {
@@ -373,12 +379,12 @@ export function EditorPage() {
     if (!loaded || !autoUpdate) return;
     if (renderTimer.current) window.clearTimeout(renderTimer.current);
     renderTimer.current = window.setTimeout(() => {
-      void runRender(code, theme);
+      void runRender(code);
     }, 280);
     return () => {
       if (renderTimer.current) window.clearTimeout(renderTimer.current);
     };
-  }, [code, theme, autoUpdate, loaded, runRender]);
+  }, [code, autoUpdate, loaded, runRender]);
 
   useEffect(() => {
     if (!loaded || access !== "edit" || conflict) return;
@@ -448,13 +454,34 @@ export function EditorPage() {
       return;
     }
     try {
-      await exportDiagram(svg, displayName(filePath), format);
+      await exportDiagram(svg, diagramHeading(parseDiagram(code).title, filePath), format);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : "Export failed");
     }
   };
 
   const readOnly = access !== "edit";
+  const info = useMemo(() => parseDiagram(code), [code]);
+  const heading = diagramHeading(info.title, filePath);
+
+  const setInfoOpen = (open: boolean) => {
+    const next = new URLSearchParams(searchParams);
+    if (open) next.set("info", "1");
+    else next.delete("info");
+    setSearchParams(next, { replace: true });
+  };
+
+  const commitInfo = (patch: DiagramPatch) => {
+    if (readOnly || info.malformed) return;
+    const next = applyDiagramPatch(code, patch);
+    if (next.ok) setCode(next.source);
+  };
+
+  const migrateInit = () => {
+    if (readOnly) return;
+    const next = migrateInitDirectives(code);
+    if (next.ok && next.migrated) setCode(next.source);
+  };
   const dirty = code !== savedCode;
   const saveLabel =
     saveState === "saving"
@@ -478,13 +505,23 @@ export function EditorPage() {
             <Brand compact />
           </Link>
           <div className="breadcrumb">
-            Local files / <strong>{displayName(filePath) || "Untitled"}</strong>
+            Local files / <strong>{heading || "Untitled"}</strong>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "0.65rem" }}>
           <span className="status-pill" aria-live="polite">
             {saveLabel}
           </span>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            style={{ color: "#e8eef5" }}
+            onClick={() => setInfoOpen(true)}
+            disabled={!loaded}
+            aria-expanded={infoOpen}
+          >
+            Diagram info
+          </button>
           <button
             type="button"
             className="btn btn-ghost"
@@ -537,6 +574,31 @@ export function EditorPage() {
           {exportError}
         </div>
       )}
+      {info.malformed && (
+        <div className="editor-banner" role="alert">
+          The YAML header could not be parsed{info.error ? `: ${info.error}` : ""}. Autosave keeps
+          the text in the code pane and will not replace the header.
+        </div>
+      )}
+      {info.hasLegacyInit && (
+        <div className="editor-banner" role="status">
+          <div>
+            This diagram uses a deprecated <code>%%{"{init}"}%%</code> directive. It still renders.
+            Move it into front matter to keep the same theme and options in the file header.
+          </div>
+          <div className="editor-banner-actions">
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={migrateInit}
+              disabled={readOnly || info.malformed}
+            >
+              Move into front matter
+            </button>
+          </div>
+          {info.initError && <div>{info.initError}</div>}
+        </div>
+      )}
       {lockNote && (
         <div className="editor-banner" role="status">
           <div>{lockNote}</div>
@@ -568,7 +630,7 @@ export function EditorPage() {
       )}
       </div>
 
-      <div className="editor-panels">
+      <div className={`editor-panels${infoOpen ? " with-info" : ""}`}>
         <section className="panel code-panel">
           <div className="panel-header">
             <h2>Code</h2>
@@ -594,7 +656,7 @@ export function EditorPage() {
               <button
                 type="button"
                 className="btn btn-primary"
-                onClick={() => void runRender(code, theme)}
+                onClick={() => void runRender(code)}
               >
                 Update preview
               </button>
@@ -602,23 +664,54 @@ export function EditorPage() {
           )}
         </section>
 
+        {infoOpen && (
+          <DiagramInfoPanel
+            source={code}
+            fileName={displayName(filePath) || "Untitled"}
+            readOnly={readOnly}
+            onChange={setCode}
+            onClose={() => setInfoOpen(false)}
+          />
+        )}
+
         <section className="panel preview-panel">
           <div className="panel-header">
             <h2>Preview</h2>
             <div className="preview-toolbar">
-              <label>
-                Theme{" "}
-                <select
-                  value={theme}
-                  onChange={(e) => setTheme(e.target.value as MermaidTheme)}
-                >
-                  <option value="dark">Dark</option>
-                  <option value="default">Default</option>
-                  <option value="neutral">Neutral</option>
-                  <option value="forest">Forest</option>
-                  <option value="base">Base</option>
-                </select>
-              </label>
+              <AppearanceSelect
+                label="Theme"
+                value={info.theme ?? ""}
+                emptyLabel="App default (dark)"
+                options={MERMAID_THEMES.map((theme) => [theme, themeLabel(theme)])}
+                disabled={readOnly || info.malformed || !loaded}
+                onChange={(theme) => commitInfo({ theme })}
+              />
+              <AppearanceSelect
+                label="Look"
+                value={info.look ?? ""}
+                emptyLabel="Engine default"
+                options={MERMAID_LOOKS.map((look) => [
+                  look,
+                  look === "handDrawn" ? "Hand-drawn" : look === "neo" ? "Neo" : "Classic",
+                ])}
+                disabled={readOnly || info.malformed || !loaded}
+                onChange={(look) => commitInfo({ look })}
+              />
+              <AppearanceSelect
+                label="Layout"
+                value={info.layout ?? ""}
+                emptyLabel="Engine default"
+                options={MERMAID_LAYOUTS.map((layout) => [layout, layout === "elk" ? "ELK" : "Dagre"])}
+                disabled={readOnly || info.malformed || !loaded}
+                onChange={(layout) => commitInfo({ layout })}
+              />
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setInfoOpen(!infoOpen)}
+              >
+                {infoOpen ? "Hide info" : "Edit info"}
+              </button>
             </div>
           </div>
           <div className="preview-stage" ref={previewRef}>
@@ -658,5 +751,42 @@ export function EditorPage() {
         />
       )}
     </div>
+  );
+}
+
+function AppearanceSelect({
+  label,
+  value,
+  emptyLabel,
+  options,
+  disabled,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  emptyLabel: string;
+  options: [string, string][];
+  disabled: boolean;
+  onChange: (value: string | null) => void;
+}) {
+  const known = new Set(options.map(([option]) => option));
+  return (
+    <label>
+      {label}{" "}
+      <select
+        aria-label={label}
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value || null)}
+      >
+        <option value="">{emptyLabel}</option>
+        {value && !known.has(value) ? <option value={value}>{value}</option> : null}
+        {options.map(([option, text]) => (
+          <option key={option} value={option}>
+            {text}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

@@ -24,6 +24,7 @@ import {
   moveBlockReason,
   relocatedFolder,
 } from "../lib/organize";
+import { diagramHeading, diagramSearchRank } from "../lib/frontMatter";
 import {
   basename,
   displayName,
@@ -32,7 +33,7 @@ import {
   formatRelativeTime,
   joinPath,
 } from "../lib/paths";
-import type { TrashItem, TreeNode } from "../types";
+import type { DiagramMeta, TrashItem, TreeNode } from "../types";
 
 type OverTarget =
   | { kind: "folder"; path: string; valid: boolean }
@@ -67,6 +68,8 @@ export function DashboardPage() {
     path: string;
     suggestedPath?: string;
   } | null>(null);
+  const [diagramMeta, setDiagramMeta] = useState<DiagramMeta[]>([]);
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [moveTarget, setMoveTarget] = useState<{ path: string; isFolder: boolean } | null>(null);
   const [importDrafts, setImportDrafts] = useState<ImportDraft[] | null>(null);
   const [importFolder, setImportFolder] = useState("");
@@ -93,17 +96,78 @@ export function DashboardPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    void api.diagramMeta().then(
+      (result) => {
+        if (!cancelled) setDiagramMeta(result.diagrams);
+      },
+      () => {
+        if (!cancelled) setDiagramMeta([]);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [tree]);
+
+  const metaByPath = useMemo(() => {
+    const map = new Map<string, DiagramMeta>();
+    for (const item of diagramMeta) map.set(item.path, item);
+    return map;
+  }, [diagramMeta]);
+
+  const allTags = useMemo(() => {
+    const tags = new Set<string>();
+    for (const item of diagramMeta) {
+      for (const tag of item.tags) tags.add(tag);
+    }
+    return [...tags].sort((a, b) => a.localeCompare(b));
+  }, [diagramMeta]);
+
+  const tagAllowed = (itemPath: string) => {
+    if (tagFilter.length === 0) return true;
+    const tags = metaByPath.get(itemPath)?.tags ?? [];
+    return tagFilter.some((tag) => tags.includes(tag));
+  };
+
+  const toggleTag = (tag: string) => {
+    setTagFilter((current) =>
+      current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag],
+    );
+  };
+
   const folderNodes = useMemo(() => findFolder(tree, folder), [tree, folder]);
   const folders = folderNodes.filter((n) => n.type === "folder");
   const files = folderNodes.filter((n) => n.type === "file");
 
   const searchResults = useMemo(() => {
-    if (!search.trim()) return null;
-    const q = search.trim().toLowerCase();
-    return flattenFiles(tree).filter(
-      (f) => f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q),
-    );
-  }, [search, tree]);
+    const query = search.trim();
+    if (!query) return null;
+    return flattenFiles(tree)
+      .map((file) => {
+        const meta = metaByPath.get(file.path);
+        const rank = diagramSearchRank(
+          {
+            path: file.path,
+            title: meta?.title ?? null,
+            description: meta?.description ?? "",
+            notes: meta?.notes ?? "",
+            tags: meta?.tags ?? [],
+          },
+          query,
+        );
+        return rank == null ? null : { file, rank };
+      })
+      .filter((item): item is { file: TreeNode; rank: number } => item != null)
+      .sort((a, b) => a.rank - b.rank || a.file.path.localeCompare(b.file.path))
+      .map((item) => item.file);
+  }, [search, tree, metaByPath]);
+
+  const shownSearch = searchResults
+    ? searchResults.filter((file) => tagAllowed(file.path))
+    : null;
+  const shownFiles = files.filter((file) => tagAllowed(file.path));
 
   const openCreateFolder = () => {
     setNameValue("");
@@ -537,6 +601,28 @@ export function DashboardPage() {
         </div>
 
         {loading ? <p>Loading workspace…</p> : null}
+        {!showTrash && allTags.length > 0 && (
+          <div className="tag-filter" role="group" aria-label="Filter by tag">
+            <button
+              type="button"
+              className={tagFilter.length === 0 ? "active" : ""}
+              onClick={() => setTagFilter([])}
+            >
+              All tags
+            </button>
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                className={tagFilter.includes(tag) ? "active" : ""}
+                aria-pressed={tagFilter.includes(tag)}
+                onClick={() => toggleTag(tag)}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
         {dragPath ? (
           <p className="drop-hint">Drop on a folder to move. A highlighted folder can take the item.</p>
         ) : null}
@@ -547,19 +633,21 @@ export function DashboardPage() {
             onRestore={(id) => void restoreItem(id)}
             onPurge={(id) => void purgeItem(id)}
           />
-        ) : searchResults ? (
+        ) : shownSearch ? (
           <>
             <div className="section-title">
-              {searchResults.length} match{searchResults.length === 1 ? "" : "es"}
+              {shownSearch.length} match{shownSearch.length === 1 ? "" : "es"}
             </div>
-            {searchResults.length === 0 ? (
+            {shownSearch.length === 0 ? (
               <div className="empty-state">No diagrams match that search.</div>
             ) : view === "grid" ? (
               <div className="card-grid">
-                {searchResults.map((file) => (
+                {shownSearch.map((file) => (
                   <DiagramCard
                     key={file.path}
                     path={file.path}
+                    meta={metaByPath.get(file.path)}
+                    onTag={toggleTag}
                     mtimeMs={file.mtimeMs}
                     favorited={favorites.includes(file.path)}
                     dragging={dragPath === file.path}
@@ -577,10 +665,12 @@ export function DashboardPage() {
               </div>
             ) : (
               <div className="list-view">
-                {searchResults.map((file) => (
+                {shownSearch.map((file) => (
                   <ListRow
                     key={file.path}
                     path={file.path}
+                    meta={metaByPath.get(file.path)}
+                    onTag={toggleTag}
                     mtimeMs={file.mtimeMs}
                     favorited={favorites.includes(file.path)}
                     dragging={dragPath === file.path}
@@ -629,16 +719,20 @@ export function DashboardPage() {
             )}
 
             <div className="section-title">Diagrams</div>
-            {files.length === 0 ? (
+            {shownFiles.length === 0 ? (
               <div className="empty-state">
-                No diagrams here yet. Create one, import a .mmd file, or paste Mermaid markdown.
+                {tagFilter.length > 0 && files.length > 0
+                  ? "No diagrams with the selected tags."
+                  : "No diagrams here yet. Create one, import a .mmd file, or paste Mermaid markdown."}
               </div>
             ) : view === "grid" ? (
               <div className="card-grid">
-                {files.map((file) => (
+                {shownFiles.map((file) => (
                   <DiagramCard
                     key={file.path}
                     path={file.path}
+                    meta={metaByPath.get(file.path)}
+                    onTag={toggleTag}
                     mtimeMs={file.mtimeMs}
                     favorited={favorites.includes(file.path)}
                     dragging={dragPath === file.path}
@@ -656,10 +750,12 @@ export function DashboardPage() {
               </div>
             ) : (
               <div className="list-view">
-                {files.map((file) => (
+                {shownFiles.map((file) => (
                   <ListRow
                     key={file.path}
                     path={file.path}
+                    meta={metaByPath.get(file.path)}
+                    onTag={toggleTag}
                     mtimeMs={file.mtimeMs}
                     favorited={favorites.includes(file.path)}
                     dragging={dragPath === file.path}
@@ -818,6 +914,8 @@ function TrashList({
 
 function DiagramCard({
   path,
+  meta,
+  onTag,
   mtimeMs,
   favorited,
   dragging,
@@ -832,6 +930,8 @@ function DiagramCard({
   onDelete,
 }: {
   path: string;
+  meta?: DiagramMeta;
+  onTag: (tag: string) => void;
   mtimeMs: number;
   favorited: boolean;
   dragging: boolean;
@@ -845,7 +945,7 @@ function DiagramCard({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const label = displayName(path);
+  const label = diagramHeading(meta?.title, path);
   return (
     <article
       className={`card${dragging ? " is-dragging" : ""}`}
@@ -865,6 +965,9 @@ function DiagramCard({
             {label}
           </Link>
         </h3>
+        {meta?.description ? <p className="card-description">{meta.description}</p> : null}
+        {meta?.malformed ? <p className="card-description">Front matter needs a fix</p> : null}
+        <TagList tags={meta?.tags ?? []} onTag={onTag} />
         <p>Updated {formatRelativeTime(mtimeMs)}</p>
         <ItemActions
           label={label}
@@ -882,6 +985,8 @@ function DiagramCard({
 
 function ListRow({
   path,
+  meta,
+  onTag,
   mtimeMs,
   favorited,
   dragging,
@@ -896,6 +1001,8 @@ function ListRow({
   onDelete,
 }: {
   path: string;
+  meta?: DiagramMeta;
+  onTag: (tag: string) => void;
   mtimeMs: number;
   favorited: boolean;
   dragging: boolean;
@@ -909,7 +1016,8 @@ function ListRow({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const label = displayName(path);
+  const label = diagramHeading(meta?.title, path);
+  const fileLabel = displayName(path);
   return (
     <div
       className={`list-row${dragging ? " is-dragging" : ""}`}
@@ -924,8 +1032,11 @@ function ListRow({
         <Link to={`/edit/${path}`} draggable={false}>
           <strong>{label}</strong>
         </Link>
+        {meta?.description ? <div className="card-description">{meta.description}</div> : null}
+        <TagList tags={meta?.tags ?? []} onTag={onTag} />
         <div style={{ color: "var(--ink-soft)", fontSize: "0.8rem" }}>
-          {path} · Updated {formatRelativeTime(mtimeMs)}
+          {label === fileLabel ? path : fileLabel} · Updated {formatRelativeTime(mtimeMs)}
+          {meta?.malformed ? " · Front matter needs a fix" : ""}
         </div>
       </div>
       <ItemActions
@@ -937,6 +1048,29 @@ function ListRow({
         onDuplicate={onDuplicate}
         onDelete={onDelete}
       />
+    </div>
+  );
+}
+
+function TagList({ tags, onTag }: { tags: string[]; onTag: (tag: string) => void }) {
+  if (tags.length === 0) return null;
+  return (
+    <div className="tag-row">
+      {tags.map((tag) => (
+        <button
+          key={tag}
+          type="button"
+          className="tag-chip"
+          draggable={false}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onTag(tag);
+          }}
+        >
+          {tag}
+        </button>
+      ))}
     </div>
   );
 }
