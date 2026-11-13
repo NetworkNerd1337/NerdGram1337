@@ -17,6 +17,7 @@ import {
   resolveBindHosts,
   type RuntimeMode,
 } from "./security.js";
+import * as search from "./search.js";
 import * as syntaxReference from "./syntaxReference.js";
 import * as thumbnails from "./thumbnails.js";
 
@@ -132,6 +133,29 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     try {
       const diagrams = await store.listDiagramMeta();
       res.json({ diagrams });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.get("/api/search", async (req, res) => {
+    try {
+      const q = String(req.query.q ?? "");
+      if (req.query.names != null && req.query.names !== "0" && req.query.names !== "1" && req.query.names !== "true" && req.query.names !== "false") {
+        res.status(400).json({ error: "names must be 0 or 1", code: "invalid" });
+        return;
+      }
+      if (req.query.regex != null && req.query.regex !== "0" && req.query.regex !== "1" && req.query.regex !== "true" && req.query.regex !== "false") {
+        res.status(400).json({ error: "regex must be 0 or 1", code: "invalid" });
+        return;
+      }
+      const result = await search.searchDiagrams({
+        q,
+        namesOnly: req.query.names === "1" || req.query.names === "true",
+        contents: req.query.contents !== "0" && req.query.contents !== "false",
+        regex: req.query.regex === "1" || req.query.regex === "true",
+      });
+      res.json(result);
     } catch (err) {
       sendError(res, err);
     }

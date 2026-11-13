@@ -392,7 +392,7 @@ flowchart LR
 
 In the editor, **Diagram info** edits the title, description, notes, and tags, and sets the theme, look, and layout. The preview toolbar has the same theme, look, and layout controls. Those controls write this header and update the preview. The preview, dashboard thumbnails, and SVG, PNG, JPG, and PDF export use the theme in the file. If the file does not set one, they use dark.
 
-The dashboard shows the title when the file has one, and the file name otherwise. A description is shown under the title. Tags are chips; click a chip, or use the tag row, to filter the dashboard. Search matches the file name, title, tags, description, and notes. A file name match is listed before a title match.
+The dashboard shows the title when the file has one, and the file name otherwise. A description is shown under the title. Tags are chips; click a chip, or use the tag row, to filter the dashboard. Search also matches this text. A file name match is listed before a title, tag, description, note, or label match. See Search below.
 
 `%%` at the start of a line is a Mermaid comment. In the code pane, Ctrl+/ (Cmd+/ on a Mac) comments or uncomments the selected lines.
 
@@ -407,6 +407,10 @@ Dashboard cards keep a thumbnail of each diagram. The first time a card is on sc
 In the editor, Ctrl+F (Cmd+F on a Mac) opens find and replace. The panel can match case, whole words, or a regular expression, and it can replace one match or all of them. Ctrl+G finds the next match. Go to line is Ctrl+Alt+G (Cmd+Alt+G on a Mac), so Ctrl+L / Cmd+L still focuses the address bar. These shortcuts apply while the code pane is focused.
 
 Ctrl+K (Cmd+K on a Mac) opens the command palette. It lists the actions already in the app: new diagram, paste, folder, import, search, open, rename, move, duplicate, trash, restore, diagram info, history, theme, export, find, and go to line. If the browser address bar takes that shortcut, use the **Commands** button. Ctrl+/ (Cmd+/ on a Mac) still comments the selected lines.
+
+## Search
+
+The sidebar search box matches file names and paths, titles, tags, descriptions, notes, and the visible text in a diagram: node and edge labels, subgraph titles, sequence messages, and similar labels. It does not match a diagram only because the file says `flowchart` or `sequenceDiagram`. Results show the matching text. Opening a result jumps to that line in the editor. The command palette (Ctrl+K or Cmd+K) uses the same search. **Names only**, under the search box, limits the dashboard to file names and paths. Diagrams in the trash are not included.
 
 ## Trash, version history, and editing locks
 

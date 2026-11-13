@@ -12,6 +12,8 @@ type SidebarProps = {
   currentFolder: string;
   search: string;
   onSearch: (value: string) => void;
+  namesOnly?: boolean;
+  onNamesOnly?: (value: boolean) => void;
   onSelectFolder: (path: string) => void;
   trashCount?: number;
   trashActive?: boolean;
@@ -29,6 +31,8 @@ export function Sidebar({
   currentFolder,
   search,
   onSearch,
+  namesOnly = false,
+  onNamesOnly,
   onSelectFolder,
   trashCount = 0,
   trashActive = false,
@@ -57,10 +61,18 @@ export function Sidebar({
           id="diagram-search"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
-          placeholder="Search name, title, or tags"
+          placeholder="Search diagrams"
           aria-label="Search diagrams"
         />
       </div>
+      <label className="search-option">
+        <input
+          type="checkbox"
+          checked={namesOnly}
+          onChange={(event) => onNamesOnly?.(event.target.checked)}
+        />
+        Names only
+      </label>
       <CommandsButton />
 
       <div className="nav-section">

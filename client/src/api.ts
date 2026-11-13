@@ -1,5 +1,6 @@
 import type {
   DiagramMeta,
+  DiagramSearchResponse,
   FilePayload,
   FileWriteResult,
   ThumbnailPayload,
@@ -83,6 +84,13 @@ export const api = {
       body: JSON.stringify({ path, cacheKey, svg }),
     }),
   diagramMeta: () => request<{ diagrams: DiagramMeta[] }>("/api/diagram-meta"),
+  search: (query: string, options?: { namesOnly?: boolean; signal?: AbortSignal }) => {
+    const params = new URLSearchParams({ q: query });
+    if (options?.namesOnly) params.set("names", "1");
+    return request<DiagramSearchResponse>(`/api/search?${params.toString()}`, {
+      signal: options?.signal,
+    });
+  },
   writeFile: (
     path: string,
     content: string,

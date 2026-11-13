@@ -57,6 +57,26 @@ export type DiagramMeta = {
   cacheKey: string;
 };
 
+export type DiagramSearchHit = {
+  path: string;
+  name: string;
+  title: string | null;
+  rank: number;
+  field: string;
+  element: string | null;
+  label: string;
+  line: number | null;
+  snippet: string;
+  matchStart: number;
+  matchLength: number;
+};
+
+export type DiagramSearchResponse = {
+  query: string;
+  truncated: boolean;
+  hits: DiagramSearchHit[];
+};
+
 export type ThumbnailPayload = {
   hit: boolean;
   path: string;

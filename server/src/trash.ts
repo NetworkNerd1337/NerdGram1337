@@ -172,6 +172,8 @@ export async function moveToTrash(relativePath: string): Promise<TrashItem> {
   };
   await writeManifest(manifest);
   await fs.rename(abs, payloadFile(id, type));
+  const search = await import("./search.js");
+  await search.removeSearchEntries(originalPath, type === "folder");
   return finishMove(manifest);
 }
 

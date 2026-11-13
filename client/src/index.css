@@ -130,6 +130,16 @@ a {
   background: transparent;
 }
 
+.search-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: -0.35rem;
+  padding: 0 0.35rem;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
 .nav-section {
   display: flex;
   flex-direction: column;
@@ -336,9 +346,11 @@ a {
   position: relative;
 }
 
-.card-thumb svg {
+.card-thumb svg,
+.card-thumb img {
   max-width: 92%;
   max-height: 92%;
+  object-fit: contain;
 }
 
 .card-thumb .empty {
@@ -1477,6 +1489,45 @@ a {
   display: block;
   color: var(--ink-soft);
   font-size: 0.75rem;
+}
+
+.palette-detail {
+  display: block;
+  color: var(--ink-soft);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 28rem;
+}
+
+.palette-detail mark,
+.search-snippet mark {
+  background: #f5d76e;
+  color: #1b2430;
+  border-radius: 3px;
+  padding: 0 0.1rem;
+}
+
+.search-snippet {
+  margin: 0.2rem 0 0;
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+}
+
+.match-chip {
+  display: inline-block;
+  margin-right: 0.35rem;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  background: var(--bg-muted);
+  color: var(--ink-soft);
+}
+
+.match-chip.file {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .palette-empty {

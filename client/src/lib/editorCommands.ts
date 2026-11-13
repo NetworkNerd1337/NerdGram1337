@@ -1,4 +1,4 @@
-import { search, searchKeymap, gotoLine, openSearchPanel } from "@codemirror/search";
+import { SearchQuery, search, searchKeymap, gotoLine, openSearchPanel, setSearchQuery } from "@codemirror/search";
 import { Prec, type Extension } from "@codemirror/state";
 import { keymap, type EditorView, type KeyBinding } from "@codemirror/view";
 
@@ -73,4 +73,53 @@ export function runReplace(): boolean {
 
 export function runGotoLine(): boolean {
   return withEditor((view) => gotoLine(view));
+}
+
+/**
+ * Select a search hit and scroll it into view. Opens the find panel when a
+ * query is known so the existing find UI shows the same match. Returns false
+ * until the editor has the document.
+ */
+export function revealEditorMatch(line: number | null, query: string): boolean {
+  const view = editorView;
+  if (!view) return false;
+  const needle = query.trim();
+  const doc = view.state.doc;
+  if (doc.length === 0 && (needle.length > 0 || (line != null && line > 1))) return false;
+  if (needle && !doc.toString().toLowerCase().includes(needle.toLowerCase())) {
+    if (doc.length < needle.length) return false;
+  }
+
+  let from = 0;
+  let to = 0;
+  const hasLine = line != null && line >= 1 && line <= doc.lines;
+  if (hasLine && line != null) {
+    const lineObj = doc.line(line);
+    from = lineObj.from;
+    to = lineObj.from;
+    if (needle) {
+      const idx = lineObj.text.toLowerCase().indexOf(needle.toLowerCase());
+      if (idx >= 0) {
+        from = lineObj.from + idx;
+        to = from + needle.length;
+      }
+    }
+  } else if (needle) {
+    const idx = doc.toString().toLowerCase().indexOf(needle.toLowerCase());
+    if (idx >= 0) {
+      from = idx;
+      to = idx + needle.length;
+    }
+  }
+
+  view.dispatch({
+    selection: { anchor: from, head: to },
+    scrollIntoView: true,
+    effects: needle
+      ? setSearchQuery.of(new SearchQuery({ search: needle, caseSensitive: false }))
+      : [],
+  });
+  if (needle) openSearchPanel(view);
+  view.focus();
+  return true;
 }

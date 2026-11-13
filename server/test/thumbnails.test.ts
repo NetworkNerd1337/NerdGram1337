@@ -192,4 +192,38 @@ describe("thumbnail cache", () => {
       .send({ path: "Notes.mmd", cacheKey: thumbnailCacheKey(BODY), svg: SVG });
     expect(foreign.status).toBe(403);
   });
+
+  it("strips event handlers and javascript URLs, including inside foreignObject", async () => {
+    await writeNew("Notes.mmd", BODY);
+    const evil = [
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)">',
+      '<rect onclick="alert(2)" width="10" height="10"/>',
+      '<a href="javascript:alert(3)"><text>x</text></a>',
+      "<foreignObject>",
+      '<div xmlns="http://www.w3.org/1999/xhtml" onmouseover="alert(5)">Hi</div>',
+      "</foreignObject>",
+      "</svg>",
+    ].join("");
+    const put = await request(app).put("/api/thumbnail").set(json).send({
+      path: "Notes.mmd",
+      cacheKey: thumbnailCacheKey(BODY),
+      svg: evil,
+    });
+    expect(put.status).toBe(200);
+    expect(put.body.svg.toLowerCase()).not.toMatch(/\son[a-z]+\s*=/);
+    expect(put.body.svg.toLowerCase()).not.toContain("javascript:");
+    expect(put.body.svg).toContain("<rect");
+
+    const storedPath = path.join(dir, ".meta", "thumbs");
+    const [name] = await fs.readdir(storedPath);
+    const record = JSON.parse(await fs.readFile(path.join(storedPath, name), "utf8")) as { svg: string };
+    record.svg =
+      '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><foreignObject><script>alert(4)</script></foreignObject><rect width="10" height="10"/></svg>';
+    await fs.writeFile(path.join(storedPath, name), JSON.stringify(record));
+    const hit = await request(app).get("/api/thumbnail").query({ path: "Notes.mmd" }).set("Host", HOST);
+    expect(hit.status).toBe(200);
+    expect(hit.body.svg.toLowerCase()).not.toContain("<script");
+    expect(hit.body.svg.toLowerCase()).not.toMatch(/\son[a-z]+\s*=/);
+    expect(hit.body.svg).toContain("rect");
+  });
 });

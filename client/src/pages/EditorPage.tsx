@@ -8,7 +8,7 @@ import { ConflictDialog } from "../components/ConflictDialog";
 import { DiagramInfoPanel } from "../components/DiagramInfoPanel";
 import { HistoryDialog } from "../components/HistoryDialog";
 import { MermaidCodeEditor } from "../components/MermaidCodeEditor";
-import { runFind, runGotoLine, runReplace } from "../lib/editorCommands";
+import { revealEditorMatch, runFind, runGotoLine, runReplace } from "../lib/editorCommands";
 import { exportDiagram, type ExportFormat } from "../lib/exportDiagram";
 import {
   cancelScheduledLockRelease,
@@ -285,6 +285,30 @@ export function EditorPage() {
       });
     };
   }, [filePath]);
+
+  const revealedKey = useRef("");
+  useEffect(() => {
+    if (!loaded) return;
+    const lineRaw = searchParams.get("line");
+    const find = searchParams.get("find") ?? "";
+    if (!lineRaw && !find) return;
+    const lineNumber = lineRaw ? Number(lineRaw) : null;
+    if (lineRaw && (!Number.isInteger(lineNumber) || (lineNumber ?? 0) < 1)) return;
+    const key = `${filePath}|${lineRaw ?? ""}|${find}`;
+    if (revealedKey.current === key) return;
+    let attempts = 0;
+    let timer = 0;
+    const tick = () => {
+      attempts += 1;
+      if (revealEditorMatch(lineNumber, find)) {
+        revealedKey.current = key;
+        return;
+      }
+      if (attempts < 12) timer = window.setTimeout(tick, 40);
+    };
+    timer = window.setTimeout(tick, 0);
+    return () => window.clearTimeout(timer);
+  }, [loaded, filePath, searchParams]);
 
   useEffect(() => {
     if (access !== "edit") return;
