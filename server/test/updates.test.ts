@@ -462,6 +462,10 @@ describe("update check API", () => {
     const same = await manualCheck();
     expect(same.matchesLatest).toBe(true);
     expect(same.updateAvailable).toBe(false);
+    expect(same.canApply).toBe(false);
+    expect(same.docker?.tag).toBe("v1.0.0");
+    expect(same.docker?.steps.map((step) => step.command).join("\n")).toContain("127.0.0.1:8787:8787");
+    expect(same.docker?.persistNote).toContain(".nerdgram-git");
     mockFetch(() => jsonResponse(200, releaseBody("v2.0.0")));
     const behind = await manualCheck();
     expect(behind.matchesLatest).toBe(false);

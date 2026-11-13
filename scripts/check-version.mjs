@@ -24,4 +24,18 @@ if (drifted.length > 0) {
   process.exit(1);
 }
 
-console.log(`Version ${expected} matches in root, client, and server.`);
+const dockerfile = readFileSync(join(root, "Dockerfile"), "utf8");
+const versionArgs = [...dockerfile.matchAll(/^ARG NERDGRAM_VERSION=(\S+)\s*$/gm)].map((match) => match[1]);
+if (versionArgs.length === 0 || versionArgs.some((version) => version !== expected)) {
+  console.error(`Dockerfile ARG NERDGRAM_VERSION must be ${expected}. Found ${versionArgs.join(", ") || "none"}.`);
+  process.exit(1);
+}
+
+const compose = readFileSync(join(root, "compose.yaml"), "utf8");
+const image = `ghcr.io/networknerd1337/nerdgram1337:v${expected}`;
+if (!compose.includes(image) || !compose.includes(`NERDGRAM_VERSION: "${expected}"`)) {
+  console.error(`compose.yaml must pin ${image} and NERDGRAM_VERSION ${expected}.`);
+  process.exit(1);
+}
+
+console.log(`Version ${expected} matches in root, client, server, Dockerfile, and compose.yaml.`);

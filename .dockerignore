@@ -1,0 +1,43 @@
+# Build context. The runtime image copies only the production artifacts.
+
+.git
+**/.git
+.github
+**/.github
+
+node_modules
+**/node_modules
+dist
+**/dist
+coverage
+**/.vite
+**/.cache
+
+# Local workspace data, tokens, and the GitHub sync mirror.
+**/.meta
+**/.nerdgram-git
+reference.staging
+reference.bak
+**/*github-token*
+**/.env
+**/.env.*
+**/.npmrc
+**/*.pem
+**/*.key
+
+# Keep the three sample diagrams. Everything else under diagrams/ stays out.
+diagrams/**
+!diagrams/Welcome.mmd
+!diagrams/NetworkMap.mmd
+!diagrams/Examples/
+!diagrams/Examples/Sequence.mmd
+
+screenshots
+**/*.mp4
+**/*.webp
+
+server/test
+client/test
+*.log
+.DS_Store
+**/Thumbs.db

@@ -85,16 +85,93 @@ export const REFERENCE_SOURCES: { id: string; sourceUrl: string; title: string }
 
 const OVERRIDES_FILE = "syntax-overrides.json";
 
-export function getReferenceRoot(): string {
+/** Bundled mirror checked into the repo and copied read-only into the image. */
+export function bundledReferenceRoot(): string {
   return path.join(REPO_ROOT, "reference");
 }
 
-function getPagesDir(root = getReferenceRoot()): string {
+/** Repo-root reference tree. Reads go through `resolveLiveReferenceRoot`. */
+export function getReferenceRoot(): string {
+  return bundledReferenceRoot();
+}
+
+/**
+ * Writable sync target. Set only when `NERDGRAM_DATA_DIR` is set, so a
+ * non-root container can update the docs and the result stays on the volume.
+ * Unset keeps sync on the repo-root `reference/` tree.
+ */
+export function dataReferenceRoot(): string | null {
+  if (!process.env.NERDGRAM_DATA_DIR?.trim()) return null;
+  return path.join(getMetaPath(), "reference");
+}
+
+export type ReferenceLayout = {
+  live: string;
+  staging: string;
+  backup: string;
+  inDataDir: boolean;
+};
+
+/** Staging and backup sit next to the live tree so the rename stays on one filesystem. */
+export function referenceWriteLayout(): ReferenceLayout {
+  const data = dataReferenceRoot();
+  if (data) {
+    const parent = path.dirname(data);
+    return {
+      live: data,
+      staging: path.join(parent, "reference.staging"),
+      backup: path.join(parent, "reference.bak"),
+      inDataDir: true,
+    };
+  }
+  return {
+    live: bundledReferenceRoot(),
+    staging: path.join(REPO_ROOT, "reference.staging"),
+    backup: path.join(REPO_ROOT, "reference.bak"),
+    inDataDir: false,
+  };
+}
+
+function getPagesDir(root: string): string {
   return path.join(root, "pages");
 }
 
-function getManifestPath(root = getReferenceRoot()): string {
+function getManifestPath(root: string): string {
   return path.join(root, "manifest.json");
+}
+
+async function manifestLooksValid(root: string): Promise<boolean> {
+  try {
+    const raw = await fs.readFile(getManifestPath(root), "utf8");
+    const parsed = JSON.parse(raw) as { pages?: unknown };
+    return Array.isArray(parsed.pages) && parsed.pages.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Prefer a synced copy under the data directory when it has a manifest.
+ * Otherwise serve the bundled tree at `REPO_ROOT/reference`.
+ */
+export async function resolveLiveReferenceRoot(): Promise<string> {
+  const data = dataReferenceRoot();
+  if (data && (await manifestLooksValid(data))) return data;
+  return bundledReferenceRoot();
+}
+
+function pageFile(root: string, filename: string): string {
+  const base = path.basename(filename);
+  if (!base || base !== filename || !base.endsWith(".md") || base.includes("\0")) {
+    throw Object.assign(new Error("Invalid reference page"), { status: 400 });
+  }
+  const pages = getPagesDir(root);
+  const absolute = path.resolve(pages, base);
+  const relative = path.relative(pages, absolute);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw Object.assign(new Error("Invalid reference page"), { status: 400 });
+  }
+  return absolute;
 }
 
 function getOverridesPath(): string {
@@ -112,12 +189,12 @@ function emptyManifest(): ReferenceManifest {
 }
 
 export async function ensureReferenceDirs(): Promise<void> {
-  await fs.mkdir(getPagesDir(), { recursive: true });
+  await fs.mkdir(getPagesDir(await resolveLiveReferenceRoot()), { recursive: true });
 }
 
-export async function readManifest(): Promise<ReferenceManifest> {
+async function readManifestFrom(root: string): Promise<ReferenceManifest> {
   try {
-    const raw = await fs.readFile(getManifestPath(), "utf8");
+    const raw = await fs.readFile(getManifestPath(root), "utf8");
     const parsed = JSON.parse(raw) as ReferenceManifest;
     return {
       ...emptyManifest(),
@@ -127,6 +204,10 @@ export async function readManifest(): Promise<ReferenceManifest> {
   } catch {
     return emptyManifest();
   }
+}
+
+export async function readManifest(): Promise<ReferenceManifest> {
+  return readManifestFrom(await resolveLiveReferenceRoot());
 }
 
 async function readOverrides(): Promise<Record<string, string>> {
@@ -167,13 +248,14 @@ function assertSafePageId(id: string): string {
 
 export async function getReferencePage(id: string): Promise<ReferencePagePayload> {
   const pageId = assertSafePageId(id);
-  const manifest = await readManifest();
+  const root = await resolveLiveReferenceRoot();
+  const manifest = await readManifestFrom(root);
   const meta = manifest.pages.find((p) => p.id === pageId);
   if (!meta) {
     throw Object.assign(new Error("Reference page not found"), { status: 404 });
   }
   const filename = meta.filename || `${pageId}.md`;
-  const content = await fs.readFile(path.join(getPagesDir(), filename), "utf8");
+  const content = await fs.readFile(pageFile(root, filename), "utf8");
   const overrides = await readOverrides();
   return {
     id: meta.id,
@@ -288,9 +370,10 @@ async function rmrf(p: string): Promise<void> {
  * the live reference. On any failure, the existing reference is left untouched.
  */
 export async function syncReference(): Promise<ReferenceManifest> {
-  const liveRoot = getReferenceRoot();
-  const stagingRoot = path.join(REPO_ROOT, "reference.staging");
-  const backupRoot = path.join(REPO_ROOT, "reference.bak");
+  const layout = referenceWriteLayout();
+  const liveRoot = layout.live;
+  const stagingRoot = layout.staging;
+  const backupRoot = layout.backup;
 
   await rmrf(stagingRoot);
   await fs.mkdir(path.join(stagingRoot, "pages"), { recursive: true });

@@ -114,6 +114,15 @@ export function stopUpdateChecker(): void {
   timer = null;
 }
 
+/** Stop the checker and wait for a check that has already started. */
+export function drainUpdateWork(): Promise<void> {
+  stopUpdateChecker();
+  return chain.then(
+    () => undefined,
+    () => undefined,
+  );
+}
+
 export async function runAutomaticCheck(): Promise<UpdateStatus> {
   if (!checksEnabled()) return getUpdateStatus();
   return exclusive(async () => {
@@ -394,9 +403,11 @@ function statusOf(file: UpdateFile, info: VersionInfo): UpdateStatus {
   const stable = release ? stableTag(parseSemver(release.tag) ?? { major: 0, minor: 0, patch: 0, prerelease: ["x"] }) : null;
   const canApply = updateAvailable && info.installKind === "git" && stable === release?.tag;
   const docker =
-    info.installKind === "docker" && release && stable === release.tag && relation === "newer"
-      ? dockerGuideForTag(release.tag)
-      : null;
+    info.installKind !== "docker"
+      ? null
+      : release && stable === release.tag && relation === "newer"
+        ? dockerGuideForTag(release.tag)
+        : dockerGuideForTag(`v${info.version}`);
 
   return {
     enabled,

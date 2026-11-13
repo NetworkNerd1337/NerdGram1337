@@ -60,6 +60,6 @@ export function dockerGuideForTag(tag: string): DockerGuide | null {
     composeNote:
       "The Compose file should use ghcr.io/networknerd1337/nerdgram1337. If the tag is `latest` or another moving tag, pull and up are enough. If it is pinned to an older vX.Y.Z, change that pin to this release first.",
     persistNote:
-      "Diagrams, favorites, trash, history, and the rest of .meta live in the /data volume. Recreating the container keeps that volume. Do not run docker volume rm, and do not change the volume you already mounted on /data. If your container or volume name is not the example above, keep the name you already use.",
+      "Diagrams, favorites, trash, history, the GitHub token, and the rest of .meta live in the /data volume, along with the GitHub sync mirror .nerdgram-git. Recreating the container keeps that volume. Do not run docker volume rm, and do not change the volume you already mounted on /data. If your container or volume name is not the example above, keep the name you already use.",
   };
 }

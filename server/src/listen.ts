@@ -5,8 +5,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Express } from "express";
 import { createApp, type CreateAppOptions, type ListenPort } from "./app.js";
-import { bootBackgroundTasks } from "./boot.js";
+import { bootBackgroundTasks, shutdownBackgroundTasks } from "./boot.js";
 import { ensureDataRoot } from "./paths.js";
+import { seedEmptyDataDir } from "./seed.js";
+import { getVersionInfo } from "./updates/versionInfo.js";
 import {
   formatExposedBindWarning,
   formatListenUrl,
@@ -38,18 +40,35 @@ function listenOn(app: Express, port: number, host: string): Promise<Server> {
   });
 }
 
-export async function closeServers(servers: readonly Server[]): Promise<void> {
+export async function closeServers(
+  servers: readonly Server[],
+  options?: { drain?: boolean },
+): Promise<void> {
   await Promise.all(
     servers.map(
       (server) =>
         new Promise<void>((resolve) => {
-          if (typeof server.closeAllConnections === "function") {
+          if (options?.drain) {
+            // Drop idle keep-alive sockets so close() can finish. A request
+            // that is still writing stays open until it ends.
+            server.closeIdleConnections?.();
+          } else if (typeof server.closeAllConnections === "function") {
             server.closeAllConnections();
           }
           server.close(() => resolve());
         }),
     ),
   );
+}
+
+/**
+ * Stop accepting requests, let the ones already inside finish, then wait for
+ * sync and the update check. `docker stop` sends SIGTERM; this is what the
+ * process runs so an atomic rename is not cut off.
+ */
+export async function gracefulShutdown(servers: readonly Server[]): Promise<void> {
+  await closeServers(servers, { drain: true });
+  await shutdownBackgroundTasks();
 }
 
 function boundUrl(server: Server): string | null {
@@ -77,6 +96,9 @@ export async function startServer(options: StartServerOptions = {}): Promise<Ser
   });
 
   ensureDataRoot();
+  if (await seedEmptyDataDir()) {
+    console.log("Seeded empty data directory with the sample diagrams.");
+  }
 
   const servers: Server[] = [];
   let listenPort = port;
@@ -121,6 +143,10 @@ export async function startServer(options: StartServerOptions = {}): Promise<Ser
     console.log(`NerdGram1337 API listening on ${url}`);
   }
   console.log(`Data directory: ${ensureDataRoot()}`);
+  const version = getVersionInfo();
+  console.log(
+    `Install: ${version.installKind} ${version.version}${version.commit ? ` ${version.commit}` : ""}`,
+  );
   console.log(`Server module dir: ${__dirname}`);
 
   const warning = formatExposedBindWarning(urls);

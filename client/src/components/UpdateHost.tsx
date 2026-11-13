@@ -486,7 +486,7 @@ export function UpdateSettingsFields() {
 }
 
 function AboutBody() {
-  const { status, actionError, busy } = useUpdate();
+  const { status, actionError, busy, openUpgrade } = useUpdate();
   if (!status) return <p>{busy ? "Loading…" : "Version information is not available yet."}</p>;
   return (
     <>
@@ -495,6 +495,23 @@ function AboutBody() {
         {status.commit ? ` (${shortCommit(status.commit)})` : ""}
       </p>
       <p>Install: {installLabel(status.installKind)}</p>
+      {status.installKind === "docker" ? (
+        <>
+          <p>
+            This is a Docker install. NerdGram does not change the container from the inside. Pull a new image and
+            start it again with the same /data volume. The steps use{" "}
+            <code>ghcr.io/networknerd1337/nerdgram1337</code>, container <code>nerdgram1337</code>, volume{" "}
+            <code>nerdgram-data</code>, and <code>127.0.0.1:8787:8787</code>.
+          </p>
+          {status.docker ? (
+            <p>
+              <button type="button" className="btn" disabled={busy} onClick={openUpgrade}>
+                Show upgrade steps
+              </button>
+            </p>
+          ) : null}
+        </>
+      ) : null}
       {status.phase === "ahead" ? <p>This build is newer than the latest stable release.</p> : null}
       {status.phase === "no_release" ? <p>No stable release has been published yet.</p> : null}
       {actionError ? <p className="update-error">{actionError}</p> : null}

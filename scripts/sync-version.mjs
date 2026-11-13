@@ -24,3 +24,17 @@ for (const file of ["client/package.json", "server/package.json"]) {
   writeFileSync(full, next);
   console.log(`${file} -> ${rootVersion}`);
 }
+
+const dockerfilePath = join(root, "Dockerfile");
+const dockerfile = readFileSync(dockerfilePath, "utf8").replace(
+  /^ARG NERDGRAM_VERSION=\S+\s*$/gm,
+  `ARG NERDGRAM_VERSION=${rootVersion}`,
+);
+writeFileSync(dockerfilePath, dockerfile);
+
+const composePath = join(root, "compose.yaml");
+const compose = readFileSync(composePath, "utf8")
+  .replace(/ghcr\.io\/networknerd1337\/nerdgram1337:v\d+\.\d+\.\d+/g, `ghcr.io/networknerd1337/nerdgram1337:v${rootVersion}`)
+  .replace(/NERDGRAM_VERSION:\s*"[^"]+"/g, `NERDGRAM_VERSION: "${rootVersion}"`);
+writeFileSync(composePath, compose);
+console.log(`Dockerfile and compose.yaml -> ${rootVersion}`);
