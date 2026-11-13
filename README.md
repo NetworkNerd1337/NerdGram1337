@@ -23,7 +23,7 @@ A short screen recording of the dashboard and editor is in [screenshots/nerdgram
 - [Update a Docker install](#update-a-docker-install)
 - [Update a git clone](#update-a-git-clone)
 - [Update a ZIP copy](#update-a-zip-copy)
-- [Releasing](#releasing)
+- [Versioning and releases](#versioning-and-releases)
 - [Troubleshooting](#troubleshooting)
 - [Developing](#developing)
 - [License](#license)
@@ -34,13 +34,13 @@ Run NerdGram with Docker, or with Node.js on the machine. Docker is the install 
 
 The app is for you, on this machine. The [security model](#security-model) is why every Docker command below publishes `127.0.0.1:8787:8787`, and why a Node install leaves `HOST` unset.
 
-Commands write the release tag as `vX.Y.Z`. That is `v` plus the `version` in the root `package.json`. [`compose.yaml`](compose.yaml) pins the real tag. [`npm run version:check`](#releasing) fails if a concrete version in this file, the Dockerfile, or `compose.yaml` disagrees with `package.json`.
+Commands write the release tag as `vX.Y.Z`. That is `v` plus the `version` in the root `package.json`. [`compose.yaml`](compose.yaml) pins the real tag. [`npm run version:check`](#versioning-and-releases) fails if an image pin in this file, the Dockerfile, or `compose.yaml` disagrees with `package.json`. The names of planned releases are listed under [Versioning and releases](#versioning-and-releases).
 
 ### Docker
 
 You do not need Node.js on the host. The image is Node.js 22 on Debian bookworm-slim (`node:22.23.5-bookworm-slim`), pinned by digest in the `NODE_IMAGE` argument of the [Dockerfile](Dockerfile). The process inside the container listens on `0.0.0.0` so Docker can publish the port. The log warns that `0.0.0.0` is not loopback. That warning is expected. On the host, publish **`127.0.0.1:8787:8787`**. Publishing `8787:8787` or `0.0.0.0:8787` opens every host interface. That setup is unsupported.
 
-There is no `ghcr.io` image until a `vX.Y.Z` release tag is pushed. Until then, build from this repository (steps 1–4). After the first release, skip the build and run step 5. The first publish may need the package set to **Public** once in the GitHub package settings. See [Releasing](#releasing).
+There is no `ghcr.io` image until a `vX.Y.Z` release tag is pushed. Until then, build from this repository (steps 1–4). After the first release, skip the build and run step 5. The first publish may need the package set to **Public** once in the GitHub package settings. See [Cutting a release](#cutting-a-release).
 
 **1. Install Docker.** Install Docker Engine and the Compose plugin from [Docker's documentation](https://docs.docker.com/get-docker/). `docker version` and `docker compose version` should both print a version.
 
@@ -435,7 +435,7 @@ The token is not returned to the browser, not written into the git remote URL or
 
 The running version is the **About** line at the bottom of the sidebar (it shows `v` plus the version) and **About NerdGram1337** in the command palette. `GET /api/version` returns `name`, `version`, `commit`, and `installKind`. `GET /api/health` returns those fields plus `"ok": true` and `dataDir`. `installKind` is `git`, `docker`, `zip`, or `unknown`. `commit` is a SHA when the build or the git checkout has one, and null otherwise. Docker never shells out to git to discover a commit. Set `NERDGRAM_COMMIT` at image build time when you want one.
 
-The server asks GitHub, with no token, whether `NetworkNerd1337/NerdGram1337` has a newer stable release. That request is unauthenticated. It does not use the GitHub sync token or `NERDGRAM_GITHUB_TOKEN`, and it does not send telemetry. The answer is cached for about 24 hours in `<data>/.meta/updates.json`. If GitHub is offline, rate-limits the check, or has not published a release yet, the automatic check stays quiet. **Check for updates** in the command palette can say that GitHub could not be reached. It has no keyboard shortcut.
+The server asks GitHub, with no token, whether `NetworkNerd1337/NerdGram1337` has a newer full release. That request uses the public Releases API for the latest stable release. It does not offer a prerelease. It does not use the GitHub sync token or `NERDGRAM_GITHUB_TOKEN`, and it does not send telemetry. The answer is cached for about 24 hours in `<data>/.meta/updates.json`. If GitHub is offline, rate-limits the check, or has not published a release yet, the automatic check stays quiet. **Check for updates** in the command palette can say that GitHub could not be reached. It has no keyboard shortcut. How a checkout of `main` differs from a checkout of a release tag is under [Pin a version or move to another](#pin-a-version-or-move-to-another).
 
 `NERDGRAM_UPDATE_CHECK=false` (also `0`, `off`, or `no`) turns checks off, including **Check for updates** and **Update now**. Clearing **Check for updates automatically** in About stops only the automatic check. The checkbox is stored in `updates.json`. **Include prereleases** in About opts in to prereleases. `NERDGRAM_UPDATE_INCLUDE_PRERELEASE=true` (also `1`, `yes`, or `on`) opts in from the environment even when the checkbox is clear.
 
@@ -657,18 +657,84 @@ There is no **Update now** for a ZIP. About shows the hand steps.
 3. If your diagrams are still in the old project's `diagrams/` folder, copy that folder into the new project, including the hidden `.meta` directory. If you set `NERDGRAM_DATA_DIR`, point the new copy at the same path and leave the files where they are.
 4. Start with `npm run dev`, or `npm run build` and `npm start`.
 
-## Releasing
+## Versioning and releases
 
-This section is for someone publishing a version of this repository. The root `package.json` `version` is the only version. It is a stable `X.Y.Z`.
+Releases are semantic versions: `vX.Y.Z`, three numbers with no prerelease suffix. `X` is the major line, `Y` is the maintenance line, and `Z` is the patch. The root `package.json` `version` is the version of the tree you have. A GitHub Release and its git tag use the same numbers with a leading `v`.
 
-1. Set the root version to `X.Y.Z` and run `npm run version:sync`. That copies it into `client/package.json`, `server/package.json`, the `ARG NERDGRAM_VERSION` lines in the Dockerfile, and the image tag and `NERDGRAM_VERSION` pin in `compose.yaml`. It does not rewrite this README. Commands here say `vX.Y.Z` so they stay valid. If you do write a concrete `vX.Y.Z` in this file, it has to match.
+No release tag has been pushed yet, and the package version in this tree has not been moved to the first release. Cutting that release is a later change. Until the tag exists, there is no image on GHCR and the in-app check stays quiet.
+
+### Version numbers and code names
+
+Each major number has one code name for as long as that line is published. Maintenance releases keep the code name and change `Y` or `Z`.
+
+| Major line | Code name | First release on that line |
+| --- | --- | --- |
+| 1 | Atlas | v1.0.5 |
+| 2 | Meridian | v2.0.0 |
+
+v1.0.5 is the first release. Every later 1.x.y release is still Atlas. Meridian begins at v2.0.0 and is the name of every 2.x.y release after that.
+
+Which number moves:
+
+- **Patch (`Z`).** A small fix. The code name stays, and only the third number changes.
+- **Minor (`Y`).** A larger maintenance change on the same major line. The second number increases, the third goes back to 0, and the code name stays.
+- **Major (`X`).** A new line and a new code name. The one after Atlas is v2.0.0, Meridian.
+
+The running app shows the version number. It does not show the code name. Read the first number in About and use the table above. A 1.x.y build is Atlas. A 2.x.y build is Meridian. The code name is also the name to put on that major's GitHub Release notes.
+
+### Where the version is shown
+
+- The bottom of the sidebar is **About** and the version, written `v` plus the number from `package.json`.
+- **About NerdGram1337** in the command palette opens the same panel: version, commit when there is one, and the install kind (git clone, Docker, ZIP, or unknown).
+- `GET /api/version` returns `name`, `version`, `commit`, and `installKind`.
+- `GET /api/health` returns those fields plus `"ok": true` and `dataDir`.
+
+`commit` is a SHA baked in with `NERDGRAM_COMMIT`, or the git `HEAD` of a git install. Docker does not run git to find one. A Compose build that omits `NERDGRAM_COMMIT` reports `commit` as null.
+
+### Pin a version or move to another
+
+Install commands elsewhere in this file write the tag as `vX.Y.Z`. Substitute the release you want, for example the first Atlas tag once it has been published. `:latest` is not a version. It is the newest full release the image workflow has pushed.
+
+**Docker, stay on one release.** Use the immutable tag `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z` in `docker run` and as the `image:` line in `compose.yaml`. `docker pull` of that tag gets that release again. Recreate the container on the same `nerdgram-data` volume when you change tags. The steps are [Update a Docker install](#update-a-docker-install). The workflow also pushes `sha-<commit>` for that build. Pin the `sha-` tag when you need that exact image rather than the version tag.
+
+**Docker, take each full release.** Set the image to `ghcr.io/networknerd1337/nerdgram1337:latest`. When a new full release is published, `docker pull` of `:latest` moves, and you recreate the container on the same volume. `:latest` follows full releases. It is not a prerelease. `compose.yaml` as shipped pins a `vX.Y.Z` tag that matches `package.json`, not `:latest`. Change that pin when you want a different release, then `docker compose pull` and `docker compose up -d`.
+
+**Git, track `main`.** Check out `main` and pull. You get the development history on `main`, which may be ahead of the latest release. **Update now** runs only when this is a clean checkout of the official origin and `main` can fast-forward to the release tag. It merges that tag with `--ff-only`, then runs `npm ci` and `npm run build`. You are still on `main` afterwards. If `main` already contains commits the release does not, the check reports that this build is ahead, and **Update now** does not reset you back to the tag.
+
+**Git, stay on a release tag.** Fetch the tag and check it out. Git detaches `HEAD`. There is no branch to move.
+
+```bash
+git fetch origin tag vX.Y.Z
+git checkout vX.Y.Z
+npm run install:all
+npm run build
+npm start
+```
+
+**Update now** on that detached checkout checks out the newer stable tag, still detached, and only when the new tag is a fast-forward from the commit you have. It does not create a branch and it does not merge into `main`. Leave **Update now** alone when you want to remain on the tag you checked out. To move on purpose, fetch and `git checkout` the other tag, then `npm run install:all` again. To go back to development, `git checkout main`.
+
+**Update now** does not run on any other branch. The message tells you to check out `main`. It also does not run when the tree is dirty, when `origin` is not this repository, or when the release is not a fast-forward. The recovery if `npm ci` dies in the middle is in [In-app updates](#in-app-updates).
+
+**ZIP.** Download the tag archive once that tag exists:
+
+`https://github.com/NetworkNerd1337/NerdGram1337/archive/refs/tags/vX.Y.Z.zip`
+
+There is no **Update now**. Extract it, run `npm run install:all`, and keep your `diagrams/` folder or the same `NERDGRAM_DATA_DIR`, as in [Update a ZIP copy](#update-a-zip-copy). An archive of `main` is not a release.
+
+### What the update check offers
+
+With the default settings the check asks GitHub for the latest full release and ignores prereleases. **Update now** and **Show upgrade steps** accept only a stable `vX.Y.Z` tag. A tag with a prerelease suffix is not applied. About has an **Include prereleases** checkbox, and `NERDGRAM_UPDATE_INCLUDE_PRERELEASE=true` (also `1`, `yes`, or `on`) includes prereleases in the lookup. Leave both off. They do not make **Update now** install a prerelease.
+
+### Cutting a release
+
+This is the maintainer path. It is not part of installing the app. The first tag to cut, in a later change, is v1.0.5, code name Atlas. Do not invent a second numbering scheme for the image.
+
+1. Set the root `package.json` `version` to `X.Y.Z` and run `npm run version:sync`. That copies it into `client/package.json`, `server/package.json`, the `ARG NERDGRAM_VERSION` lines in the Dockerfile, and the image tag and `NERDGRAM_VERSION` pin in `compose.yaml`. It does not rewrite this README. Install examples stay on the `vX.Y.Z` placeholder. `npm run version:check` still requires an image pin written out as `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z` with real numbers, or a `nerdgram1337@` example, to match `package.json`. The planned names v1.0.5 and v2.0.0 are allowed in this section.
 2. Run `npm run version:check`. It fails when those files disagree, and it checks the links in this README.
-3. Add a `## X.Y.Z` section to `CHANGELOG.md`. The heading can also be `## [X.Y.Z]`. The section body is the GitHub Release notes.
-4. Commit, tag `vX.Y.Z` (it must match that version), and push the tag.
+3. Add a `## X.Y.Z` section to `CHANGELOG.md`, and name the code name for that major line in the section body. The heading can also be `## [X.Y.Z]`. The section body is the GitHub Release notes.
+4. Commit, tag `vX.Y.Z` (it must match that version), and push the tag. Do not mark the GitHub Release as a prerelease. The update check offers full releases.
 5. [`.github/workflows/release.yml`](.github/workflows/release.yml) publishes the GitHub Release from that changelog section when the tag is pushed.
 6. [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) pushes `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z`, `:latest`, and a `sha-<commit>` tag. It runs only for that tag, for `linux/amd64` and `linux/arm64`. Pull requests do not push. The workflow then tries to mark the GHCR package public. The first package may still need **Public** set once in the package settings if that call cannot.
-
-Until the first tag is pushed, the image is not on GHCR.
 
 ## Troubleshooting
 

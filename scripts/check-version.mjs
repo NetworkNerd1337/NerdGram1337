@@ -2,6 +2,9 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+/** Planned releases named in the README. They are not the package.json pin. */
+const POLICY_VERSIONS = new Set(["1.0.5", "2.0.0"]);
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const files = ["package.json", "client/package.json", "server/package.json"];
 const versions = files.map((file) => {
@@ -52,25 +55,31 @@ console.log(
 );
 
 /**
- * Commands in the README use a vX.Y.Z placeholder so a release does not have
- * to edit every example. A concrete version that does slip in has to match
- * the root package.json. `npm run version:sync` does not rewrite the README.
+ * Install commands use a vX.Y.Z placeholder so a release does not have to edit
+ * every example. An image tag, `nerdgram1337@`, or NERDGRAM_VERSION pin has to
+ * match the root package.json. `npm run version:sync` does not rewrite the README.
+ *
+ * The versioning section also names planned releases. Those are not the
+ * package that is checked out today, so they are allowed in prose only.
  */
 function assertReadmeVersions(markdown, version) {
-  const patterns = [
+  const pinPatterns = [
     /ghcr\.io\/networknerd1337\/nerdgram1337:v(\d+\.\d+\.\d+)/g,
     /nerdgram1337@(\d+\.\d+\.\d+)/g,
     /NERDGRAM_VERSION(?:=|:)\s*"?(\d+\.\d+\.\d+)/g,
-    /(?<![A-Za-z0-9.])v(\d+\.\d+\.\d+)\b/g,
   ];
   const bad = new Set();
-  for (const pattern of patterns) {
+  for (const pattern of pinPatterns) {
     for (const match of markdown.matchAll(pattern)) {
       if (match[1] !== version) bad.add(match[0]);
     }
   }
+  for (const match of markdown.matchAll(/(?<![A-Za-z0-9.])v(\d+\.\d+\.\d+)\b/g)) {
+    if (match[1] !== version && !POLICY_VERSIONS.has(match[1])) bad.add(match[0]);
+  }
   if (bad.size > 0) {
     console.error(`README version examples must match package.json ${version}, or use the vX.Y.Z placeholder.`);
+    console.error("Prose may also name the planned releases v1.0.5 (Atlas) and v2.0.0 (Meridian).");
     for (const item of bad) console.error(`  ${item}`);
     process.exit(1);
   }
