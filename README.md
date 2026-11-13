@@ -392,7 +392,21 @@ Autosave still waits 500 ms after you stop typing, and Auto-Update still refresh
 
 Opening a diagram takes a lock for that browser tab. Another tab, or a second NerdGram process pointed at the same data directory with a different `PORT`, can open the diagram read-only and is told that it is already open. The editor sends a heartbeat every **15 seconds**. If the heartbeat is missing for **90 seconds**, or the server process that held the lock has exited, the next editor can take the lock. Closing the tab releases it. These locks are not accounts and they do not stop you from editing the `.mmd` file in another program. That case is the conflict prompt above.
 
-You cannot rename, move, or trash a diagram (or a folder that contains it) while an editor still holds its lock. Close the editor first.
+You cannot rename, move, or trash a diagram (or a folder that contains it) while an editor still holds its lock. Close the editor first. The open editor keeps its path; another view cannot move that file out from under it.
+
+## Move, duplicate, and import
+
+**Move to…** is on every diagram and folder, next to Rename and Delete. It opens a folder list, including the workspace root. Arrow keys move through that list, and the same action is available by dragging the item onto a folder in the dashboard or the sidebar tree. The Dashboard item at the top of the sidebar is the workspace root. Trash is not a drop target.
+
+A move that would land in the item's current folder, or put a folder inside itself or one of its subfolders, is refused. Dragging onto a diagram does nothing. If the destination already has that name, the drag is refused and nothing is overwritten. Move to… offers **Move as Name (copy)** (then **Name (copy 2)**, and so on) so you can keep both. Favorites and revision history follow the file or folder to the new path.
+
+A locked diagram, or a folder that contains one, cannot be moved. The dashboard says to close the editor first.
+
+**Duplicate** copies a diagram or a whole folder. The first copy is `Name (copy).mmd` (or `Name (copy)` for a folder), then `Name (copy 2)`, and it never overwrites an existing item. The copy is not favorited, it does not share the source's editor lock, and it starts with no revision history. Later saves build history for the copy only. Hidden files, including anything under `.meta`, are not copied.
+
+**Import** copies text you already have on disk into the folder you are viewing, or into a folder you pick in the import dialog. Use **Import** to choose files, or drop `.mmd`, `.md`, and `.txt` files onto the dashboard or a folder. `.md` and `.txt` are stored as `.mmd`. Other file types are rejected. Each file can be up to 512 KB, with at most 25 files and 3 MB of text in one import. A dropped folder is not imported as a tree; pick the files themselves.
+
+If a name is already in that folder, choose **Skip**, **Rename** (`Name 2.mmd`, then `Name 3.mmd`), or **Replace**. Nothing is overwritten unless you choose Replace. Replace keeps the previous text as a revision. A diagram that is open in an editor is not replaced. If Mermaid cannot parse a file, the dialog warns you and still lets you import it so you can fix it in the editor. The imported file is a normal diagram in the data directory, not a link back to the original path.
 
 ## Offline Mermaid syntax reference library
 
@@ -498,6 +512,9 @@ The production build has not been created. From the project root run `npm run bu
 
 - Dashboard with folder tree, search, grid/list views
 - Create / rename / delete folders and diagrams. Delete moves them to trash
+- Move diagrams and folders with Move to… or by dragging them onto a folder, including the workspace root
+- Duplicate a diagram or folder as Name (copy), without overwriting or sharing its lock and history
+- Import .mmd, .md, and .txt files from a file picker or by dropping them on a folder. Name clashes ask before anything is replaced
 - Trash, with restore, replace-or-copy when the old path is taken, and permanent purge
 - Per-diagram version history (the last 20 previous saves) that follows rename and move
 - Conflict check on autosave, so a file that changed on disk is not overwritten without a choice

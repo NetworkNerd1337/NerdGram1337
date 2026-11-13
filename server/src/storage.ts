@@ -186,9 +186,10 @@ function insertSuffix(relativePath: string, suffix: string): string {
 /**
  * First free path at or near `desired`.
  *
- * With `word: "restored"`, a taken `Notes.mmd` becomes `Notes (restored).mmd`,
- * then `Notes (restored 2).mmd`. Without a word, the suffixes are ` 2`, ` 3`,
- * which is the shape duplicate and import can use later.
+ * With `word: "copy"`, a taken `Notes.mmd` becomes `Notes (copy).mmd`, then
+ * `Notes (copy 2).mmd`. Trash restore uses `word: "restored"` the same way.
+ * Without a word, the suffixes are ` 2`, ` 3`, which import uses when the
+ * user chooses to rename instead of replacing.
  */
 export async function resolveAvailablePath(
   desired: string,

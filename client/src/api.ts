@@ -2,6 +2,7 @@ import type {
   FilePayload,
   FileWriteResult,
   FolderListing,
+  ImportFileResult,
   RevisionSummary,
   TrashItem,
   TreeNode,
@@ -107,6 +108,19 @@ export const api = {
     request<{ path: string }>("/api/move", {
       method: "POST",
       body: JSON.stringify({ from, toFolder }),
+    }),
+  duplicate: (path: string) =>
+    request<{ path: string; type: "file" | "folder" }>("/api/duplicate", {
+      method: "POST",
+      body: JSON.stringify({ path }),
+    }),
+  importFiles: (
+    folder: string,
+    files: { name: string; text: string; onCollision?: "rename" | "skip" | "replace" }[],
+  ) =>
+    request<{ folder: string; results: ImportFileResult[] }>("/api/import", {
+      method: "POST",
+      body: JSON.stringify({ folder, files }),
     }),
   delete: (path: string) =>
     request<void>(`/api/item?path=${encodeURIComponent(path)}`, {

@@ -1,11 +1,31 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiError, api } from "../api";
+import { ImportDialog } from "../components/ImportDialog";
+import { ItemActions } from "../components/ItemActions";
 import { MermaidThumbnail } from "../components/MermaidThumbnail";
 import { Modal } from "../components/Modal";
+import { MoveDialog } from "../components/MoveDialog";
 import { Sidebar } from "../components/Sidebar";
 import { useWorkspace } from "../hooks/useWorkspace";
 import {
+  classifyDrag,
+  filesFromDataTransfer,
+  readDragItem,
+  writeDragItem,
+  type DragItem,
+  type DragPayload,
+} from "../lib/drag";
+import { draftsFromFiles, type ImportDraft } from "../lib/importDrafts";
+import {
+  collectPaths,
+  dropMoveState,
+  explainOrganizeError,
+  moveBlockReason,
+  relocatedFolder,
+} from "../lib/organize";
+import {
+  basename,
   displayName,
   ensureMmd,
   flattenFiles,
@@ -14,22 +34,20 @@ import {
 } from "../lib/paths";
 import type { TrashItem, TreeNode } from "../types";
 
-function findFolder(nodes: TreeNode[], path: string): TreeNode[] {
-  if (!path) return nodes;
-  const parts = path.split("/").filter(Boolean);
-  let current = nodes;
-  for (const part of parts) {
-    const next = current.find((n) => n.type === "folder" && n.name === part);
-    if (!next?.children) return [];
-    current = next.children;
-  }
-  return current;
+type OverTarget =
+  | { kind: "folder"; path: string; valid: boolean }
+  | { kind: "pane"; valid: boolean };
+
+function sameOver(current: OverTarget | null, next: OverTarget | null): boolean {
+  if (current === next) return true;
+  if (!current || !next || current.kind !== next.kind || current.valid !== next.valid) return false;
+  if (current.kind === "folder" && next.kind === "folder") return current.path === next.path;
+  return true;
 }
 
 export function DashboardPage() {
   const navigate = useNavigate();
-  const { tree, favorites, loading, error, refresh, toggleFavorite } =
-    useWorkspace();
+  const { tree, favorites, loading, error, refresh, toggleFavorite } = useWorkspace();
   const [folder, setFolder] = useState("");
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"grid" | "list">("grid");
@@ -41,6 +59,7 @@ export function DashboardPage() {
   >(null);
   const [nameValue, setNameValue] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [showTrash, setShowTrash] = useState(false);
   const [trash, setTrash] = useState<TrashItem[]>([]);
   const [collision, setCollision] = useState<{
@@ -48,6 +67,18 @@ export function DashboardPage() {
     path: string;
     suggestedPath?: string;
   } | null>(null);
+  const [moveTarget, setMoveTarget] = useState<{ path: string; isFolder: boolean } | null>(null);
+  const [importDrafts, setImportDrafts] = useState<ImportDraft[] | null>(null);
+  const [importFolder, setImportFolder] = useState("");
+  const [dragPath, setDragPath] = useState<string | null>(null);
+  const [over, setOver] = useState<OverTarget | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dragItemRef = useRef<DragItem | null>(null);
+  const rejectRef = useRef<string | null>(null);
+  const landedRef = useRef(false);
+  const taken = useMemo(() => collectPaths(tree), [tree]);
+  const takenRef = useRef(taken);
+  takenRef.current = taken;
 
   const loadTrash = async () => {
     const result = await api.trash();
@@ -58,6 +89,8 @@ export function DashboardPage() {
     void loadTrash().catch((err: unknown) => {
       setActionError(err instanceof Error ? err.message : "Could not load trash");
     });
+    // Trash is loaded once when the dashboard opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const folderNodes = useMemo(() => findFolder(tree, folder), [tree, folder]);
@@ -68,9 +101,7 @@ export function DashboardPage() {
     if (!search.trim()) return null;
     const q = search.trim().toLowerCase();
     return flattenFiles(tree).filter(
-      (f) =>
-        f.name.toLowerCase().includes(q) ||
-        f.path.toLowerCase().includes(q),
+      (f) => f.name.toLowerCase().includes(q) || f.path.toLowerCase().includes(q),
     );
   }, [search, tree]);
 
@@ -103,17 +134,12 @@ export function DashboardPage() {
       } else if (modal.type === "diagram") {
         const filename = ensureMmd(nameValue || "Untitled");
         const path = joinPath(folder, filename);
-        await api.writeFile(
-          path,
-          "flowchart TD\n  A[Start] --> B[Edit me]\n",
-        );
+        await api.writeFile(path, "flowchart TD\n  A[Start] --> B[Edit me]\n");
         await refresh();
         navigate(`/edit/${path}`);
         return;
       } else if (modal.type === "rename") {
-        const nextName = modal.isFolder
-          ? nameValue.trim()
-          : ensureMmd(nameValue);
+        const nextName = modal.isFolder ? nameValue.trim() : ensureMmd(nameValue);
         if (!nextName) throw new Error("Name is required");
         const parent = modal.path.includes("/")
           ? modal.path.slice(0, modal.path.lastIndexOf("/"))
@@ -139,14 +165,11 @@ export function DashboardPage() {
       await refresh();
       await loadTrash();
     } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Delete failed");
+      setActionError(explainOrganizeError(err));
     }
   };
 
-  const restoreItem = async (
-    id: string,
-    options?: { path?: string; overwrite?: boolean },
-  ) => {
+  const restoreItem = async (id: string, options?: { path?: string; overwrite?: boolean }) => {
     setActionError(null);
     try {
       await api.restoreTrash(id, options);
@@ -188,7 +211,215 @@ export function DashboardPage() {
     }
   };
 
+  const afterMove = async (from: string, to: string, isFolder: boolean) => {
+    setFolder((current) => relocatedFolder(current, from, to, isFolder));
+    setMoveTarget(null);
+    setActionError(null);
+    setStatus(`Moved ${basename(from)} to ${to || "the workspace root"}.`);
+    await refresh();
+  };
+
+  const commitMove = async (from: string, toFolder: string, isFolder: boolean) => {
+    const reason = moveBlockReason(from, isFolder, toFolder);
+    if (reason) {
+      setStatus(null);
+      setActionError(reason);
+      return;
+    }
+    try {
+      const result = await api.move(from, toFolder);
+      await afterMove(from, result.path, isFolder);
+    } catch (err) {
+      setStatus(null);
+      if (err instanceof ApiError && err.code === "collision") {
+        setActionError("That folder already has an item with this name. Use Move to… to keep both.");
+        return;
+      }
+      setActionError(explainOrganizeError(err));
+    }
+  };
+
+  const duplicateItem = async (itemPath: string) => {
+    setActionError(null);
+    try {
+      const result = await api.duplicate(itemPath);
+      setStatus(`Duplicated as ${result.path}.`);
+      await refresh();
+    } catch (err) {
+      setStatus(null);
+      setActionError(explainOrganizeError(err));
+    }
+  };
+
+  const beginImport = async (toFolder: string, picked: File[], sawDirectory: boolean) => {
+    if (picked.length === 0) {
+      setStatus(null);
+      setActionError(
+        sawDirectory
+          ? "Import individual .mmd, .md, or .txt files. Folders are not imported."
+          : "Nothing in that drop can be imported.",
+      );
+      return;
+    }
+    try {
+      const drafts = await draftsFromFiles(picked);
+      setImportFolder(toFolder);
+      setImportDrafts(drafts);
+      setShowTrash(false);
+      setActionError(null);
+      setStatus(
+        sawDirectory ? "Folders in that drop were skipped. Review the files before importing." : null,
+      );
+    } catch (err) {
+      setStatus(null);
+      setActionError(err instanceof Error ? err.message : "Could not read those files.");
+    }
+  };
+
+  const startDrag = (event: DragEvent, item: DragItem) => {
+    dragItemRef.current = item;
+    writeDragItem(event.dataTransfer, item);
+    setDragPath(item.path);
+  };
+
+  const endDrag = () => {
+    const reason = rejectRef.current;
+    const landed = landedRef.current;
+    dragItemRef.current = null;
+    rejectRef.current = null;
+    landedRef.current = false;
+    setDragPath(null);
+    setOver(null);
+    // A refused drop sets dropEffect to none, so the browser never fires drop.
+    // The reason is reported when the drag ends.
+    if (!landed && reason) {
+      setStatus(null);
+      setActionError(reason);
+    }
+  };
+
+  const kindOf = (dataTransfer: DataTransfer) =>
+    dragItemRef.current ? "item" : classifyDrag(dataTransfer);
+
+  const assignOver = (next: OverTarget | null) => {
+    setOver((current) => (sameOver(current, next) ? current : next));
+  };
+
+  const markFolder = (toFolder: string, event: DragPayload) => {
+    const kind = kindOf(event.dataTransfer);
+    if (kind === "unknown") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (kind === "files") {
+      event.dataTransfer.dropEffect = "copy";
+      rejectRef.current = null;
+      assignOver({ kind: "folder", path: toFolder, valid: true });
+      return;
+    }
+    const item = dragItemRef.current;
+    if (!item) {
+      event.dataTransfer.dropEffect = "none";
+      rejectRef.current = "That item cannot be moved.";
+      assignOver({ kind: "folder", path: toFolder, valid: false });
+      return;
+    }
+    const decision = dropMoveState(item, toFolder, takenRef.current);
+    event.dataTransfer.dropEffect = decision.ok ? "move" : "none";
+    rejectRef.current = decision.ok ? null : decision.reason;
+    assignOver({ kind: "folder", path: toFolder, valid: decision.ok });
+  };
+
+  const dropOnFolder = (toFolder: string, event: DragPayload) => {
+    const kind = kindOf(event.dataTransfer);
+    if (kind === "unknown") return;
+    landedRef.current = true;
+    event.preventDefault();
+    event.stopPropagation();
+    setOver(null);
+    if (kind === "files") {
+      const { files, sawDirectory } = filesFromDataTransfer(event.dataTransfer);
+      void beginImport(toFolder, files, sawDirectory);
+      return;
+    }
+    const item = dragItemRef.current ?? readDragItem(event.dataTransfer);
+    dragItemRef.current = null;
+    setDragPath(null);
+    if (!item) return;
+    const decision = dropMoveState(item, toFolder, takenRef.current);
+    if (!decision.ok) {
+      setStatus(null);
+      setActionError(decision.reason);
+      return;
+    }
+    void commitMove(item.path, toFolder, item.type === "folder");
+  };
+
+  const markPane = (event: DragEvent<HTMLElement>) => {
+    const kind = kindOf(event.dataTransfer);
+    if (kind === "unknown") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (showTrash) {
+      event.dataTransfer.dropEffect = "none";
+      rejectRef.current = "Trash is not a drop target.";
+      assignOver(null);
+      return;
+    }
+    if (kind === "files") {
+      event.dataTransfer.dropEffect = "copy";
+      rejectRef.current = null;
+      assignOver({ kind: "pane", valid: true });
+      return;
+    }
+    const item = dragItemRef.current;
+    if (!item) {
+      event.dataTransfer.dropEffect = "none";
+      rejectRef.current = "That item cannot be moved.";
+      assignOver({ kind: "pane", valid: false });
+      return;
+    }
+    const decision = dropMoveState(item, folder, takenRef.current);
+    event.dataTransfer.dropEffect = decision.ok ? "move" : "none";
+    rejectRef.current = decision.ok ? null : decision.reason;
+    assignOver({ kind: "pane", valid: decision.ok });
+  };
+
+  const dropOnPane = (event: DragEvent<HTMLElement>) => {
+    if (kindOf(event.dataTransfer) === "unknown") return;
+    landedRef.current = true;
+    event.preventDefault();
+    event.stopPropagation();
+    if (showTrash) {
+      setStatus(null);
+      setActionError("Trash is not a drop target.");
+      setOver(null);
+      return;
+    }
+    dropOnFolder(folder, event);
+  };
+
+  const rejectFileDrop = (event: DragPayload) => {
+    if (kindOf(event.dataTransfer) !== "item") return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "none";
+    rejectRef.current = "Drop onto a folder. Diagrams are not drop targets.";
+  };
+
+  const dropOnFile = (event: DragPayload) => {
+    if (kindOf(event.dataTransfer) !== "item") return;
+    landedRef.current = true;
+    event.preventDefault();
+    event.stopPropagation();
+    setOver(null);
+    setStatus(null);
+    setActionError("Drop onto a folder. Diagrams are not drop targets.");
+  };
+
+  const folderHighlight =
+    over?.kind === "folder" ? { path: over.path, valid: over.valid } : null;
   const title = folder ? displayName(folder) : "Dashboard";
+  const paneClass = over?.kind === "pane" ? (over.valid ? " drop-valid" : " drop-invalid") : "";
 
   return (
     <div className="app-shell">
@@ -211,8 +442,27 @@ export function DashboardPage() {
           setShowTrash(true);
           setSearch("");
         }}
+        dropHighlight={folderHighlight}
+        onFolderDragOver={markFolder}
+        onFolderDrop={dropOnFolder}
+        onTrashDragOver={(event) => {
+          if (kindOf(event.dataTransfer) === "unknown") return;
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = "none";
+          rejectRef.current = "Trash is not a drop target.";
+        }}
+        onTrashDrop={(event) => {
+          if (kindOf(event.dataTransfer) === "unknown") return;
+          landedRef.current = true;
+          event.preventDefault();
+          event.stopPropagation();
+          setOver(null);
+          setStatus(null);
+          setActionError("Trash is not a drop target.");
+        }}
       />
-      <main className="main">
+      <main className={`main${paneClass}`} onDragOver={markPane} onDrop={dropOnPane}>
         <div className="page-header">
           <h1>{showTrash ? "Trash" : search.trim() ? "Search" : title}</h1>
           <Link className="btn btn-ghost" to="/new">
@@ -220,13 +470,23 @@ export function DashboardPage() {
           </Link>
         </div>
 
-        {(error || actionError) && (
-          <div className="error-banner">{actionError || error}</div>
-        )}
+        <div aria-live="polite">
+          {(error || actionError) && <div className="error-banner">{actionError || error}</div>}
+          {status && !actionError ? <div className="status-banner">{status}</div> : null}
+        </div>
+        <p id="drag-help" className="sr-only">
+          Drag a diagram or folder onto a folder to move it. Move to… does the same thing from the
+          keyboard. Dropping .mmd, .md, or .txt files imports them. Trash is not a drop target.
+        </p>
 
         <div className="toolbar">
           {showTrash ? (
-            <button type="button" className="btn btn-danger" onClick={() => void emptyTrash()} disabled={trash.length === 0}>
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={() => void emptyTrash()}
+              disabled={trash.length === 0}
+            >
               Empty trash
             </button>
           ) : (
@@ -237,29 +497,49 @@ export function DashboardPage() {
               <button type="button" className="btn btn-ghost" onClick={openCreateFolder}>
                 New folder
               </button>
+              <button type="button" className="btn btn-ghost" onClick={() => fileInputRef.current?.click()}>
+                Import
+              </button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".mmd,.md,.txt,text/plain,text/markdown"
+                multiple
+                hidden
+                aria-label="Import diagram files"
+                onChange={(event) => {
+                  const picked = Array.from(event.target.files ?? []);
+                  event.target.value = "";
+                  if (picked.length === 0) return;
+                  void beginImport(folder, picked, false);
+                }}
+              />
             </>
           )}
           {!showTrash && (
-          <div className="view-toggle" role="group" aria-label="View mode">
-            <button
-              type="button"
-              className={view === "grid" ? "active" : ""}
-              onClick={() => setView("grid")}
-            >
-              Grid
-            </button>
-            <button
-              type="button"
-              className={view === "list" ? "active" : ""}
-              onClick={() => setView("list")}
-            >
-              List
-            </button>
-          </div>
+            <div className="view-toggle" role="group" aria-label="View mode">
+              <button
+                type="button"
+                className={view === "grid" ? "active" : ""}
+                onClick={() => setView("grid")}
+              >
+                Grid
+              </button>
+              <button
+                type="button"
+                className={view === "list" ? "active" : ""}
+                onClick={() => setView("list")}
+              >
+                List
+              </button>
+            </div>
           )}
         </div>
 
         {loading ? <p>Loading workspace…</p> : null}
+        {dragPath ? (
+          <p className="drop-hint">Drop on a folder to move. A highlighted folder can take the item.</p>
+        ) : null}
 
         {showTrash ? (
           <TrashList
@@ -282,8 +562,15 @@ export function DashboardPage() {
                     path={file.path}
                     mtimeMs={file.mtimeMs}
                     favorited={favorites.includes(file.path)}
+                    dragging={dragPath === file.path}
+                    onDragStart={(event) => startDrag(event, { path: file.path, type: "file" })}
+                    onDragEnd={endDrag}
+                    onDragOver={rejectFileDrop}
+                    onDrop={dropOnFile}
                     onFavorite={() => void toggleFavorite(file.path)}
                     onRename={() => openRename(file.path, false)}
+                    onMove={() => setMoveTarget({ path: file.path, isFolder: false })}
+                    onDuplicate={() => void duplicateItem(file.path)}
                     onDelete={() => void handleDelete(file.path)}
                   />
                 ))}
@@ -296,8 +583,15 @@ export function DashboardPage() {
                     path={file.path}
                     mtimeMs={file.mtimeMs}
                     favorited={favorites.includes(file.path)}
+                    dragging={dragPath === file.path}
+                    onDragStart={(event) => startDrag(event, { path: file.path, type: "file" })}
+                    onDragEnd={endDrag}
+                    onDragOver={rejectFileDrop}
+                    onDrop={dropOnFile}
                     onFavorite={() => void toggleFavorite(file.path)}
                     onRename={() => openRename(file.path, false)}
+                    onMove={() => setMoveTarget({ path: file.path, isFolder: false })}
+                    onDuplicate={() => void duplicateItem(file.path)}
                     onDelete={() => void handleDelete(file.path)}
                   />
                 ))}
@@ -310,46 +604,26 @@ export function DashboardPage() {
               <>
                 <div className="section-title">Folders</div>
                 <div className="card-grid">
-                  {folders.map((f) => (
-                    <article key={f.path} className="card folder-card">
-                      <button
-                        type="button"
-                        className="folder-open"
-                        onClick={() => setFolder(f.path)}
-                      >
-                        <h3>
-                          <span className="folder-glyph" aria-hidden="true" />
-                          {f.name}
-                        </h3>
-                        <p>
-                          {(f.children || []).filter((c) => c.type === "file").length}{" "}
-                          diagram
-                          {(f.children || []).filter((c) => c.type === "file")
-                            .length === 1
-                            ? ""
-                            : "s"}
-                        </p>
-                      </button>
-                      <div className="card-body">
-                        <div className="card-actions">
-                          <button
-                            type="button"
-                            className="btn btn-ghost"
-                            onClick={() => openRename(f.path, true)}
-                          >
-                            Rename
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-danger"
-                            onClick={() => void handleDelete(f.path)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </div>
-                    </article>
-                  ))}
+                  {folders.map((item) => {
+                    const highlighted = over?.kind === "folder" && over.path === item.path;
+                    return (
+                      <FolderCard
+                        key={item.path}
+                        node={item}
+                        dragging={dragPath === item.path}
+                        dropClass={highlighted ? (over.valid ? " drop-valid" : " drop-invalid") : ""}
+                        onOpen={() => setFolder(item.path)}
+                        onDragStart={(event) => startDrag(event, { path: item.path, type: "folder" })}
+                        onDragEnd={endDrag}
+                        onDragOver={(event) => markFolder(item.path, event)}
+                        onDrop={(event) => dropOnFolder(item.path, event)}
+                        onRename={() => openRename(item.path, true)}
+                        onMove={() => setMoveTarget({ path: item.path, isFolder: true })}
+                        onDuplicate={() => void duplicateItem(item.path)}
+                        onDelete={() => void handleDelete(item.path)}
+                      />
+                    );
+                  })}
                 </div>
               </>
             )}
@@ -357,7 +631,7 @@ export function DashboardPage() {
             <div className="section-title">Diagrams</div>
             {files.length === 0 ? (
               <div className="empty-state">
-                No diagrams here yet. Create one or paste Mermaid markdown.
+                No diagrams here yet. Create one, import a .mmd file, or paste Mermaid markdown.
               </div>
             ) : view === "grid" ? (
               <div className="card-grid">
@@ -367,8 +641,15 @@ export function DashboardPage() {
                     path={file.path}
                     mtimeMs={file.mtimeMs}
                     favorited={favorites.includes(file.path)}
+                    dragging={dragPath === file.path}
+                    onDragStart={(event) => startDrag(event, { path: file.path, type: "file" })}
+                    onDragEnd={endDrag}
+                    onDragOver={rejectFileDrop}
+                    onDrop={dropOnFile}
                     onFavorite={() => void toggleFavorite(file.path)}
                     onRename={() => openRename(file.path, false)}
+                    onMove={() => setMoveTarget({ path: file.path, isFolder: false })}
+                    onDuplicate={() => void duplicateItem(file.path)}
                     onDelete={() => void handleDelete(file.path)}
                   />
                 ))}
@@ -381,8 +662,15 @@ export function DashboardPage() {
                     path={file.path}
                     mtimeMs={file.mtimeMs}
                     favorited={favorites.includes(file.path)}
+                    dragging={dragPath === file.path}
+                    onDragStart={(event) => startDrag(event, { path: file.path, type: "file" })}
+                    onDragEnd={endDrag}
+                    onDragOver={rejectFileDrop}
+                    onDrop={dropOnFile}
                     onFavorite={() => void toggleFavorite(file.path)}
                     onRename={() => openRename(file.path, false)}
+                    onMove={() => setMoveTarget({ path: file.path, isFolder: false })}
+                    onDuplicate={() => void duplicateItem(file.path)}
                     onDelete={() => void handleDelete(file.path)}
                   />
                 ))}
@@ -421,9 +709,7 @@ export function DashboardPage() {
                 <button
                   type="button"
                   className="btn btn-primary"
-                  onClick={() =>
-                    void restoreItem(collision.id, { path: collision.suggestedPath })
-                  }
+                  onClick={() => void restoreItem(collision.id, { path: collision.suggestedPath })}
                 >
                   Restore as {displayName(collision.suggestedPath)}
                 </button>
@@ -436,19 +722,13 @@ export function DashboardPage() {
       {modal && (
         <Modal
           title={
-            modal.type === "folder"
-              ? "New folder"
-              : modal.type === "diagram"
-                ? "New diagram"
-                : "Rename"
+            modal.type === "folder" ? "New folder" : modal.type === "diagram" ? "New diagram" : "Rename"
           }
           confirmLabel={modal.type === "rename" ? "Rename" : "Create"}
           onClose={() => setModal(null)}
           onConfirm={() => void handleConfirm()}
         >
-          <label htmlFor="name-input">
-            {modal.type === "folder" ? "Folder name" : "Diagram name"}
-          </label>
+          <label htmlFor="name-input">{modal.type === "folder" ? "Folder name" : "Diagram name"}</label>
           <input
             id="name-input"
             autoFocus
@@ -458,8 +738,47 @@ export function DashboardPage() {
           />
         </Modal>
       )}
+
+      {moveTarget ? (
+        <MoveDialog
+          itemPath={moveTarget.path}
+          isFolder={moveTarget.isFolder}
+          tree={tree}
+          initialFolder={folder}
+          onClose={() => setMoveTarget(null)}
+          onMoved={(from, to) => void afterMove(from, to, moveTarget.isFolder)}
+        />
+      ) : null}
+
+      {importDrafts ? (
+        <ImportDialog
+          tree={tree}
+          folder={importFolder}
+          drafts={importDrafts}
+          onFolderChange={setImportFolder}
+          onClose={() => setImportDrafts(null)}
+          onDone={(message, close) => {
+            setStatus(message);
+            setActionError(null);
+            void refresh();
+            if (close) setImportDrafts(null);
+          }}
+        />
+      ) : null}
     </div>
   );
+}
+
+function findFolder(nodes: TreeNode[], path: string): TreeNode[] {
+  if (!path) return nodes;
+  const parts = path.split("/").filter(Boolean);
+  let current = nodes;
+  for (const part of parts) {
+    const next = current.find((n) => n.type === "folder" && n.name === part);
+    if (!next?.children) return [];
+    current = next.children;
+  }
+  return current;
 }
 
 function TrashList({
@@ -501,38 +820,61 @@ function DiagramCard({
   path,
   mtimeMs,
   favorited,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
   onFavorite,
   onRename,
+  onMove,
+  onDuplicate,
   onDelete,
 }: {
   path: string;
   mtimeMs: number;
   favorited: boolean;
+  dragging: boolean;
+  onDragStart: (event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
+  onDragOver: (event: DragPayload) => void;
+  onDrop: (event: DragPayload) => void;
   onFavorite: () => void;
   onRename: () => void;
+  onMove: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
+  const label = displayName(path);
   return (
-    <article className="card">
-      <Link to={`/edit/${path}`}>
+    <article
+      className={`card${dragging ? " is-dragging" : ""}`}
+      draggable
+      aria-describedby="drag-help"
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <Link to={`/edit/${path}`} draggable={false}>
         <MermaidThumbnail path={path} />
       </Link>
       <div className="card-body">
         <h3>
-          <Link to={`/edit/${path}`}>{displayName(path)}</Link>
+          <Link to={`/edit/${path}`} draggable={false}>
+            {label}
+          </Link>
         </h3>
         <p>Updated {formatRelativeTime(mtimeMs)}</p>
-        <div className="card-actions">
-          <button type="button" className="btn btn-ghost" onClick={onFavorite}>
-            {favorited ? "Unfavorite" : "Favorite"}
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={onRename}>
-            Rename
-          </button>
-          <button type="button" className="btn btn-danger" onClick={onDelete}>
-            Delete
-          </button>
-        </div>
+        <ItemActions
+          label={label}
+          favorited={favorited}
+          onFavorite={onFavorite}
+          onRename={onRename}
+          onMove={onMove}
+          onDuplicate={onDuplicate}
+          onDelete={onDelete}
+        />
       </div>
     </article>
   );
@@ -542,38 +884,140 @@ function ListRow({
   path,
   mtimeMs,
   favorited,
+  dragging,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
   onFavorite,
   onRename,
+  onMove,
+  onDuplicate,
   onDelete,
 }: {
   path: string;
   mtimeMs: number;
   favorited: boolean;
+  dragging: boolean;
+  onDragStart: (event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
+  onDragOver: (event: DragPayload) => void;
+  onDrop: (event: DragPayload) => void;
   onFavorite: () => void;
   onRename: () => void;
+  onMove: () => void;
+  onDuplicate: () => void;
   onDelete: () => void;
 }) {
+  const label = displayName(path);
   return (
-    <div className="list-row">
-      <div>
-        <Link to={`/edit/${path}`}>
-          <strong>{displayName(path)}</strong>
+    <div
+      className={`list-row${dragging ? " is-dragging" : ""}`}
+      draggable
+      aria-describedby="drag-help"
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <div className="list-row-main">
+        <Link to={`/edit/${path}`} draggable={false}>
+          <strong>{label}</strong>
         </Link>
         <div style={{ color: "var(--ink-soft)", fontSize: "0.8rem" }}>
           {path} · Updated {formatRelativeTime(mtimeMs)}
         </div>
       </div>
-      <button type="button" className="btn btn-ghost" onClick={onFavorite}>
-        {favorited ? "Unfavorite" : "Favorite"}
-      </button>
-      <div style={{ display: "flex", gap: "0.35rem" }}>
-        <button type="button" className="btn btn-ghost" onClick={onRename}>
-          Rename
-        </button>
-        <button type="button" className="btn btn-danger" onClick={onDelete}>
-          Delete
-        </button>
-      </div>
+      <ItemActions
+        label={label}
+        favorited={favorited}
+        onFavorite={onFavorite}
+        onRename={onRename}
+        onMove={onMove}
+        onDuplicate={onDuplicate}
+        onDelete={onDelete}
+      />
     </div>
+  );
+}
+
+function FolderCard({
+  node,
+  dragging,
+  dropClass,
+  onOpen,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDrop,
+  onRename,
+  onMove,
+  onDuplicate,
+  onDelete,
+}: {
+  node: TreeNode;
+  dragging: boolean;
+  dropClass: string;
+  onOpen: () => void;
+  onDragStart: (event: DragEvent<HTMLElement>) => void;
+  onDragEnd: () => void;
+  onDragOver: (event: DragPayload) => void;
+  onDrop: (event: DragPayload) => void;
+  onRename: () => void;
+  onMove: () => void;
+  onDuplicate: () => void;
+  onDelete: () => void;
+}) {
+  const suppressClick = useRef(false);
+  const count = (node.children || []).filter((child) => child.type === "file").length;
+  return (
+    <article
+      className={`card folder-card${dragging ? " is-dragging" : ""}${dropClass}`}
+      draggable
+      aria-describedby="drag-help"
+      onDragStart={(event) => {
+        suppressClick.current = true;
+        onDragStart(event);
+      }}
+      onDragEnd={() => {
+        onDragEnd();
+        window.setTimeout(() => {
+          suppressClick.current = false;
+        }, 0);
+      }}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <button
+        type="button"
+        className="folder-open"
+        onClick={(event) => {
+          if (suppressClick.current) {
+            event.preventDefault();
+            event.stopPropagation();
+            suppressClick.current = false;
+            return;
+          }
+          onOpen();
+        }}
+      >
+        <h3>
+          <span className="folder-glyph" aria-hidden="true" />
+          {node.name}
+        </h3>
+        <p>
+          {count} diagram{count === 1 ? "" : "s"}
+        </p>
+      </button>
+      <div className="card-body">
+        <ItemActions
+          label={node.name}
+          onRename={onRename}
+          onMove={onMove}
+          onDuplicate={onDuplicate}
+          onDelete={onDelete}
+        />
+      </div>
+    </article>
   );
 }

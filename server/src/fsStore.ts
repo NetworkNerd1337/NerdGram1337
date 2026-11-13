@@ -17,6 +17,7 @@ import {
   httpFail,
   normalizeRelative,
   pathExists,
+  resolveAvailablePath,
   type DiskState,
   type WriteBaseline,
 } from "./storage.js";
@@ -131,6 +132,16 @@ function requireDiagram(relativePath: string): string {
     throw httpFail(400, "Only .mmd diagram files are supported", "invalid");
   }
   return normalized;
+}
+
+function isInsideFolder(folderRel: string, candidateRel: string): boolean {
+  const folder = normalizeRelative(folderRel);
+  const candidate = normalizeRelative(candidateRel);
+  return candidate === folder || candidate.startsWith(`${folder}/`);
+}
+
+async function relativePathTaken(relativePath: string): Promise<boolean> {
+  return pathExists(resolveSafePath(relativePath));
 }
 
 export async function readFile(relativePath: string): Promise<{
@@ -271,17 +282,27 @@ export async function renameItem(fromPath: string, toPath: string): Promise<{ pa
   if (fromStat.isFile() && !isDiagramFile(toPath)) {
     throw httpFail(400, "Diagram files must use .mmd extension", "invalid");
   }
+
+  const fromRel = toRelativePath(fromAbs);
+  const toRel = toRelativePath(toAbs);
+  if (fromStat.isDirectory() && isInsideFolder(fromRel, toRel)) {
+    throw httpFail(
+      400,
+      "A folder cannot be moved into itself or one of its subfolders.",
+      "descendant",
+    );
+  }
   if (await pathExists(toAbs)) {
+    const suggestedPath = await resolveAvailablePath(toRel, relativePathTaken, { word: "copy" });
     throw httpFail(409, "Something already exists at that path.", "collision", {
-      path: toRelativePath(toAbs),
+      path: toRel,
+      suggestedPath,
     });
   }
 
-  const fromRel = toRelativePath(fromAbs);
   await assertUnlocked(fromRel, fromStat.isDirectory());
   await fs.mkdir(path.dirname(toAbs), { recursive: true });
   await fs.rename(fromAbs, toAbs);
-  const toRel = toRelativePath(toAbs);
   await rewriteFavoritePaths(fromRel, toRel, fromStat.isDirectory());
   await relocateHistory(fromRel, toRel, fromStat.isDirectory());
   await relocateLocks(fromRel, toRel, fromStat.isDirectory());
@@ -293,6 +314,74 @@ export async function moveItem(fromPath: string, toFolder: string): Promise<{ pa
   const folder = normalizeRelative(toFolder);
   const dest = folder ? `${folder}/${name}` : name;
   return renameItem(fromPath, dest);
+}
+
+/**
+ * Copy a diagram or folder to a new collision-safe path in the same place.
+ *
+ * The copy starts unfavorited and with no revision history. A later save
+ * builds history for the copy only. The source lock is left where it is, and
+ * the copy does not inherit it.
+ */
+export async function duplicateItem(
+  relativePath: string,
+): Promise<{ path: string; type: "file" | "folder" }> {
+  const normalized = normalizeRelative(relativePath);
+  if (!normalized) throw httpFail(400, "path is required", "invalid");
+  const abs = resolveSafePath(normalized);
+
+  let stat: Awaited<ReturnType<typeof fs.lstat>>;
+  try {
+    stat = await fs.lstat(abs);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") throw httpFail(404, "Not found", "not_found");
+    throw err;
+  }
+  if (stat.isSymbolicLink()) {
+    throw httpFail(400, "Only diagrams and folders can be duplicated", "invalid");
+  }
+
+  const fromRel = toRelativePath(abs);
+  const destRel = await resolveAvailablePath(fromRel, relativePathTaken, { word: "copy" });
+  const destAbs = resolveSafePath(destRel);
+
+  if (stat.isDirectory()) {
+    await fs.mkdir(destAbs);
+    try {
+      await copyFolderContents(abs, destAbs);
+    } catch (err) {
+      await fs.rm(destAbs, { recursive: true, force: true });
+      throw err;
+    }
+    return { path: toRelativePath(destAbs), type: "folder" };
+  }
+
+  if (!stat.isFile() || !isDiagramFile(fromRel)) {
+    throw httpFail(400, "Only .mmd diagram files are supported", "invalid");
+  }
+  const content = await fs.readFile(abs, "utf8");
+  const written = await writeFile(destRel, content);
+  return { path: written.path, type: "file" };
+}
+
+async function copyFolderContents(srcAbs: string, destAbs: string): Promise<void> {
+  const entries = await fs.readdir(srcAbs, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
+    if (entry.isSymbolicLink()) continue;
+    const src = path.join(srcAbs, entry.name);
+    const dest = path.join(destAbs, entry.name);
+    if (entry.isDirectory()) {
+      await fs.mkdir(dest);
+      await copyFolderContents(src, dest);
+      continue;
+    }
+    if (entry.isFile() && isDiagramFile(entry.name)) {
+      const content = await fs.readFile(src, "utf8");
+      await writeFile(toRelativePath(dest), content);
+    }
+  }
 }
 
 export async function deleteItem(relativePath: string): Promise<void> {
