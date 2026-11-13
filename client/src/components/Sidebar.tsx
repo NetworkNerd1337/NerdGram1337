@@ -11,6 +11,9 @@ type SidebarProps = {
   search: string;
   onSearch: (value: string) => void;
   onSelectFolder: (path: string) => void;
+  trashCount?: number;
+  trashActive?: boolean;
+  onOpenTrash?: () => void;
 };
 
 export function Sidebar({
@@ -20,6 +23,9 @@ export function Sidebar({
   search,
   onSearch,
   onSelectFolder,
+  trashCount = 0,
+  trashActive = false,
+  onOpenTrash,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -41,10 +47,17 @@ export function Sidebar({
         <div className="nav-label">Your space</div>
         <button
           type="button"
-          className={`nav-link${currentFolder === "" ? " active" : ""}`}
+          className={`nav-link${currentFolder === "" && !trashActive ? " active" : ""}`}
           onClick={() => onSelectFolder("")}
         >
           Dashboard
+        </button>
+        <button
+          type="button"
+          className={`nav-link${trashActive ? " active" : ""}`}
+          onClick={() => onOpenTrash?.()}
+        >
+          Trash{trashCount > 0 ? ` (${trashCount})` : ""}
         </button>
         <FolderTree
           nodes={tree}

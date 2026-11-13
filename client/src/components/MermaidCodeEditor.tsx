@@ -22,12 +22,14 @@ import { lintMermaidDoc } from "../lib/mermaidLint";
 type MermaidCodeEditorProps = {
   value: string;
   onChange: (value: string) => void;
+  readOnly?: boolean;
   "aria-label"?: string;
 };
 
 export function MermaidCodeEditor({
   value,
   onChange,
+  readOnly = false,
   "aria-label": ariaLabel = "Mermaid source editor",
 }: MermaidCodeEditorProps) {
   const extensions = useMemo(
@@ -62,8 +64,9 @@ export function MermaidCodeEditor({
         ...foldKeymap,
       ]),
       EditorState.tabSize.of(2),
+      EditorState.readOnly.of(readOnly),
     ],
-    [],
+    [readOnly],
   );
 
   return (
@@ -73,6 +76,8 @@ export function MermaidCodeEditor({
         height="100%"
         theme="dark"
         basicSetup={false}
+        editable={!readOnly}
+        readOnly={readOnly}
         extensions={extensions}
         onChange={onChange}
       />

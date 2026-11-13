@@ -2,7 +2,11 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import * as store from "./fsStore.js";
-import { ensureDataRoot, REPO_ROOT } from "./paths.js";
+import * as history from "./history.js";
+import * as locks from "./locks.js";
+import { ensureDataRoot, REPO_ROOT, resolveSafePath, toRelativePath } from "./paths.js";
+import { REVISION_RETENTION } from "./storage.js";
+import * as trash from "./trash.js";
 import {
   createDevCors,
   createHostGuard,
@@ -30,22 +34,52 @@ export type CreateAppOptions = {
   allowedOrigins?: readonly string[];
 };
 
-function httpError(err: unknown): { status: number; message: string } {
+function httpError(err: unknown): { status: number; body: Record<string, unknown> } {
   if (err && typeof err === "object") {
-    const code = "code" in err ? String((err as { code: unknown }).code) : "";
+    const errno = "code" in err ? String((err as { code: unknown }).code) : "";
     const explicit =
       "status" in err && typeof (err as { status: unknown }).status === "number"
         ? (err as { status: number }).status
         : undefined;
     const message = err instanceof Error ? err.message : "Unknown error";
-    if (explicit !== undefined) return { status: explicit, message };
-    if (code === "ENOENT") return { status: 404, message: "Not found" };
-    if (message.includes("escapes") || message.includes("Invalid")) {
-      return { status: 400, message };
+    const details =
+      "details" in err &&
+      (err as { details?: unknown }).details &&
+      typeof (err as { details?: unknown }).details === "object"
+        ? (err as { details: Record<string, unknown> }).details
+        : undefined;
+    const appCode =
+      typeof (err as { code?: unknown }).code === "string" &&
+      !/^[A-Z0-9]+$/.test(String((err as { code?: unknown }).code))
+        ? String((err as { code?: unknown }).code)
+        : undefined;
+
+    let status = explicit ?? 500;
+    let errorMessage = message;
+    if (explicit === undefined) {
+      if (errno === "ENOENT" || message.includes("ENOENT")) {
+        status = 404;
+        errorMessage = "Not found";
+      } else if (message.includes("escapes") || message.includes("Invalid")) {
+        status = 400;
+      }
     }
-    return { status: 500, message };
+
+    const body: Record<string, unknown> = { error: errorMessage };
+    if (appCode) body.code = appCode;
+    if (details) {
+      for (const [key, value] of Object.entries(details)) {
+        if (key !== "error" && key !== "status" && key !== "code") body[key] = value;
+      }
+    }
+    return { status, body };
   }
-  return { status: 500, message: "Unknown error" };
+  return { status: 500, body: { error: "Unknown error" } };
+}
+
+function sendError(res: express.Response, err: unknown): void {
+  const { status, body } = httpError(err);
+  res.status(status).json(body);
 }
 
 export function createApp(options: CreateAppOptions = {}): express.Express {
@@ -78,8 +112,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const tree = await store.buildTree();
       res.json({ tree });
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -89,8 +122,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const listing = await store.listFolder(folderPath);
       res.json(listing);
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -104,10 +136,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const file = await store.readFile(filePath);
       res.json(file);
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status === 500 && message.includes("ENOENT") ? 404 : status).json({
-        error: message,
-      });
+      sendError(res, err);
     }
   });
 
@@ -119,11 +148,32 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
         res.status(400).json({ error: "path is required" });
         return;
       }
-      const result = await store.writeFile(filePath, content);
+      if (req.body?.expectedMtimeMs != null && typeof req.body.expectedMtimeMs !== "number") {
+        res.status(400).json({ error: "expectedMtimeMs must be a number", code: "invalid" });
+        return;
+      }
+      if (req.body?.expectedHash != null && typeof req.body.expectedHash !== "string") {
+        res.status(400).json({ error: "expectedHash must be a string", code: "invalid" });
+        return;
+      }
+      if (req.body?.force != null && typeof req.body.force !== "boolean") {
+        res.status(400).json({ error: "force must be a boolean", code: "invalid" });
+        return;
+      }
+      if (req.body?.lockToken != null && typeof req.body.lockToken !== "string") {
+        res.status(400).json({ error: "lockToken must be a string", code: "invalid" });
+        return;
+      }
+      const result = await store.writeFile(filePath, content, {
+        expectedMtimeMs:
+          typeof req.body?.expectedMtimeMs === "number" ? req.body.expectedMtimeMs : null,
+        expectedHash: typeof req.body?.expectedHash === "string" ? req.body.expectedHash : null,
+        force: req.body?.force === true,
+        lockToken: typeof req.body?.lockToken === "string" ? req.body.lockToken : null,
+      });
       res.json(result);
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -133,8 +183,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const result = await store.createFolder(folderPath);
       res.status(201).json(result);
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -149,8 +198,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const result = await store.renameItem(from, to);
       res.json(result);
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -165,8 +213,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const result = await store.moveItem(from, toFolder);
       res.json(result);
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -180,8 +227,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       await store.deleteItem(itemPath);
       res.status(204).send();
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -190,8 +236,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const favorites = await store.getFavorites();
       res.json({ favorites });
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -205,8 +250,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const result = await store.toggleFavorite(itemPath);
       res.json(result);
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -216,8 +260,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const data = await syntaxReference.listReference();
       res.json(data);
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -231,8 +274,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const page = await syntaxReference.getReferencePage(id);
       res.json(page);
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -247,8 +289,7 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const result = await syntaxReference.setOverride(id, text);
       res.json(result);
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
     }
   });
 
@@ -257,8 +298,171 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       const manifest = await syntaxReference.syncReference();
       res.json({ manifest, pages: manifest.pages });
     } catch (err) {
-      const { status, message } = httpError(err);
-      res.status(status).json({ error: message });
+      sendError(res, err);
+    }
+  });
+
+  app.get("/api/trash", async (_req, res) => {
+    try {
+      const items = await trash.listTrash();
+      res.json({ items });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/trash/restore", async (req, res) => {
+    try {
+      const id = String(req.body?.id || "");
+      if (!id) {
+        res.status(400).json({ error: "id is required", code: "invalid" });
+        return;
+      }
+      const destination =
+        req.body?.path == null || req.body.path === "" ? undefined : String(req.body.path);
+      if (req.body?.overwrite != null && typeof req.body.overwrite !== "boolean") {
+        res.status(400).json({ error: "overwrite must be a boolean", code: "invalid" });
+        return;
+      }
+      const result = await trash.restoreTrashItem(id, {
+        destination,
+        overwrite: req.body?.overwrite === true,
+      });
+      res.json(result);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.delete("/api/trash/item", async (req, res) => {
+    try {
+      const id = String(req.query.id || req.body?.id || "");
+      if (!id) {
+        res.status(400).json({ error: "id is required", code: "invalid" });
+        return;
+      }
+      await trash.purgeTrashItem(id);
+      res.status(204).send();
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/trash/empty", async (_req, res) => {
+    try {
+      const result = await trash.emptyTrash();
+      res.json(result);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.get("/api/history", async (req, res) => {
+    try {
+      const filePath = String(req.query.path || "");
+      if (!filePath) {
+        res.status(400).json({ error: "path is required", code: "invalid" });
+        return;
+      }
+      const revisions = await history.listRevisions(filePath);
+      res.json({ path: filePath, retention: REVISION_RETENTION, revisions });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.get("/api/history/revision", async (req, res) => {
+    try {
+      const filePath = String(req.query.path || "");
+      const id = String(req.query.id || "");
+      if (!filePath || !id) {
+        res.status(400).json({ error: "path and id are required", code: "invalid" });
+        return;
+      }
+      const revision = await history.readRevision(filePath, id);
+      res.json(revision);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/history/restore", async (req, res) => {
+    try {
+      const filePath = String(req.body?.path || "");
+      const id = String(req.body?.id || "");
+      if (!filePath || !id) {
+        res.status(400).json({ error: "path and id are required", code: "invalid" });
+        return;
+      }
+      if (req.body?.lockToken != null && typeof req.body.lockToken !== "string") {
+        res.status(400).json({ error: "lockToken must be a string", code: "invalid" });
+        return;
+      }
+      const result = await store.restoreRevision(
+        filePath,
+        id,
+        typeof req.body?.lockToken === "string" ? req.body.lockToken : null,
+      );
+      res.json(result);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  function diagramPath(input: unknown): string {
+    const requested = String(input || "");
+    if (!requested) {
+      throw Object.assign(new Error("path is required"), { status: 400, code: "invalid" });
+    }
+    const absolute = resolveSafePath(requested);
+    const relative = toRelativePath(absolute);
+    if (!relative.toLowerCase().endsWith(".mmd")) {
+      throw Object.assign(new Error("Only .mmd diagram files are supported"), {
+        status: 400,
+        code: "invalid",
+      });
+    }
+    return relative;
+  }
+
+  app.post("/api/lock", async (req, res) => {
+    try {
+      const relative = diagramPath(req.body?.path);
+      const sessionId = String(req.body?.sessionId || "");
+      const lock = await locks.acquireLock(relative, sessionId);
+      res.json(lock);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/lock/heartbeat", async (req, res) => {
+    try {
+      const relative = diagramPath(req.body?.path);
+      const token = String(req.body?.token || "");
+      if (!token) {
+        res.status(400).json({ error: "token is required", code: "invalid" });
+        return;
+      }
+      const lock = await locks.heartbeatLock(relative, token);
+      res.json(lock);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/lock/release", async (req, res) => {
+    try {
+      const relative = diagramPath(req.body?.path);
+      const token = String(req.body?.token || "");
+      if (!token) {
+        res.status(400).json({ error: "token is required", code: "invalid" });
+        return;
+      }
+      await locks.releaseLock(relative, token);
+      res.status(204).send();
+    } catch (err) {
+      sendError(res, err);
     }
   });
 
