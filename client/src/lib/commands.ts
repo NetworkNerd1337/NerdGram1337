@@ -5,7 +5,7 @@
  * workspace with `registerCommandProvider`. Both return an unregister
  * function. Later issues should register here instead of editing the palette:
  *
- * - #13 full search: a provider that returns diagram hits
+ * - #13 full search: `diagramHits` on the context (registered below)
  * - #17 new from template: `registerCommands` for each template
  * - #18 Present: one command, shortcut Mod-Shift-Enter or F5 (do not bind those here)
  * - #19 check for updates: `registerCommands` from the update module
@@ -60,6 +60,20 @@ export type CommandActions = {
   gotoLine?: () => void;
 };
 
+/** One diagram match from `GET /api/search`, already ranked by the server. */
+export type DiagramSearchCommandHit = {
+  path: string;
+  name: string;
+  title: string | null;
+  rank: number;
+  field: string;
+  label: string;
+  line: number | null;
+  snippet: string;
+  matchStart: number;
+  matchLength: number;
+};
+
 export type CommandContext = {
   route: CommandRoute;
   query: string;
@@ -71,6 +85,8 @@ export type CommandContext = {
   autoUpdate: boolean;
   readOnly: boolean;
   conflictOpen: boolean;
+  /** Content and name matches for the current palette query. Empty until the search returns. */
+  diagramHits?: readonly DiagramSearchCommandHit[];
 };
 
 export type CommandHostInput = Omit<CommandContext, "query" | "navigate">;
@@ -96,6 +112,14 @@ export type PaletteCommand = {
   order?: number;
   /** Left out of the list until the query is non-empty. */
   searchOnly?: boolean;
+  /** Set when diagram search already decided this row matches. Skips the fuzzy filter. */
+  matched?: boolean;
+  /** Server rank. Lower is a better match. Only used with `matched`. */
+  rank?: number;
+  /** Plain-text snippet. Rendered as text, never as HTML. */
+  detail?: string;
+  matchStart?: number;
+  matchLength?: number;
   when?: (ctx: CommandContext) => boolean;
   run: (ctx: CommandContext) => void | Promise<void>;
 };
@@ -160,6 +184,10 @@ export function filterCommands(
   const ranked: { command: PaletteCommand; score: number; index: number }[] = [];
   commands.forEach((command, index) => {
     if (!needle && command.searchOnly) return;
+    if (command.matched) {
+      ranked.push({ command, score: 36 - (command.rank ?? 0), index });
+      return;
+    }
     const score = scoreCommand(command, needle);
     if (score == null) return;
     ranked.push({ command, score, index });
@@ -219,3 +247,33 @@ export function formatShortcut(shortcut: string, mac: boolean): string {
 }
 
 export const RESERVED_SHORTCUTS = ["F5", "Mod-Shift-Enter", "Mod-/", "Mod-l", "Mod-k"] as const;
+
+const PALETTE_HITS = 8;
+
+/** Diagram rows for the open palette. The dashboard search box calls the same `/api/search`. */
+registerCommandProvider((ctx) => {
+  const query = ctx.query.trim();
+  const hits = ctx.diagramHits ?? [];
+  if (!query || hits.length === 0) return [];
+  return hits.slice(0, PALETTE_HITS).map((hit, index) => ({
+    id: `search:${hit.path}:${hit.field}:${hit.line ?? 0}`,
+    title: hit.title?.trim() || hit.name.replace(/\.mmd$/i, ""),
+    section: hit.label,
+    detail: hit.snippet,
+    matchStart: hit.matchStart,
+    matchLength: hit.matchLength,
+    keywords: [hit.path, hit.snippet, hit.label, hit.field],
+    searchOnly: true,
+    matched: true,
+    rank: hit.rank,
+    order: index,
+    run: (host: CommandContext) => {
+      const params = new URLSearchParams();
+      if (hit.line) params.set("line", String(hit.line));
+      const find = host.query.trim();
+      if (find) params.set("find", find);
+      const qs = params.toString();
+      host.navigate(`/edit/${hit.path}${qs ? `?${qs}` : ""}`);
+    },
+  }));
+});

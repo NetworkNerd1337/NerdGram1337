@@ -342,7 +342,10 @@ describe("move, duplicate, and import", () => {
     expect(await fs.readFile(path.join(dir, "secret.mmd"), "utf8")).toContain("A-->B");
     await expect(fs.access(path.join(dir, ".meta", "secret.mmd"))).rejects.toThrow();
     const names = await fs.readdir(dir);
-    expect(names.filter((name) => name.endsWith(".png") || name.startsWith("."))).toEqual([]);
+    // `.meta` is the search index, not an imported file. Nothing else hidden lands in the workspace.
+    expect(names.filter((name) => name.endsWith(".png") || (name.startsWith(".") && name !== ".meta"))).toEqual(
+      [],
+    );
   });
 
   it("rejects an import into .meta, a missing folder, or a non-JSON body", async () => {

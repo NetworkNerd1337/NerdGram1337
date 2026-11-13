@@ -763,30 +763,217 @@ export function migrateInitDirectives(source: string): MigrateResult {
   }
 }
 
+/** A visible text element extracted from a diagram body. `line` is 1-based in the file. */
+export type DiagramTextElement = {
+  kind: string;
+  text: string;
+  line: number;
+};
+
 export type DiagramSearchFields = {
   path: string;
   title: string | null;
   description: string;
   notes: string;
   tags: string[];
+  /** Visible labels from the diagram body. Matched after the fields above. */
+  elements?: readonly DiagramTextElement[];
 };
+
+export type DiagramSearchField =
+  | "filename"
+  | "path"
+  | "title"
+  | "tag"
+  | "description"
+  | "notes"
+  | "text";
+
+export type DiagramSearchMatch = {
+  /** Lower is a better match. */
+  rank: number;
+  field: DiagramSearchField;
+  elementKind: string | null;
+  line: number | null;
+  /** The field or element text that matched, before snippet clipping. */
+  text: string;
+  index: number;
+  length: number;
+};
+
+/** How much of `text` matched. `null` means no match. A zero-length match is not a match. */
+export type SearchLocator = (text: string) => { index: number; length: number } | null;
+
+/**
+ * Case-insensitive substring. The query is never compiled as a regular expression.
+ * `null` when the query is empty.
+ */
+export function literalLocator(query: string): SearchLocator | null {
+  const needle = query.trim();
+  if (!needle) return null;
+  const lower = needle.toLowerCase();
+  return (text: string) => {
+    const index = text.toLowerCase().indexOf(lower);
+    if (index < 0) return null;
+    return { index, length: needle.length };
+  };
+}
+
+const ELEMENT_LABELS: Record<string, string> = {
+  node: "Node label",
+  edge: "Edge label",
+  subgraph: "Subgraph title",
+  title: "Diagram title",
+  accTitle: "Title",
+  accDescr: "Description",
+  note: "Note",
+  participant: "Participant",
+  message: "Sequence message",
+  class: "Class",
+  member: "Member",
+  entity: "Entity",
+  attribute: "Attribute",
+  task: "Task",
+  section: "Section",
+  slice: "Slice",
+  state: "State",
+  text: "Text",
+};
+
+export function searchMatchLabel(field: DiagramSearchField, elementKind: string | null): string {
+  if (field === "filename") return "File name";
+  if (field === "path") return "Path";
+  if (field === "title") return "Title";
+  if (field === "tag") return "Tag";
+  if (field === "description") return "Description";
+  if (field === "notes") return "Notes";
+  if (elementKind && ELEMENT_LABELS[elementKind]) return ELEMENT_LABELS[elementKind];
+  return "Text";
+}
+
+export type SearchScope = "all" | "meta" | "names";
+
+/**
+ * Best match for one diagram.
+ *
+ * File name, then path, then title, tags, description, and notes. Visible
+ * text elements are last, so a file name match stays ahead of a label match.
+ * `names` checks only the file name and path. `meta` skips text elements.
+ * `null` means no match.
+ */
+export function matchDiagramSearch(
+  item: DiagramSearchFields,
+  query: string,
+  locate: SearchLocator | null = literalLocator(query),
+  scope: SearchScope = "all",
+): DiagramSearchMatch | null {
+  if (!locate) return null;
+  const fileName = item.path.split("/").pop()?.replace(/\.mmd$/i, "") ?? item.path;
+  const fileHit = locate(fileName);
+  if (fileHit) {
+    return {
+      rank: 0,
+      field: "filename",
+      elementKind: null,
+      line: null,
+      text: fileName,
+      index: fileHit.index,
+      length: fileHit.length,
+    };
+  }
+  const pathHit = locate(item.path);
+  if (pathHit) {
+    return {
+      rank: 0,
+      field: "path",
+      elementKind: null,
+      line: null,
+      text: item.path,
+      index: pathHit.index,
+      length: pathHit.length,
+    };
+  }
+  if (scope === "names") return null;
+
+  const title = item.title ?? "";
+  const titleHit = title ? locate(title) : null;
+  if (titleHit) {
+    return {
+      rank: 1,
+      field: "title",
+      elementKind: null,
+      line: null,
+      text: title,
+      index: titleHit.index,
+      length: titleHit.length,
+    };
+  }
+  for (const tag of item.tags) {
+    const tagHit = locate(tag);
+    if (tagHit) {
+      return {
+        rank: 2,
+        field: "tag",
+        elementKind: null,
+        line: null,
+        text: tag,
+        index: tagHit.index,
+        length: tagHit.length,
+      };
+    }
+  }
+  const descriptionHit = item.description ? locate(item.description) : null;
+  if (descriptionHit) {
+    return {
+      rank: 3,
+      field: "description",
+      elementKind: null,
+      line: null,
+      text: item.description,
+      index: descriptionHit.index,
+      length: descriptionHit.length,
+    };
+  }
+  const notesHit = item.notes ? locate(item.notes) : null;
+  if (notesHit) {
+    return {
+      rank: 4,
+      field: "notes",
+      elementKind: null,
+      line: null,
+      text: item.notes,
+      index: notesHit.index,
+      length: notesHit.length,
+    };
+  }
+  if (scope !== "all") return null;
+
+  let best: DiagramSearchMatch | null = null;
+  for (const element of item.elements ?? []) {
+    if (!element.text) continue;
+    const hit = locate(element.text);
+    if (!hit || hit.length <= 0) continue;
+    const candidate: DiagramSearchMatch = {
+      rank: 5,
+      field: "text",
+      elementKind: element.kind,
+      line: element.line,
+      text: element.text,
+      index: hit.index,
+      length: hit.length,
+    };
+    if (!best || (candidate.line ?? 0) < (best.line ?? 0)) best = candidate;
+  }
+  return best;
+}
 
 /**
  * Lower is a better match. `null` means no match.
- * The file name and path outrank title, tags, description, and notes
- * when more than one field matches.
+ * The file name and path outrank title, tags, description, notes, and
+ * visible text elements when more than one field matches.
  */
 export function diagramSearchRank(item: DiagramSearchFields, query: string): number | null {
-  const needle = query.trim().toLowerCase();
-  if (!needle) return null;
-  const path = item.path.toLowerCase();
-  const fileName = path.split("/").pop()?.replace(/\.mmd$/i, "") ?? path;
-  if (fileName.includes(needle) || path.includes(needle)) return 0;
-  if ((item.title ?? "").toLowerCase().includes(needle)) return 1;
-  if (item.tags.some((tag) => tag.toLowerCase().includes(needle))) return 2;
-  if (item.description.toLowerCase().includes(needle)) return 3;
-  if (item.notes.toLowerCase().includes(needle)) return 4;
-  return null;
+  return matchDiagramSearch(item, query)?.rank ?? null;
 }
 
 export type DiagramMeta = {

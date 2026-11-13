@@ -272,6 +272,21 @@ describe("front matter parsing", () => {
     expect(diagramSearchRank(overview, "edge")).toBe(3);
     expect(diagramSearchRank(overview, "lab-only")).toBe(2);
     expect(diagramSearchRank(overview, "missing")).toBeNull();
+    expect(
+      diagramSearchRank(
+        { ...overview, elements: [{ kind: "node", text: "Firewall", line: 2 }] },
+        "Firewall",
+      ),
+    ).toBe(5);
+    expect(
+      diagramSearchRank(
+        {
+          ...named,
+          elements: [{ kind: "node", text: "Network overview", line: 1 }],
+        },
+        "Network overview",
+      ),
+    ).toBe(0);
   });
 });
 

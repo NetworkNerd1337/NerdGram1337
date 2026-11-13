@@ -1,3 +1,4 @@
+import * as cheerio from "cheerio";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { thumbnailCacheKey } from "./frontMatter.js";
@@ -68,7 +69,95 @@ function requireDiagram(relativePath: string): string {
   return normalized;
 }
 
-function assertSvg(svg: string): void {
+const URL_ATTRS = new Set(["href", "xlink:href", "src"]);
+
+function decodeUrl(value: string): string {
+  return value
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => {
+      const code = Number.parseInt(hex, 16);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : "";
+    })
+    .replace(/&#(\d+);/g, (_, num: string) => {
+      const code = Number.parseInt(num, 10);
+      return Number.isFinite(code) ? String.fromCodePoint(code) : "";
+    })
+    .replace(/[\u0000-\u0020]+/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function isDangerousUrl(value: string): boolean {
+  const decoded = decodeUrl(value);
+  return (
+    decoded.startsWith("javascript:") ||
+    decoded.startsWith("vbscript:") ||
+    decoded.startsWith("data:text/html") ||
+    decoded.startsWith("data:application/xhtml")
+  );
+}
+
+/**
+ * Strip active content from an SVG before it is stored or drawn.
+ * A clean document is returned unchanged. Event-handler attributes,
+ * scriptable URLs, and script-bearing markup are removed, including
+ * markup nested in `foreignObject`.
+ */
+export function sanitizeThumbnailSvg(svg: string): string {
+  const trimmed = svg.trim();
+  if (!trimmed) return svg;
+  let changed = false;
+  const $ = cheerio.load(trimmed, { xml: true });
+  $("*").each((_, el) => {
+    if (el.type !== "tag" && el.type !== "script") return;
+    const name = el.name.toLowerCase();
+    if (name === "script" || name === "iframe" || name === "object" || name === "embed" || name === "link" || name === "meta" || name === "base") {
+      $(el).remove();
+      changed = true;
+      return;
+    }
+    const attribs = el.attribs;
+    for (const [attr, raw] of Object.entries(attribs)) {
+      const lower = attr.toLowerCase();
+      const value = raw ?? "";
+      if (lower.startsWith("on")) {
+        $(el).removeAttr(attr);
+        changed = true;
+        continue;
+      }
+      if (URL_ATTRS.has(lower) || lower.endsWith(":href")) {
+        if (isDangerousUrl(value)) {
+          $(el).removeAttr(attr);
+          changed = true;
+        }
+      }
+      if (lower === "style" && /javascript\s*:|expression\s*\(|behavior\s*:|-moz-binding|@import/i.test(value)) {
+        $(el).removeAttr(attr);
+        changed = true;
+      }
+      if (
+        (name === "set" || name === "animate" || name === "animatetransform") &&
+        lower === "attributename" &&
+        (value.toLowerCase().startsWith("on") || value.toLowerCase() === "href" || value.toLowerCase().endsWith(":href"))
+      ) {
+        $(el).remove();
+        changed = true;
+      }
+    }
+  });
+  const structured = changed ? $.xml().trim() : trimmed;
+  const swept = structured
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, "")
+    .replace(/<script\b[^>]*\/?>/gi, "")
+    .replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "")
+    .replace(
+      /(\s(?:href|xlink:href|src)\s*=\s*)(["'])\s*(?:javascript|vbscript):[^"']*\2/gi,
+      '$1$2#$2',
+    );
+  if (swept === svg || swept === trimmed) return svg;
+  return swept;
+}
+
+function assertSvg(svg: string): string {
   const trimmed = svg.trim();
   if (!trimmed.startsWith("<svg") && !trimmed.startsWith("<?xml")) {
     throw httpFail(400, "Thumbnail must be an SVG document", "invalid");
@@ -76,9 +165,14 @@ function assertSvg(svg: string): void {
   if (trimmed.length > MAX_THUMBNAIL_SVG_CHARS) {
     throw httpFail(413, "Thumbnail is too large to cache", "too_large");
   }
-  if (/<script[\s>]/i.test(trimmed)) {
+  if (/<script[\s>/]/i.test(trimmed)) {
     throw httpFail(400, "Thumbnail SVG cannot contain a script", "invalid");
   }
+  const cleaned = sanitizeThumbnailSvg(svg);
+  if (!cleaned.trim().startsWith("<svg") && !cleaned.trim().startsWith("<?xml")) {
+    throw httpFail(400, "Thumbnail must be an SVG document", "invalid");
+  }
+  return cleaned;
 }
 
 async function readDiagram(relativePath: string): Promise<{
@@ -122,7 +216,7 @@ export async function readThumbnail(relativePath: string): Promise<ThumbnailLook
     path: diagram.path,
     cacheKey,
     mtimeMs: diagram.mtimeMs,
-    svg: stored.svg,
+    svg: sanitizeThumbnailSvg(stored.svg),
   };
 }
 
@@ -136,7 +230,7 @@ export async function writeThumbnail(
   svg: string,
 ): Promise<ThumbnailHit> {
   if (!cacheKey.trim()) throw httpFail(400, "cacheKey is required", "invalid");
-  assertSvg(svg);
+  const safeSvg = assertSvg(svg);
   const diagram = await readDiagram(relativePath);
   const current = thumbnailCacheKey(diagram.content);
   if (cacheKey !== current) {
@@ -145,7 +239,7 @@ export async function writeThumbnail(
   const record: StoredThumbnail = {
     cacheKey: current,
     mtimeMs: diagram.mtimeMs,
-    svg,
+    svg: safeSvg,
   };
   await atomicWriteJson(thumbFile(diagram.path), record);
   return {
@@ -153,7 +247,7 @@ export async function writeThumbnail(
     path: diagram.path,
     cacheKey: current,
     mtimeMs: diagram.mtimeMs,
-    svg,
+    svg: safeSvg,
   };
 }
 

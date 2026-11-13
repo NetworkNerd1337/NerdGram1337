@@ -156,11 +156,23 @@ function ThumbnailBody({ path, mtimeMs, cacheKey }: MermaidThumbnailProps) {
 
   const message =
     shown.status === "failed" ? "Preview unavailable" : shown.status === "empty" ? "Empty diagram" : "";
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    const image = imageRef.current;
+    if (!image || !shown.svg) return;
+    const url = URL.createObjectURL(new Blob([shown.svg], { type: "image/svg+xml" }));
+    image.src = url;
+    return () => {
+      URL.revokeObjectURL(url);
+      image.removeAttribute("src");
+    };
+  }, [shown.svg]);
 
   return (
     <div className="card-thumb" ref={rootRef} aria-busy={shown.status === "pending"}>
       {shown.svg ? (
-        <div dangerouslySetInnerHTML={{ __html: shown.svg }} />
+        <img ref={imageRef} alt="" />
       ) : (
         <span className="empty">{message}</span>
       )}

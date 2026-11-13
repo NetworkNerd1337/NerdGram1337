@@ -192,6 +192,42 @@ describe("command palette registry", () => {
     ).toEqual(["b"]);
   });
 
+  it("returns diagram search hits with the snippet and the matching field", () => {
+    const commands = collectCommands(
+      context({
+        query: "Firewall",
+        diagramHits: [
+          {
+            path: "NetworkMap.mmd",
+            name: "NetworkMap.mmd",
+            title: null,
+            rank: 5,
+            field: "text",
+            label: "Node label",
+            line: 2,
+            snippet: "Internet --> Firewall",
+            matchStart: 12,
+            matchLength: 8,
+          },
+        ],
+      }),
+    );
+    const hit = commands.find((command) => command.id.startsWith("search:"));
+    expect(hit?.title).toBe("NetworkMap");
+    expect(hit?.section).toBe("Node label");
+    expect(hit?.detail).toBe("Internet --> Firewall");
+    expect(hit?.matchStart).toBe(12);
+    expect(hit?.matchLength).toBe(8);
+    const navigated: string[] = [];
+    hit?.run(
+      context({
+        query: "Firewall",
+        navigate: (to) => navigated.push(to),
+      }),
+    );
+    expect(navigated).toEqual(["/edit/NetworkMap.mmd?line=2&find=Firewall"]);
+  });
+
   it("treats Ctrl+K and Cmd+K as the palette shortcut and ignores shifted variants", () => {
     expect(
       isPaletteShortcut({ key: "k", ctrlKey: true, metaKey: false, altKey: false, shiftKey: false }),

@@ -129,6 +129,19 @@ describe("client front matter helper", () => {
         "draft",
       ),
     ).toBe(2);
+    expect(
+      diagramSearchRank(
+        {
+          path: "Notes.mmd",
+          title: null,
+          description: "",
+          notes: "",
+          tags: [],
+          elements: [{ kind: "node", text: "Firewall", line: 2 }],
+        },
+        "Firewall",
+      ),
+    ).toBe(5);
   });
 });
 

@@ -9,8 +9,13 @@ import {
   type CommandHostInput,
   type PaletteCommand,
 } from "../lib/commands";
+import { searchDiagrams } from "../lib/diagramSearch";
+import type { DiagramSearchHit } from "../types";
 import "../lib/builtinCommands";
+import { HighlightedText } from "./HighlightedText";
 import { PaletteContext, usePaletteControls, type PaletteControls } from "./commandPaletteContext";
+
+const NO_HITS: DiagramSearchHit[] = [];
 
 function shortcutMac(): boolean {
   if (typeof navigator === "undefined") return false;
@@ -85,8 +90,39 @@ function CommandPaletteDialog({
   const restoreFocus = useRef<HTMLElement | null>(null);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
+  const [hits, setHits] = useState<DiagramSearchHit[]>([]);
+  const [hitQuery, setHitQuery] = useState("");
   const mac = shortcutMac();
-  const results = useMemo(() => collectCommands(buildContext(query)), [buildContext, query]);
+  const trimmedQuery = query.trim();
+  const diagramHits = trimmedQuery && hitQuery === trimmedQuery ? hits : NO_HITS;
+  const results = useMemo(
+    () => collectCommands({ ...buildContext(query), diagramHits }),
+    [buildContext, query, diagramHits],
+  );
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void searchDiagrams(q, { signal: controller.signal }).then(
+        (result) => {
+          if (controller.signal.aborted) return;
+          setHits(result.hits);
+          setHitQuery(q);
+        },
+        () => {
+          if (controller.signal.aborted) return;
+          setHits([]);
+          setHitQuery(q);
+        },
+      );
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query]);
   const activeIndex = results.length === 0 ? 0 : Math.min(active, results.length - 1);
   const activeId = results[activeIndex] ? `${listId}-option-${activeIndex}` : undefined;
 
@@ -205,6 +241,15 @@ function CommandPaletteDialog({
                   <span>
                     <span className="palette-title">{command.title}</span>
                     {command.section ? <span className="palette-section">{command.section}</span> : null}
+                    {command.detail ? (
+                      <span className="palette-detail">
+                        <HighlightedText
+                          text={command.detail}
+                          start={command.matchStart ?? 0}
+                          length={command.matchLength ?? 0}
+                        />
+                      </span>
+                    ) : null}
                   </span>
                   {command.shortcut ? (
                     <span className="kbd">{formatShortcut(command.shortcut, mac)}</span>

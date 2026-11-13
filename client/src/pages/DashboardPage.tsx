@@ -4,6 +4,7 @@ import { ApiError, api } from "../api";
 import { useCommandHost } from "../components/commandPaletteContext";
 import { ImportDialog } from "../components/ImportDialog";
 import { ItemActions } from "../components/ItemActions";
+import { HighlightedText } from "../components/HighlightedText";
 import { MermaidThumbnail } from "../components/MermaidThumbnail";
 import { Modal } from "../components/Modal";
 import { MoveDialog } from "../components/MoveDialog";
@@ -26,16 +27,16 @@ import {
   relocatedFolder,
 } from "../lib/organize";
 import type { WorkspaceItem } from "../lib/commands";
-import { diagramHeading, diagramSearchRank } from "../lib/frontMatter";
+import { editorHref, searchDiagrams } from "../lib/diagramSearch";
+import { diagramHeading } from "../lib/frontMatter";
 import {
   basename,
   displayName,
   ensureMmd,
-  flattenFiles,
   formatRelativeTime,
   joinPath,
 } from "../lib/paths";
-import type { DiagramMeta, TrashItem, TreeNode } from "../types";
+import type { DiagramMeta, DiagramSearchHit, TrashItem, TreeNode } from "../types";
 
 type OverTarget =
   | { kind: "folder"; path: string; valid: boolean }
@@ -53,6 +54,15 @@ export function DashboardPage() {
   const { tree, favorites, loading, error, refresh, toggleFavorite } = useWorkspace();
   const [folder, setFolder] = useState("");
   const [search, setSearch] = useState("");
+  const [namesOnly, setNamesOnly] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchState, setSearchState] = useState<{
+    query: string;
+    namesOnly: boolean;
+    hits: DiagramSearchHit[];
+    truncated: boolean;
+  } | null>(null);
   const [view, setView] = useState<"grid" | "list">("grid");
   const [modal, setModal] = useState<
     | null
@@ -165,31 +175,61 @@ export function DashboardPage() {
   const folders = folderNodes.filter((n) => n.type === "folder");
   const files = folderNodes.filter((n) => n.type === "file");
 
-  const searchResults = useMemo(() => {
-    const query = search.trim();
-    if (!query) return null;
-    return flattenFiles(tree)
-      .map((file) => {
-        const meta = metaByPath.get(file.path);
-        const rank = diagramSearchRank(
-          {
-            path: file.path,
-            title: meta?.title ?? null,
-            description: meta?.description ?? "",
-            notes: meta?.notes ?? "",
-            tags: meta?.tags ?? [],
-          },
-          query,
-        );
-        return rank == null ? null : { file, rank };
-      })
-      .filter((item): item is { file: TreeNode; rank: number } => item != null)
-      .sort((a, b) => a.rank - b.rank || a.file.path.localeCompare(b.file.path))
-      .map((item) => item.file);
-  }, [search, tree, metaByPath]);
+  const filesByPath = useMemo(() => {
+    const map = new Map<string, TreeNode>();
+    const walk = (nodes: TreeNode[]) => {
+      for (const node of nodes) {
+        if (node.type === "file") map.set(node.path, node);
+        else if (node.children) walk(node.children);
+      }
+    };
+    walk(tree);
+    return map;
+  }, [tree]);
 
-  const shownSearch = searchResults
-    ? searchResults.filter((file) => tagAllowed(file.path))
+  useEffect(() => {
+    const query = search.trim();
+    if (!query) {
+      setSearchState(null);
+      setSearching(false);
+      setSearchError(null);
+      return;
+    }
+    const controller = new AbortController();
+    setSearching(true);
+    const timer = window.setTimeout(() => {
+      void searchDiagrams(query, { namesOnly, signal: controller.signal }).then(
+        (result) => {
+          if (controller.signal.aborted) return;
+          setSearchState({
+            query,
+            namesOnly,
+            hits: result.hits,
+            truncated: result.truncated,
+          });
+          setSearching(false);
+          setSearchError(null);
+        },
+        (err: unknown) => {
+          if (controller.signal.aborted) return;
+          setSearching(false);
+          setSearchError(err instanceof Error ? err.message : "Search failed");
+        },
+      );
+    }, 250);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [search, namesOnly, tree]);
+
+  const query = search.trim();
+  const freshSearch =
+    searchState && searchState.query === query && searchState.namesOnly === namesOnly
+      ? searchState
+      : null;
+  const shownSearch = freshSearch
+    ? freshSearch.hits.filter((hit) => tagAllowed(hit.path))
     : null;
   const shownFiles = files.filter((file) => tagAllowed(file.path));
 
@@ -567,6 +607,8 @@ export function DashboardPage() {
         favorites={favorites}
         currentFolder={showTrash ? "__trash__" : folder}
         search={search}
+        namesOnly={namesOnly}
+        onNamesOnly={setNamesOnly}
         onSearch={(value) => {
           setSearch(value);
           if (value.trim()) setShowTrash(false);
@@ -708,60 +750,71 @@ export function DashboardPage() {
             onRestore={(id) => void restoreItem(id)}
             onPurge={(id) => void purgeItem(id)}
           />
-        ) : shownSearch ? (
+        ) : query ? (
           <>
             <div className="section-title">
-              {shownSearch.length} match{shownSearch.length === 1 ? "" : "es"}
+              {shownSearch
+                ? `${shownSearch.length} match${shownSearch.length === 1 ? "" : "es"}`
+                : "Searching…"}
+              {freshSearch?.truncated ? " Showing the first matches." : ""}
             </div>
-            {shownSearch.length === 0 ? (
+            {searchError ? <div className="error-banner">{searchError}</div> : null}
+            {searching && !shownSearch ? <p>Searching…</p> : null}
+            {shownSearch && shownSearch.length === 0 ? (
               <div className="empty-state">No diagrams match that search.</div>
-            ) : view === "grid" ? (
+            ) : null}
+            {shownSearch && shownSearch.length > 0 && view === "grid" ? (
               <div className="card-grid">
-                {shownSearch.map((file) => (
+                {shownSearch.map((hit) => (
                   <DiagramCard
-                    key={file.path}
-                    path={file.path}
-                    meta={metaByPath.get(file.path)}
+                    key={hit.path}
+                    path={hit.path}
+                    href={editorHref(hit.path, hit.line, query)}
+                    match={hit}
+                    meta={metaByPath.get(hit.path)}
                     onTag={toggleTag}
-                    mtimeMs={file.mtimeMs}
-                    favorited={favorites.includes(file.path)}
-                    dragging={dragPath === file.path}
-                    onDragStart={(event) => startDrag(event, { path: file.path, type: "file" })}
+                    mtimeMs={filesByPath.get(hit.path)?.mtimeMs ?? 0}
+                    favorited={favorites.includes(hit.path)}
+                    dragging={dragPath === hit.path}
+                    onDragStart={(event) => startDrag(event, { path: hit.path, type: "file" })}
                     onDragEnd={endDrag}
                     onDragOver={rejectFileDrop}
                     onDrop={dropOnFile}
-                    onFavorite={() => void toggleFavorite(file.path)}
-                    onRename={() => openRename(file.path, false)}
-                    onMove={() => setMoveTarget({ path: file.path, isFolder: false })}
-                    onDuplicate={() => void duplicateItem(file.path)}
-                    onDelete={() => void handleDelete(file.path)}
+                    onFavorite={() => void toggleFavorite(hit.path)}
+                    onRename={() => openRename(hit.path, false)}
+                    onMove={() => setMoveTarget({ path: hit.path, isFolder: false })}
+                    onDuplicate={() => void duplicateItem(hit.path)}
+                    onDelete={() => void handleDelete(hit.path)}
                   />
                 ))}
               </div>
-            ) : (
+            ) : null}
+            {shownSearch && shownSearch.length > 0 && view === "list" ? (
               <div className="list-view">
-                {shownSearch.map((file) => (
+                {shownSearch.map((hit) => (
                   <ListRow
-                    key={file.path}
-                    path={file.path}
-                    meta={metaByPath.get(file.path)}
+                    key={hit.path}
+                    path={hit.path}
+                    href={editorHref(hit.path, hit.line, query)}
+                    match={hit}
+                    meta={metaByPath.get(hit.path)}
                     onTag={toggleTag}
-                    mtimeMs={file.mtimeMs}
-                    favorited={favorites.includes(file.path)}
-                    dragging={dragPath === file.path}
-                    onDragStart={(event) => startDrag(event, { path: file.path, type: "file" })}
+                    mtimeMs={filesByPath.get(hit.path)?.mtimeMs ?? 0}
+                    favorited={favorites.includes(hit.path)}
+                    dragging={dragPath === hit.path}
+                    onDragStart={(event) => startDrag(event, { path: hit.path, type: "file" })}
                     onDragEnd={endDrag}
                     onDragOver={rejectFileDrop}
                     onDrop={dropOnFile}
-                    onFavorite={() => void toggleFavorite(file.path)}
-                    onRename={() => openRename(file.path, false)}
-                    onMove={() => setMoveTarget({ path: file.path, isFolder: false })}
-                    onDuplicate={() => void duplicateItem(file.path)}
-                    onDelete={() => void handleDelete(file.path)}
+                    onFavorite={() => void toggleFavorite(hit.path)}
+                    onRename={() => openRename(hit.path, false)}
+                    onMove={() => setMoveTarget({ path: hit.path, isFolder: false })}
+                    onDuplicate={() => void duplicateItem(hit.path)}
+                    onDelete={() => void handleDelete(hit.path)}
                   />
                 ))}
               </div>
-            )}
+            ) : null}
           </>
         ) : (
           <>
@@ -987,8 +1040,20 @@ function TrashList({
   );
 }
 
+function SearchMatch({ hit }: { hit: DiagramSearchHit }) {
+  const fileMatch = hit.field === "filename" || hit.field === "path";
+  return (
+    <p className="search-snippet">
+      <span className={fileMatch ? "match-chip file" : "match-chip"}>{hit.label}</span>
+      <HighlightedText text={hit.snippet} start={hit.matchStart} length={hit.matchLength} />
+    </p>
+  );
+}
+
 function DiagramCard({
   path,
+  href = `/edit/${path}`,
+  match,
   meta,
   onTag,
   mtimeMs,
@@ -1005,6 +1070,8 @@ function DiagramCard({
   onDelete,
 }: {
   path: string;
+  href?: string;
+  match?: DiagramSearchHit;
   meta?: DiagramMeta;
   onTag: (tag: string) => void;
   mtimeMs: number;
@@ -1020,7 +1087,7 @@ function DiagramCard({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const label = diagramHeading(meta?.title, path);
+  const label = diagramHeading(meta?.title ?? match?.title, path);
   return (
     <article
       className={`card${dragging ? " is-dragging" : ""}`}
@@ -1031,16 +1098,19 @@ function DiagramCard({
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
-      <Link to={`/edit/${path}`} draggable={false}>
+      <Link to={href} draggable={false} aria-label={`Open ${label}`}>
         <MermaidThumbnail path={path} mtimeMs={mtimeMs} cacheKey={meta?.cacheKey ?? null} />
       </Link>
       <div className="card-body">
         <h3>
-          <Link to={`/edit/${path}`} draggable={false}>
+          <Link to={href} draggable={false}>
             {label}
           </Link>
         </h3>
-        {meta?.description ? <p className="card-description">{meta.description}</p> : null}
+        {match ? <SearchMatch hit={match} /> : null}
+        {meta?.description && match?.field !== "description" ? (
+          <p className="card-description">{meta.description}</p>
+        ) : null}
         {meta?.malformed ? <p className="card-description">Front matter needs a fix</p> : null}
         <TagList tags={meta?.tags ?? []} onTag={onTag} />
         <p>Updated {formatRelativeTime(mtimeMs)}</p>
@@ -1060,6 +1130,8 @@ function DiagramCard({
 
 function ListRow({
   path,
+  href = `/edit/${path}`,
+  match,
   meta,
   onTag,
   mtimeMs,
@@ -1076,6 +1148,8 @@ function ListRow({
   onDelete,
 }: {
   path: string;
+  href?: string;
+  match?: DiagramSearchHit;
   meta?: DiagramMeta;
   onTag: (tag: string) => void;
   mtimeMs: number;
@@ -1091,7 +1165,7 @@ function ListRow({
   onDuplicate: () => void;
   onDelete: () => void;
 }) {
-  const label = diagramHeading(meta?.title, path);
+  const label = diagramHeading(meta?.title ?? match?.title, path);
   const fileLabel = displayName(path);
   return (
     <div
@@ -1104,10 +1178,13 @@ function ListRow({
       onDrop={onDrop}
     >
       <div className="list-row-main">
-        <Link to={`/edit/${path}`} draggable={false}>
+        <Link to={href} draggable={false}>
           <strong>{label}</strong>
         </Link>
-        {meta?.description ? <div className="card-description">{meta.description}</div> : null}
+        {match ? <SearchMatch hit={match} /> : null}
+        {meta?.description && match?.field !== "description" ? (
+          <div className="card-description">{meta.description}</div>
+        ) : null}
         <TagList tags={meta?.tags ?? []} onTag={onTag} />
         <div style={{ color: "var(--ink-soft)", fontSize: "0.8rem" }}>
           {label === fileLabel ? path : fileLabel} · Updated {formatRelativeTime(mtimeMs)}

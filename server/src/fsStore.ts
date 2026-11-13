@@ -254,6 +254,8 @@ export async function writeFile(
   await atomicWriteText(abs, content);
   await dropThumbnail(relative);
   const stat = await fs.stat(abs);
+  const search = await import("./search.js");
+  await search.rememberSearchEntry(relative, content, stat.mtimeMs, stat.size);
   return {
     path: relative,
     mtimeMs: stat.mtimeMs,
@@ -333,6 +335,8 @@ export async function renameItem(fromPath: string, toPath: string): Promise<{ pa
   await relocateHistory(fromRel, toRel, fromStat.isDirectory());
   await relocateLocks(fromRel, toRel, fromStat.isDirectory());
   await relocateThumbnails(fromRel, toRel, fromStat.isDirectory());
+  const search = await import("./search.js");
+  await search.moveSearchEntries(fromRel, toRel, fromStat.isDirectory());
   return { path: toRel };
 }
 
