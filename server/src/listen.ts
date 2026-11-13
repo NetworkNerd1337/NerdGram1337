@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Express } from "express";
 import { createApp, type CreateAppOptions, type ListenPort } from "./app.js";
+import { bootBackgroundTasks } from "./boot.js";
 import { ensureDataRoot } from "./paths.js";
 import {
   formatExposedBindWarning,
@@ -124,6 +125,8 @@ export async function startServer(options: StartServerOptions = {}): Promise<Ser
 
   const warning = formatExposedBindWarning(urls);
   if (warning) console.error(`\n${warning}\n`);
+
+  await bootBackgroundTasks();
 
   return servers;
 }

@@ -928,6 +928,25 @@ function schedule(ms: number): void {
   timer.unref?.();
 }
 
+/** Resume watcher, reconcile, and retry timers for a workspace that is already syncing. */
+export async function startSyncLoopsIfEnabled(): Promise<void> {
+  try {
+    const config = await loadConfig();
+    if (!config.enabled) return;
+    ensureLoops();
+  } catch {
+    console.error("GitHub sync: background loops did not start");
+  }
+}
+
+export function syncLoopsActive(): { reconcile: boolean; retry: boolean; watch: boolean } {
+  return {
+    reconcile: reconcileTimer != null,
+    retry: retryTimer != null,
+    watch: watcher != null,
+  };
+}
+
 function ensureLoops(): void {
   const root = getDataRoot();
   if (watchedRoot === root && (reconcileTimer || retryTimer || watcher)) return;

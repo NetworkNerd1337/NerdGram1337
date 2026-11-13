@@ -11,6 +11,9 @@ import type {
   RevisionSummary,
   TrashItem,
   TreeNode,
+  UpdateJob,
+  UpdateStatus,
+  VersionInfo,
 } from "./types";
 
 export class ApiError extends Error {
@@ -303,6 +306,34 @@ export const api = {
         body: JSON.stringify({ confirm }),
       },
     ),
+  version: () => request<VersionInfo>("/api/version"),
+  updates: () => request<UpdateStatus>("/api/updates"),
+  updateJob: () => request<{ job: UpdateJob | null }>("/api/updates/job"),
+  checkUpdates: () =>
+    request<UpdateStatus>("/api/updates/check", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  updateSettings: (body: { automatic?: boolean; includePrerelease?: boolean; clearSkipped?: boolean }) =>
+    request<UpdateStatus>("/api/updates/settings", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  skipUpdate: () =>
+    request<UpdateStatus>("/api/updates/skip", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  laterUpdate: () =>
+    request<UpdateStatus>("/api/updates/later", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  applyUpdate: () =>
+    request<{ job: UpdateJob }>("/api/updates/apply", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   referenceSync: () =>
     request<{
       manifest: {

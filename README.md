@@ -532,7 +532,33 @@ npm run install:all
 
 Then `npm run dev`, or `npm run build` and `npm start`. `git pull` updates tracked files. Diagrams you created under `diagrams/` stay put, because the repo ignores those extra files. The three sample diagrams are tracked. If you edited `Welcome.mmd`, `NetworkMap.mmd`, or `Examples/Sequence.mmd`, git may stop and ask you to handle those local edits before the pull can finish.
 
+The app can also do this check and, for a git clone, the update. See [In-app updates](#in-app-updates).
+
 **If you used the ZIP**, download a fresh ZIP from the link in step 2 and extract it to a new folder. `cd` into that folder and run `npm run install:all` again. The ZIP does not include `node_modules`. If your diagrams are still in the old project's `diagrams/` folder, copy that folder into the new project. If you set `NERDGRAM_DATA_DIR`, point the new copy at the same path and leave the files where they are.
+
+## In-app updates
+
+The running version is in **About** (command palette: **About NerdGram1337**, or the version line at the bottom of the dashboard sidebar). `GET /api/version` and `GET /api/health` return the same `version`, `commit` when the build has one, and `installKind` (`git`, `docker`, `zip`, or `unknown`).
+
+The server asks GitHub, with no token, whether `NetworkNerd1337/NerdGram1337` has a newer stable release. That is the only request this feature makes. It does not use the GitHub sync token or `NERDGRAM_GITHUB_TOKEN`, and it does not send telemetry. The answer is cached for about 24 hours. If GitHub is offline or rate-limits the check, the app stays quiet. **Check for updates** in the command palette can say that GitHub could not be reached. It has no keyboard shortcut.
+
+Turn checks off with `NERDGRAM_UPDATE_CHECK=false`, or clear **Check for updates automatically** in About. The environment variable wins and also blocks the manual check. The checkbox only stops the automatic check.
+
+**Git clone.** On a clean checkout of this repository whose `origin` is this repo, on `main` or a detached release tag, **Update now** fetches the release, fast-forwards to the tag, runs `npm ci` and `npm run build`, and then tells you to restart. It stops if the tree is dirty, if `origin` is some other repository, or if the release is not a fast-forward. It does not force or clean, and it does not modify `NERDGRAM_DATA_DIR`. If the install or build fails after the fast-forward, it tries to return to the previous commit with `git reset --keep`, which will not discard uncommitted work. After a successful update, stop the process and start it again (`npm run dev`, or `npm start` for a production build), then reload the page.
+
+**Docker.** The app does not update itself inside the container. It shows the new version and copyable steps: pull `ghcr.io/networknerd1337/nerdgram1337:<tag>`, stop and remove the old container, and run it again with the same `/data` volume and `127.0.0.1:8787:8787`. Compose is `docker compose pull`, then `docker compose up -d`. Diagrams and `.meta` stay on the volume. **Check again** after you recreate the container says whether the running version matches that release. The image from the Docker install sets `NERDGRAM_INSTALL=docker`. Until that image exists, a container is still detected when that variable or a container marker is set, and the app still will not run git inside it.
+
+**ZIP or an unknown copy.** You can read the release notes. There is no **Update now**. Download the new ZIP and keep your `diagrams` folder, or the same `NERDGRAM_DATA_DIR`.
+
+### Cutting a release
+
+The root `package.json` `version` is the only version. `npm run version:sync` copies it into `client/package.json` and `server/package.json`. `npm run version:check` fails if they differ. CI runs that check.
+
+1. Set the root version to `X.Y.Z` and run `npm run version:sync`.
+2. Add a `## X.Y.Z` section to `CHANGELOG.md`.
+3. Commit, tag `vX.Y.Z` (it must match that version), and push the tag.
+4. `.github/workflows/release.yml` publishes the GitHub Release from that changelog section.
+5. The container image for the same tag is `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z`. Publishing the image is the Docker workflow. It should use this tag, not a second version scheme.
 
 ## GitHub sync
 
@@ -620,6 +646,8 @@ Two browser checks sit in front of that bind:
 Paths stay inside the data directory. The server rejects null bytes, hidden paths such as `.meta`, and any path that escapes that directory. Diagram writes must be `.mmd` files. Editor locks only keep two windows from writing the same diagram. They are not authentication.
 
 GitHub sync is an optional copy of the `.mmd` files, not a second account system. The access token is stored in `.meta/github-token` with mode `0600`, or taken from `NERDGRAM_GITHUB_TOKEN`. It is not sent to the browser, not logged, and not written into the git remote. Sync routes use the same Host, Origin, and JSON checks as the rest of the API. Disconnect leaves the GitHub repository in your account and deletes the local mirror and the saved token. See [GitHub sync](#github-sync).
+
+Update checks call the public GitHub Releases API for this repository with no token and no telemetry. `NERDGRAM_UPDATE_CHECK=false` turns that call off. **Update now** is a localhost route with the same Host, Origin, and JSON checks as other changes. It only fast-forwards a clean git clone of this repository. A Docker install is not updated from inside the container. See [In-app updates](#in-app-updates).
 
 ## Troubleshooting
 

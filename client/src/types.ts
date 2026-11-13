@@ -145,3 +145,64 @@ export type SyncStatus = {
   grantRevoked?: boolean;
   revokeUrl?: string;
 };
+
+export type InstallKind = "git" | "docker" | "zip" | "unknown";
+
+export type VersionInfo = {
+  name: string;
+  version: string;
+  commit: string | null;
+  installKind: InstallKind;
+};
+
+export type UpdateRelease = {
+  tag: string;
+  version: string;
+  name: string;
+  body: string;
+  htmlUrl: string;
+  publishedAt: string | null;
+  prerelease: boolean;
+};
+
+export type UpdateStatus = {
+  enabled: boolean;
+  automatic: boolean;
+  includePrerelease: boolean;
+  installKind: InstallKind;
+  currentVersion: string;
+  commit: string | null;
+  phase: "disabled" | "current" | "available" | "ahead" | "unknown" | "no_release";
+  updateAvailable: boolean;
+  skipped: boolean;
+  dismissed: boolean;
+  skippedVersions: string[];
+  latest: UpdateRelease | null;
+  checkedAt: string | null;
+  error: { code: string; message: string } | null;
+  canApply: boolean;
+  matchesLatest: boolean;
+  docker: {
+    image: string;
+    tag: string;
+    steps: { title: string; command: string }[];
+    compose: { title: string; command: string }[];
+    composeNote: string;
+    persistNote: string;
+  } | null;
+};
+
+export type UpdateJob = {
+  running: boolean;
+  phase: string;
+  lines: string[];
+  error: { code: string; message: string } | null;
+  result: {
+    ok: true;
+    previousCommit: string;
+    commit: string;
+    version: string;
+    tag: string;
+    restart: { required: true; mode: string; instructions: string };
+  } | null;
+};

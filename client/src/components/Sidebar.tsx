@@ -4,6 +4,7 @@ import type { TreeNode } from "../types";
 import { Brand } from "./Brand";
 import { CommandsButton } from "./CommandPalette";
 import { FolderTree } from "./FolderTree";
+import { useUpdate } from "./updateContext";
 import { displayName } from "../lib/paths";
 
 type SidebarProps = {
@@ -43,6 +44,8 @@ export function Sidebar({
   onTrashDragOver,
   onTrashDrop,
 }: SidebarProps) {
+  const updates = useUpdate();
+  const version = updates.status?.currentVersion;
   const rootDrop =
     dropHighlight?.path === ""
       ? dropHighlight.valid
@@ -142,6 +145,10 @@ export function Sidebar({
           </ul>
         )}
       </div>
+      <button type="button" className="sidebar-about" onClick={updates.openAbout}>
+        <span>About</span>
+        <span>{version ? `v${version}` : "version"}</span>
+      </button>
     </aside>
   );
 }
