@@ -175,6 +175,10 @@ docker exec "$NAME" cat /data/.nerdgram-git/SMOKE | grep -q mirror
 echo "root-owned bind mount must fail to start"
 docker stop "$NAME" >/dev/null
 ROOT_DIR="$(mktemp -d)"
+# GitHub-hosted runners are uid 1001, the same as the image user. A fresh
+# mktemp directory would be writable. Force a directory the process cannot write.
+sudo chown root:root "$ROOT_DIR"
+sudo chmod 755 "$ROOT_DIR"
 docker run -d \
   --name "$ROOT_NAME" \
   --read-only \
@@ -191,7 +195,11 @@ for _ in $(seq 1 25); do
   fi
   sleep 1
 done
-test "$ROOT_FAILED" = "1"
+if [ "$ROOT_FAILED" != "1" ]; then
+  echo "a root-owned bind mount stayed up; the process should have exited" >&2
+  docker logs "$ROOT_NAME" >&2 || true
+  exit 1
+fi
 docker rm -f "$ROOT_NAME" >/dev/null
 
 echo "bind mount owned by uid 1001 is writable"
