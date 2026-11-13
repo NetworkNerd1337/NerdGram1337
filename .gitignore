@@ -1,5 +1,7 @@
 node_modules/
 dist/
+.cache/
+server/.cache/
 client/dist/
 server/dist/
 .DS_Store

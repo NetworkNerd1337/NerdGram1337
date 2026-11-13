@@ -1,0 +1,16 @@
+{
+  "name": "nerdgram",
+  "version": "1.0.6",
+  "description": "Command-line tool for a local NerdGram1337 server",
+  "type": "module",
+  "bin": {
+    "nerdgram": "./bin/nerdgram.js"
+  },
+  "files": [
+    "bin"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "private": false
+}

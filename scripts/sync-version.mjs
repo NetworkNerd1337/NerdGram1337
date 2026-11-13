@@ -12,7 +12,7 @@ if (!current.ok) {
 const rootVersion = current.version;
 const codename = current.codename;
 
-for (const file of ["client/package.json", "server/package.json"]) {
+for (const file of ["client/package.json", "server/package.json", "cli/package.json"]) {
   const full = join(root, file);
   const text = readFileSync(full, "utf8");
   const next = text.replace(/("version"\s*:\s*")[^"]+(")/, `$1${rootVersion}$2`);

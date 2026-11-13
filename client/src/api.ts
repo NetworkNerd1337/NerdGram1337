@@ -456,6 +456,46 @@ export const api = {
       method: "POST",
       body: JSON.stringify({}),
     }),
+  listTokens: () =>
+    request<{
+      tokens: {
+        id: string;
+        name: string;
+        prefix: string;
+        scope: "read" | "read-write";
+        createdAt: string;
+        lastUsedAt: string | null;
+        revokedAt: string | null;
+      }[];
+    }>("/api/tokens"),
+  createToken: (name: string, scope: "read" | "read-write") =>
+    request<{
+      token: string;
+      tokenMeta: {
+        id: string;
+        name: string;
+        prefix: string;
+        scope: "read" | "read-write";
+        createdAt: string;
+        lastUsedAt: string | null;
+        revokedAt: string | null;
+      };
+    }>("/api/tokens", {
+      method: "POST",
+      body: JSON.stringify({ name, scope }),
+    }),
+  revokeToken: (id: string) =>
+    request<{
+      token: {
+        id: string;
+        name: string;
+        prefix: string;
+        scope: "read" | "read-write";
+        createdAt: string;
+        lastUsedAt: string | null;
+        revokedAt: string | null;
+      };
+    }>(`/api/tokens/${encodeURIComponent(id)}`, { method: "DELETE", body: "{}" }),
   referenceSync: () =>
     request<{
       manifest: {

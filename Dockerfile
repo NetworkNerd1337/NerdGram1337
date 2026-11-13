@@ -9,9 +9,17 @@ ARG NODE_IMAGE=node:22.23.5-bookworm-slim@sha256:e9f565d32859f0cbfb52125eafe8be3
 # build stage's devDependencies.
 FROM ${NODE_IMAGE} AS server-deps
 WORKDIR /src
-COPY server/package.json server/package-lock.json server/
+# chrome-headless-shell only (see server/.puppeteerrc.cjs). Full Chrome is not
+# downloaded. The cache has to live somewhere the runtime stage can copy.
+COPY server/package.json server/package-lock.json server/.puppeteerrc.cjs server/
+ENV PUPPETEER_CACHE_DIR=/opt/puppeteer
+# cosmiconfig (via Puppeteer) depends on the TypeScript compiler so it can
+# load a .ts config. This image uses server/.puppeteerrc.cjs at install time
+# and PUPPETEER_CACHE_DIR at runtime, so the compiler is not needed. The
+# runtime image is not a development environment.
 RUN --mount=type=cache,target=/root/.npm \
-    npm ci --omit=dev --prefix server
+    npm ci --omit=dev --prefix server \
+ && rm -rf server/node_modules/typescript
 
 # Client and server builds. The client bundle is static files. The server
 # compile needs TypeScript, which stays in this stage.
@@ -21,10 +29,13 @@ COPY package.json package-lock.json ./
 COPY client/package.json client/package-lock.json client/
 COPY server/package.json server/package-lock.json server/
 COPY scripts/check-version.mjs scripts/codenames.mjs scripts/changelog-notes.mjs scripts/
+# The server compile does not render diagrams. Skip the browser download here.
+ENV PUPPETEER_SKIP_DOWNLOAD=1
 RUN --mount=type=cache,target=/root/.npm \
     npm ci --prefix client && npm ci --prefix server
 COPY client client
 COPY server server
+COPY cli cli
 COPY templates templates
 COPY reference reference
 COPY diagrams diagrams
@@ -42,10 +53,31 @@ RUN node scripts/check-version.mjs \
 FROM ${NODE_IMAGE} AS runtime
 WORKDIR /app
 
+# chrome-headless-shell needs these libraries. fonts-liberation is what the
+# renderer falls back to when a diagram names a font the image does not have.
+# The shell itself is about 260 MB unpacked. That is the cost of SVG and PNG
+# that match the editor. A DOM emulator laid nodes on top of each other.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update \
- && apt-get install -y --no-install-recommends tini
+ && apt-get install -y --no-install-recommends \
+      tini \
+      ca-certificates \
+      fonts-liberation \
+      libasound2 \
+      libatk-bridge2.0-0 \
+      libatk1.0-0 \
+      libdrm2 \
+      libgbm1 \
+      libnss3 \
+      libx11-6 \
+      libxcomposite1 \
+      libxdamage1 \
+      libxext6 \
+      libxfixes3 \
+      libxkbcommon0 \
+      libxrandr2 \
+      libxrender1
 
 RUN groupadd --gid 1001 nerdgram \
  && useradd --uid 1001 --gid 1001 --home-dir /tmp --no-create-home --shell /usr/sbin/nologin nerdgram \
@@ -56,6 +88,7 @@ RUN groupadd --gid 1001 nerdgram \
 # Layout matches REPO_ROOT (server/dist -> /app): client/dist, templates/,
 # reference/, and the sample diagrams used to seed an empty /data.
 COPY --link --from=server-deps /src/server/node_modules /app/server/node_modules
+COPY --link --from=server-deps /opt/puppeteer /opt/puppeteer
 COPY --link --from=build /src/server/package.json /app/server/package.json
 COPY --link --from=build /src/server/dist /app/server/dist
 COPY --link --from=build /src/package.json /app/package.json
@@ -67,7 +100,11 @@ COPY --link --from=build /src/diagrams /app/diagrams
 # The process can read these. It cannot change the bundled templates,
 # reference, or sample files. Synced reference pages go to /data.
 RUN chmod -R a-w /app/templates /app/reference /app/diagrams /app/server/dist /app/package.json /app/server/package.json \
- && chmod -R a+rX /app/templates /app/reference /app/diagrams /app/server /app/client /app/package.json
+ && chmod -R a+rX /app/templates /app/reference /app/diagrams /app/server /app/client /app/package.json \
+ && chmod -R a+rX /opt/puppeteer \
+ && chmod -R a+x /opt/puppeteer \
+ && printf '%s\n' '#!/bin/sh' 'exec node /app/server/dist/cli.js "$@"' > /usr/local/bin/nerdgram \
+ && chmod 755 /usr/local/bin/nerdgram
 
 ARG NERDGRAM_VERSION=1.0.6
 ARG NERDGRAM_CODENAME=Atlas
@@ -79,6 +116,7 @@ ENV NODE_ENV=production \
     NERDGRAM_INSTALL=docker \
     NERDGRAM_COMMIT=${NERDGRAM_COMMIT} \
     NERDGRAM_CODENAME=${NERDGRAM_CODENAME} \
+    PUPPETEER_CACHE_DIR=/opt/puppeteer \
     HOME=/tmp \
     TMPDIR=/tmp
 

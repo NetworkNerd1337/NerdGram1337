@@ -8,6 +8,7 @@ import { createApp, type CreateAppOptions, type ListenPort } from "./app.js";
 import { bootBackgroundTasks, shutdownBackgroundTasks } from "./boot.js";
 import { ensureDataRoot } from "./paths.js";
 import { seedEmptyDataDir } from "./seed.js";
+import { closeRenderer } from "./renderDiagram.js";
 import { getVersionInfo } from "./updates/versionInfo.js";
 import {
   formatExposedBindWarning,
@@ -69,6 +70,7 @@ export async function closeServers(
 export async function gracefulShutdown(servers: readonly Server[]): Promise<void> {
   await closeServers(servers, { drain: true });
   await shutdownBackgroundTasks();
+  await closeRenderer();
 }
 
 function boundUrl(server: Server): string | null {

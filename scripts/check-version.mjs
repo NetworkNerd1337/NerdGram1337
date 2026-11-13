@@ -8,7 +8,7 @@ import { currentCodename } from "./codenames.mjs";
 const POLICY_VERSIONS = new Set(["1.0.5", "2.0.0"]);
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const files = ["package.json", "client/package.json", "server/package.json"];
+const files = ["package.json", "client/package.json", "server/package.json", "cli/package.json"];
 const versions = files.map((file) => {
   const json = JSON.parse(readFileSync(join(root, file), "utf8"));
   return { file, version: json.version };
@@ -109,7 +109,7 @@ assertReadmeVersions(readme, expected);
 assertReadmeLinks(readme, root);
 
 console.log(
-  `Version ${expected} "${codename}" matches in root, client, server, Dockerfile, compose.yaml, CHANGELOG.md, and README.md.`,
+  `Version ${expected} "${codename}" matches in root, client, server, cli, Dockerfile, compose.yaml, CHANGELOG.md, and README.md.`,
 );
 
 /**

@@ -3,6 +3,9 @@
   "version": "1.0.6",
   "private": true,
   "type": "module",
+  "bin": {
+    "nerdgram": "./dist/cli.js"
+  },
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
@@ -15,6 +18,8 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "isomorphic-git": "^1.44.13",
+    "mermaid": "^12.3.0",
+    "puppeteer": "^24.43.1",
     "turndown": "^7.2.5",
     "yaml": "^2.9.1"
   },
