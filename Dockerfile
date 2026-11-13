@@ -39,7 +39,7 @@ COPY cli cli
 COPY templates templates
 COPY reference reference
 COPY diagrams diagrams
-COPY Dockerfile compose.yaml README.md CHANGELOG.md LICENSE ./
+COPY Dockerfile compose.yaml compose.build.yaml README.md CHANGELOG.md LICENSE ./
 ARG NERDGRAM_VERSION=1.1.0
 ARG NERDGRAM_CODENAME=Atlas
 ENV NERDGRAM_VERSION=${NERDGRAM_VERSION} \

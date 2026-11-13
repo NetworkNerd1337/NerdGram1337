@@ -28,6 +28,7 @@ describe("docker packaging", () => {
     expect(dockerfile).toContain("NERDGRAM_DATA_DIR=/data");
     expect(dockerfile).toContain("NERDGRAM_INSTALL=docker");
     expect(dockerfile).toContain("NERDGRAM_COMMIT");
+    expect(dockerfile).toContain("COPY Dockerfile compose.yaml compose.build.yaml");
     expect(dockerfile).toContain("/api/health");
     expect(dockerfile).toContain("--uid 1001");
     expect(dockerfile).toContain("org.opencontainers.image.source");
