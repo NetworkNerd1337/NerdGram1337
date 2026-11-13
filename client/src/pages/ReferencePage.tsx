@@ -3,6 +3,8 @@ import Markdown from "react-markdown";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import { Brand } from "../components/Brand";
+import { CommandsButton } from "../components/CommandPalette";
+import { useCommandHost } from "../components/commandPaletteContext";
 
 type PageMeta = {
   id: string;
@@ -36,6 +38,17 @@ export function ReferencePage() {
   const [savingOverride, setSavingOverride] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+
+  useCommandHost({
+    route: "reference",
+    actions: {},
+    items: [],
+    trashItems: [],
+    hasPreview: false,
+    autoUpdate: false,
+    readOnly: false,
+    conflictOpen: false,
+  });
 
   const loadList = async (preferId?: string) => {
     setLoading(true);
@@ -161,6 +174,7 @@ export function ReferencePage() {
           </div>
         </div>
         <div className="reference-top-actions">
+          <CommandsButton />
           <Link className="btn btn-ghost" to="/">
             Back to dashboard
           </Link>

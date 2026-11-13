@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { Brand } from "../components/Brand";
+import { CommandsButton } from "../components/CommandPalette";
+import { useCommandHost } from "../components/commandPaletteContext";
 import { ensureMmd, joinPath } from "../lib/paths";
 
 const PLACEHOLDER = `%% Paste your Mermaid code
@@ -18,6 +20,17 @@ export function NewDiagramPage() {
   const [folder, setFolder] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useCommandHost({
+    route: "new",
+    actions: {},
+    items: [],
+    trashItems: [],
+    hasPreview: false,
+    autoUpdate: false,
+    readOnly: false,
+    conflictOpen: false,
+  });
 
   const lineCount = useMemo(
     () => Math.max(1, (code || PLACEHOLDER).split("\n").length),
@@ -45,10 +58,11 @@ export function NewDiagramPage() {
   return (
     <div className="paste-page">
       <div className="paste-shell">
-        <div style={{ display: "flex", justifyContent: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "0.75rem" }}>
           <Link to="/">
             <Brand />
           </Link>
+          <CommandsButton />
         </div>
         <h1>What do you want to diagram?</h1>
         <div className="paste-mode">

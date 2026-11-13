@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import type { DragPayload } from "../lib/drag";
 import type { TreeNode } from "../types";
 import { Brand } from "./Brand";
+import { CommandsButton } from "./CommandPalette";
 import { FolderTree } from "./FolderTree";
 import { displayName } from "../lib/paths";
 
@@ -53,12 +54,14 @@ export function Sidebar({
       <div className="search-box">
         <span aria-hidden="true">⌕</span>
         <input
+          id="diagram-search"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
           placeholder="Search name, title, or tags"
           aria-label="Search diagrams"
         />
       </div>
+      <CommandsButton />
 
       <div className="nav-section">
         <div className="nav-label">Your space</div>

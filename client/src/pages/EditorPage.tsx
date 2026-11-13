@@ -2,10 +2,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "../api";
 import { Brand } from "../components/Brand";
+import { CommandsButton } from "../components/CommandPalette";
+import { useCommandHost } from "../components/commandPaletteContext";
 import { ConflictDialog } from "../components/ConflictDialog";
 import { DiagramInfoPanel } from "../components/DiagramInfoPanel";
 import { HistoryDialog } from "../components/HistoryDialog";
 import { MermaidCodeEditor } from "../components/MermaidCodeEditor";
+import { runFind, runGotoLine, runReplace } from "../lib/editorCommands";
 import { exportDiagram, type ExportFormat } from "../lib/exportDiagram";
 import {
   cancelScheduledLockRelease,
@@ -27,9 +30,11 @@ import {
   migrateInitDirectives,
   parseDiagram,
   themeLabel,
+  thumbnailCacheKey,
   type DiagramPatch,
 } from "../lib/frontMatter";
 import { renderMermaid } from "../lib/mermaidRender";
+import { rememberThumbnail } from "../lib/thumbnailCache";
 import { displayName, joinPath, parentPath } from "../lib/paths";
 
 type Access = "loading" | "edit" | "readonly";
@@ -89,6 +94,7 @@ export function EditorPage() {
   const [lockToken, setLockToken] = useState<string | null>(null);
 
   const previewRef = useRef<HTMLDivElement>(null);
+  const renderedRef = useRef<{ source: string; svg: string } | null>(null);
   const renderTimer = useRef<number | null>(null);
   const skipNextSave = useRef(true);
   const baselineRef = useRef<Baseline | null>(null);
@@ -118,6 +124,19 @@ export function EditorPage() {
     };
   }, []);
 
+  const publishThumbnail = (file: string, source: string, svg: string) => {
+    if (!svg || !source.trim() || source !== lastSavedRef.current) return;
+    const key = thumbnailCacheKey(source);
+    rememberThumbnail({
+      path: file,
+      cacheKey: key,
+      mtimeMs: baselineRef.current?.mtimeMs ?? null,
+      svg,
+      status: "ready",
+    });
+    void api.saveThumbnail(file, key, svg).catch(() => undefined);
+  };
+
   const flushSave = useCallback(async (scheduledPath: string) => {
     while (mountedRef.current && pathRef.current === scheduledPath) {
       if (savingRef.current) return;
@@ -141,6 +160,10 @@ export function EditorPage() {
           lastSavedRef.current = content;
           setSavedCode(content);
           setSaveState("saved");
+        }
+        const rendered = renderedRef.current;
+        if (rendered && rendered.source === content) {
+          publishThumbnail(scheduledPath, content, rendered.svg);
         }
       } catch (err) {
         if (!mountedRef.current || pathRef.current !== scheduledPath) return;
@@ -366,9 +389,13 @@ export function EditorPage() {
   const runRender = useCallback(async (source: string) => {
     try {
       const { svg } = await renderMermaid(source, FALLBACK_THEME);
+      if (!mountedRef.current) return;
+      renderedRef.current = { source, svg };
       setSvgHtml(svg);
       setRenderError(null);
+      publishThumbnail(pathRef.current, source, svg);
     } catch (err) {
+      if (!mountedRef.current) return;
       const message = err instanceof Error ? err.message : "Render failed";
       setRenderError(message);
       setSvgHtml("");
@@ -482,6 +509,34 @@ export function EditorPage() {
     const next = migrateInitDirectives(code);
     if (next.ok && next.migrated) setCode(next.source);
   };
+  useCommandHost({
+    route: "editor",
+    actions: {
+      editDiagramInfo: () => setInfoOpen(true),
+      openHistory: () => setHistoryOpen(true),
+      toggleAutoUpdate: () => setAutoUpdate((current) => !current),
+      setTheme: (theme) => commitInfo({ theme }),
+      exportAs: (format) => {
+        void handleExport(format);
+      },
+      find: () => {
+        runFind();
+      },
+      replace: () => {
+        runReplace();
+      },
+      gotoLine: () => {
+        runGotoLine();
+      },
+    },
+    items: [],
+    trashItems: [],
+    hasPreview: Boolean(svgHtml) && !renderError,
+    autoUpdate,
+    readOnly,
+    conflictOpen: Boolean(conflict?.open),
+  });
+
   const dirty = code !== savedCode;
   const saveLabel =
     saveState === "saving"
@@ -512,6 +567,7 @@ export function EditorPage() {
           <span className="status-pill" aria-live="polite">
             {saveLabel}
           </span>
+          <CommandsButton />
           <button
             type="button"
             className="btn btn-ghost"

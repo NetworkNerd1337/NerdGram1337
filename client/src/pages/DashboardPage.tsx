@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ApiError, api } from "../api";
+import { useCommandHost } from "../components/commandPaletteContext";
 import { ImportDialog } from "../components/ImportDialog";
 import { ItemActions } from "../components/ItemActions";
 import { MermaidThumbnail } from "../components/MermaidThumbnail";
@@ -24,6 +25,7 @@ import {
   moveBlockReason,
   relocatedFolder,
 } from "../lib/organize";
+import type { WorkspaceItem } from "../lib/commands";
 import { diagramHeading, diagramSearchRank } from "../lib/frontMatter";
 import {
   basename,
@@ -76,6 +78,7 @@ export function DashboardPage() {
   const [dragPath, setDragPath] = useState<string | null>(null);
   const [over, setOver] = useState<OverTarget | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const dragItemRef = useRef<DragItem | null>(null);
   const rejectRef = useRef<string | null>(null);
   const landedRef = useRef(false);
@@ -116,6 +119,27 @@ export function DashboardPage() {
     for (const item of diagramMeta) map.set(item.path, item);
     return map;
   }, [diagramMeta]);
+
+  const commandItems = useMemo(() => {
+    const items: WorkspaceItem[] = [];
+    const walk = (nodes: TreeNode[]) => {
+      for (const node of nodes) {
+        if (node.type === "folder") {
+          items.push({ path: node.path, name: node.name, type: "folder", title: null });
+          if (node.children) walk(node.children);
+        } else {
+          items.push({
+            path: node.path,
+            name: node.name,
+            type: "file",
+            title: metaByPath.get(node.path)?.title ?? null,
+          });
+        }
+      }
+    };
+    walk(tree);
+    return items;
+  }, [tree, metaByPath]);
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
@@ -178,6 +202,18 @@ export function DashboardPage() {
     setNameValue("Untitled");
     setModal({ type: "diagram" });
   };
+
+  const newFlag = searchParams.get("new");
+  useEffect(() => {
+    if (newFlag !== "diagram" && newFlag !== "folder") return;
+    if (newFlag === "diagram") openCreateDiagram();
+    else openCreateFolder();
+    const next = new URLSearchParams(searchParams);
+    next.delete("new");
+    setSearchParams(next, { replace: true });
+    // Open the same create modals the toolbar buttons use, once per flag.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newFlag]);
 
   const openRename = (path: string, isFolder: boolean) => {
     setNameValue(displayName(path));
@@ -479,6 +515,45 @@ export function DashboardPage() {
     setStatus(null);
     setActionError("Drop onto a folder. Diagrams are not drop targets.");
   };
+
+  useCommandHost({
+    route: "dashboard",
+    actions: {
+      newDiagram: openCreateDiagram,
+      newFolder: openCreateFolder,
+      focusSearch: () => document.getElementById("diagram-search")?.focus(),
+      importFiles: () => fileInputRef.current?.click(),
+      openTrash: () => {
+        setShowTrash(true);
+        setSearch("");
+      },
+      emptyTrash: () => {
+        void emptyTrash();
+      },
+      openDiagram: (path) => navigate(`/edit/${path}`),
+      openFolder: (path) => {
+        setShowTrash(false);
+        setFolder(path);
+      },
+      renameItem: openRename,
+      moveItem: (path, isFolder) => setMoveTarget({ path, isFolder }),
+      duplicateItem: (itemPath) => {
+        void duplicateItem(itemPath);
+      },
+      trashItem: (path) => {
+        void handleDelete(path);
+      },
+      restoreTrash: (id) => {
+        void restoreItem(id);
+      },
+    },
+    items: commandItems,
+    trashItems: trash.map((item) => ({ id: item.id, name: item.name, type: item.type })),
+    hasPreview: false,
+    autoUpdate: false,
+    readOnly: false,
+    conflictOpen: false,
+  });
 
   const folderHighlight =
     over?.kind === "folder" ? { path: over.path, valid: over.valid } : null;
@@ -957,7 +1032,7 @@ function DiagramCard({
       onDrop={onDrop}
     >
       <Link to={`/edit/${path}`} draggable={false}>
-        <MermaidThumbnail path={path} />
+        <MermaidThumbnail path={path} mtimeMs={mtimeMs} cacheKey={meta?.cacheKey ?? null} />
       </Link>
       <div className="card-body">
         <h3>

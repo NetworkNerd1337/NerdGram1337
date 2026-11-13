@@ -18,6 +18,7 @@ import {
   type RuntimeMode,
 } from "./security.js";
 import * as syntaxReference from "./syntaxReference.js";
+import * as thumbnails from "./thumbnails.js";
 
 export type ListenPort = { port: number };
 
@@ -131,6 +132,38 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     try {
       const diagrams = await store.listDiagramMeta();
       res.json({ diagrams });
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.get("/api/thumbnail", async (req, res) => {
+    try {
+      const filePath = String(req.query.path || "");
+      if (!filePath) {
+        res.status(400).json({ error: "path is required", code: "invalid" });
+        return;
+      }
+      const hit = await thumbnails.readThumbnail(filePath);
+      res.json(hit);
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.put("/api/thumbnail", async (req, res) => {
+    try {
+      const filePath = String(req.body?.path || "");
+      if (!filePath || typeof req.body?.cacheKey !== "string" || !req.body.cacheKey.trim()) {
+        res.status(400).json({ error: "path and cacheKey are required", code: "invalid" });
+        return;
+      }
+      if (typeof req.body?.svg !== "string") {
+        res.status(400).json({ error: "svg must be a string", code: "invalid" });
+        return;
+      }
+      const result = await thumbnails.writeThumbnail(filePath, req.body.cacheKey, req.body.svg);
+      res.json(result);
     } catch (err) {
       sendError(res, err);
     }

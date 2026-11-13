@@ -57,6 +57,14 @@ export type DiagramMeta = {
   cacheKey: string;
 };
 
+export type ThumbnailPayload = {
+  hit: boolean;
+  path: string;
+  cacheKey: string;
+  mtimeMs: number;
+  svg?: string;
+};
+
 export type FolderListing = {
   path: string;
   folders: TreeNode[];

@@ -372,15 +372,15 @@ function fnv1a(text: string): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-function cacheKeyFor(parts: {
-  title: string | null;
-  theme: string | null;
-  look: string | null;
-  layout: string | null;
-  body: string;
-}): string {
-  const payload = JSON.stringify([parts.title, parts.theme, parts.look, parts.layout, parts.body]);
-  return `${fnv1a(payload)}:${payload.length}`;
+/**
+ * Hash the whole diagram text (front matter header and body, including any
+ * `%%{init}%%` directives). A variables-only, font, seed, or CSS edit has to
+ * miss the thumbnail cache the same way a theme edit does. Notes and tags
+ * are in that header, so they miss too; that is cheaper than serving a stale
+ * picture.
+ */
+function cacheKeyFor(source: string): string {
+  return `${fnv1a(source)}:${source.length}`;
 }
 
 function readConfig(data: Record<string, unknown>): {
@@ -412,7 +412,7 @@ function readConfig(data: Record<string, unknown>): {
   };
 }
 
-function withInits(document: DiagramDocument, body: string): DiagramDocument {
+function withInits(document: DiagramDocument, body: string, source: string): DiagramDocument {
   const hits = findInitDirectives(body);
   const failed = hits.find((hit) => hit.error);
   let initConfig: Record<string, unknown> = {};
@@ -428,7 +428,7 @@ function withInits(document: DiagramDocument, body: string): DiagramDocument {
     initError: failed?.error ?? null,
     initConfig,
   };
-  next.cacheKey = cacheKeyFor(next);
+  next.cacheKey = cacheKeyFor(source);
   return next;
 }
 
@@ -436,7 +436,7 @@ function withInits(document: DiagramDocument, body: string): DiagramDocument {
 export function parseDiagram(source: string): DiagramDocument {
   const text = source.startsWith("\uFEFF") ? source.slice(1) : source;
   const match = matchFrontMatter(text);
-  if (!match) return withInits({ ...emptyDocument(), body: text }, text);
+  if (!match) return withInits({ ...emptyDocument(), body: text }, text, text);
 
   const doc = parseDocument(yamlText(match), { schema: "core", prettyErrors: false });
   const body = text.slice(match.length);
@@ -453,6 +453,7 @@ export function parseDiagram(source: string): DiagramDocument {
         body,
       },
       body,
+      text,
     );
   }
 
@@ -468,6 +469,7 @@ export function parseDiagram(source: string): DiagramDocument {
         body,
       },
       body,
+      text,
     );
   }
 
@@ -487,7 +489,7 @@ export function parseDiagram(source: string): DiagramDocument {
     displayMode: asString(data.displayMode),
     ...config,
   };
-  return withInits(parsed, body);
+  return withInits(parsed, body, text);
 }
 
 export function thumbnailCacheKey(source: string): string {
@@ -559,6 +561,8 @@ export function diagramInitConfig(
   }
   init.startOnLoad = false;
   init.securityLevel = "loose";
+  // A bad diagram must not append Mermaid's error SVG to document.body.
+  init.suppressErrorRendering = true;
   init.theme = appearance(effective, parsed.body, "theme") ?? fallbackTheme;
   const look = appearance(effective, parsed.body, "look");
   if (look) init.look = look;

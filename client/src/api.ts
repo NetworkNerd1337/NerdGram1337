@@ -2,6 +2,7 @@ import type {
   DiagramMeta,
   FilePayload,
   FileWriteResult,
+  ThumbnailPayload,
   FolderListing,
   ImportFileResult,
   RevisionSummary,
@@ -74,6 +75,13 @@ export const api = {
     request<FolderListing>(`/api/list?path=${encodeURIComponent(path)}`),
   readFile: (path: string) =>
     request<FilePayload>(`/api/file?path=${encodeURIComponent(path)}`),
+  thumbnail: (path: string) =>
+    request<ThumbnailPayload>(`/api/thumbnail?path=${encodeURIComponent(path)}`),
+  saveThumbnail: (path: string, cacheKey: string, svg: string) =>
+    request<{ path: string; cacheKey: string; mtimeMs: number }>("/api/thumbnail", {
+      method: "PUT",
+      body: JSON.stringify({ path, cacheKey, svg }),
+    }),
   diagramMeta: () => request<{ diagrams: DiagramMeta[] }>("/api/diagram-meta"),
   writeFile: (
     path: string,
