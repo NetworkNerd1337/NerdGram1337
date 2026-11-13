@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { findChangelogSection } from "./changelog-notes.mjs";
 import { currentCodename } from "./codenames.mjs";
 
-/** Planned releases named in the README. They are not the package.json pin. */
-const POLICY_VERSIONS = new Set(["1.0.5", "2.0.0"]);
+/** Releases named in README prose that are not the package.json pin. */
+const POLICY_VERSIONS = new Set(["1.0.5", "1.0.6", "2.0.0"]);
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const files = ["package.json", "client/package.json", "server/package.json", "cli/package.json"];
@@ -58,12 +58,21 @@ if (!dockerfile.includes("NERDGRAM_CODENAME=${NERDGRAM_CODENAME}")) {
 
 const compose = readFileSync(join(root, "compose.yaml"), "utf8");
 const image = `ghcr.io/networknerd1337/nerdgram1337:v${expected}`;
-if (!compose.includes(image) || !compose.includes(`NERDGRAM_VERSION: "${expected}"`)) {
-  console.error(`compose.yaml must pin ${image} and NERDGRAM_VERSION ${expected}.`);
+if (!compose.includes(image)) {
+  console.error(`compose.yaml must pin ${image} for docker compose pull.`);
   process.exit(1);
 }
-if (!compose.includes(`NERDGRAM_CODENAME: "${codename}"`)) {
-  console.error(`compose.yaml must pin NERDGRAM_CODENAME ${codename}.`);
+if (/^\s*build\s*:/m.test(compose)) {
+  console.error("compose.yaml must not build an image. A local build belongs in compose.build.yaml as nerdgram1337:local.");
+  process.exit(1);
+}
+const buildCompose = readFileSync(join(root, "compose.build.yaml"), "utf8");
+if (!buildCompose.includes("image: nerdgram1337:local") || !buildCompose.includes(`NERDGRAM_VERSION: "${expected}"`)) {
+  console.error(`compose.build.yaml must tag nerdgram1337:local and pin NERDGRAM_VERSION ${expected}.`);
+  process.exit(1);
+}
+if (!buildCompose.includes(`NERDGRAM_CODENAME: "${codename}"`)) {
+  console.error(`compose.build.yaml must pin NERDGRAM_CODENAME ${codename}.`);
   process.exit(1);
 }
 
@@ -109,7 +118,7 @@ assertReadmeVersions(readme, expected);
 assertReadmeLinks(readme, root);
 
 console.log(
-  `Version ${expected} "${codename}" matches in root, client, server, cli, Dockerfile, compose.yaml, CHANGELOG.md, and README.md.`,
+  `Version ${expected} "${codename}" matches in root, client, server, cli, Dockerfile, compose.yaml, compose.build.yaml, CHANGELOG.md, and README.md.`,
 );
 
 /**
@@ -137,7 +146,7 @@ function assertReadmeVersions(markdown, version) {
   }
   if (bad.size > 0) {
     console.error(`README version examples must match package.json ${version}, or use the vX.Y.Z placeholder.`);
-    console.error("Prose may also name the planned releases v1.0.5 (Atlas) and v2.0.0 (Meridian).");
+    console.error("Prose may also name v1.0.5, v1.0.6, and v2.0.0 (Meridian).");
     for (const item of bad) console.error(`  ${item}`);
     process.exit(1);
   }

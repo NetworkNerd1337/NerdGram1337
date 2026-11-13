@@ -39,15 +39,29 @@ if (!dockerfile.includes(`ARG NERDGRAM_CODENAME=${codename}`)) {
 writeFileSync(dockerfilePath, dockerfile);
 
 const composePath = join(root, "compose.yaml");
-const compose = readFileSync(composePath, "utf8")
-  .replace(/ghcr\.io\/networknerd1337\/nerdgram1337:v\d+\.\d+\.\d+/g, `ghcr.io/networknerd1337/nerdgram1337:v${rootVersion}`)
-  .replace(/NERDGRAM_VERSION:\s*"[^"]+"/g, `NERDGRAM_VERSION: "${rootVersion}"`)
-  .replace(/NERDGRAM_CODENAME:\s*"[^"]+"/g, `NERDGRAM_CODENAME: "${codename}"`);
-if (!compose.includes(`NERDGRAM_CODENAME: "${codename}"`)) {
-  console.error("compose.yaml has no NERDGRAM_CODENAME pin to update.");
+const compose = readFileSync(composePath, "utf8").replace(
+  /ghcr\.io\/networknerd1337\/nerdgram1337:v\d+\.\d+\.\d+/g,
+  `ghcr.io/networknerd1337/nerdgram1337:v${rootVersion}`,
+);
+if (!compose.includes(`ghcr.io/networknerd1337/nerdgram1337:v${rootVersion}`)) {
+  console.error("compose.yaml has no published image tag to update.");
   process.exit(1);
 }
 writeFileSync(composePath, compose);
+
+const buildComposePath = join(root, "compose.build.yaml");
+const buildCompose = readFileSync(buildComposePath, "utf8")
+  .replace(/NERDGRAM_VERSION:\s*"[^"]+"/g, `NERDGRAM_VERSION: "${rootVersion}"`)
+  .replace(/NERDGRAM_CODENAME:\s*"[^"]+"/g, `NERDGRAM_CODENAME: "${codename}"`);
+if (!buildCompose.includes(`image: nerdgram1337:local`)) {
+  console.error("compose.build.yaml must tag the local build nerdgram1337:local.");
+  process.exit(1);
+}
+if (!buildCompose.includes(`NERDGRAM_CODENAME: "${codename}"`)) {
+  console.error("compose.build.yaml has no NERDGRAM_CODENAME pin to update.");
+  process.exit(1);
+}
+writeFileSync(buildComposePath, buildCompose);
 
 for (const file of ["package-lock.json", "client/package-lock.json", "server/package-lock.json"]) {
   const full = join(root, file);
@@ -65,4 +79,4 @@ for (const file of ["package-lock.json", "client/package-lock.json", "server/pac
   writeFileSync(full, next);
 }
 
-console.log(`Dockerfile, compose.yaml, and lockfiles -> ${rootVersion} "${codename}"`);
+console.log(`Dockerfile, compose.yaml, compose.build.yaml, and lockfiles -> ${rootVersion} "${codename}"`);

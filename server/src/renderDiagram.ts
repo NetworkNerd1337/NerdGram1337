@@ -2,6 +2,7 @@ import { createRequire } from "node:module";
 import type { Browser, Page } from "puppeteer";
 import puppeteer from "puppeteer";
 import { diagramInitConfig } from "./frontMatter.js";
+import { locateParseError } from "./parseError.js";
 import { httpFail } from "./storage.js";
 import { sanitizeThumbnailSvg } from "./thumbnails.js";
 
@@ -141,20 +142,51 @@ async function draw(page: Page, source: string, background: string): Promise<str
     { waitUntil: "domcontentloaded" },
   );
   await page.addScriptTag({ path: mermaidScript() });
-  const svg = await page.evaluate(
+  const drawn = await page.evaluate(
     async (code: string, mermaidConfig: Record<string, unknown>, fill: string) => {
       const api = (window as unknown as { mermaid?: { initialize: (config: unknown) => void; render: (id: string, text: string) => Promise<{ svg: string }> } }).mermaid;
-      if (!api) throw new Error("Mermaid did not load");
+      if (!api) return { ok: false as const, message: "Mermaid did not load", loc: null, token: undefined };
       document.body.style.background = fill;
       api.initialize(mermaidConfig);
-      const rendered = await api.render("nerdgram-render", code);
-      return rendered.svg;
+      try {
+        const rendered = await api.render("nerdgram-render", code);
+        return { ok: true as const, svg: rendered.svg };
+      } catch (err) {
+        const hash =
+          err && typeof err === "object" && "hash" in err
+            ? (err as { hash?: { loc?: { first_line?: number; last_line?: number; first_column?: number; last_column?: number }; token?: unknown } }).hash
+            : undefined;
+        const loc = hash?.loc;
+        return {
+          ok: false as const,
+          message: err instanceof Error ? err.message : String(err),
+          loc:
+            loc && typeof loc.first_line === "number"
+              ? {
+                  first_line: loc.first_line,
+                  last_line: typeof loc.last_line === "number" ? loc.last_line : undefined,
+                  first_column: typeof loc.first_column === "number" ? loc.first_column : undefined,
+                  last_column: typeof loc.last_column === "number" ? loc.last_column : undefined,
+                }
+              : null,
+          token: typeof hash?.token === "string" ? hash.token : undefined,
+        };
+      }
     },
     source,
     config,
     background,
   );
-  return svg;
+  if (!drawn.ok) {
+    const parsed = drawn.loc != null || /parse error on line/i.test(drawn.message);
+    if (!parsed) throw httpFail(400, plainError(drawn.message), "invalid");
+    const located = locateParseError(
+      { message: drawn.message, hash: { loc: drawn.loc ?? undefined, token: drawn.token } },
+      source,
+    );
+    throw httpFail(400, located.message, "invalid");
+  }
+  return drawn.svg;
 }
 
 async function rasterize(page: Page, svg: string, background: string): Promise<Buffer> {

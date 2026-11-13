@@ -2,7 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { lintDiagram } from "./diagramLint.js";
+import { lintDiagramSource } from "./mermaidSyntax.js";
 import { closeRenderer, renderDiagram, type RenderFormat } from "./renderDiagram.js";
 
 /**
@@ -277,7 +277,7 @@ async function lintCommand(parsed: Parsed, io: Io): Promise<number> {
   let label = target ?? "(workspace)";
   if (target && (flagString(parsed.flags, "source") || (await pathExists(target)))) {
     const source = await fs.readFile(target, "utf8");
-    diagnostics = lintDiagram(source, { sourcePath: target });
+    diagnostics = await lintDiagramSource(source, { sourcePath: target });
     label = target;
   } else {
     const { base, token } = configOf(parsed.flags, io.env);

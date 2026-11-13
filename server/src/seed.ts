@@ -2,14 +2,33 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ensureDataRoot, REPO_ROOT } from "./paths.js";
 
-/** Sample diagrams shipped in the repo. Copied once into an empty data directory. */
-const SAMPLE_FILES = [
-  "Welcome.mmd",
-  "NetworkMap.mmd",
-  "Examples/Sequence.mmd",
-  "WAN.mmd",
-  "Sites/Atlanta.mmd",
-];
+/**
+ * Every `.mmd` file under `diagrams/`, including subfolders.
+ * A new sample is seeded with the others. It is not a separate allow-list.
+ */
+export async function bundledSampleFiles(root = path.join(REPO_ROOT, "diagrams")): Promise<string[]> {
+  return walkMmd(root, "");
+}
+
+async function walkMmd(dir: string, prefix: string): Promise<string[]> {
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const files: string[] = [];
+  for (const entry of entries) {
+    if (entry.name.startsWith(".")) continue;
+    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      files.push(...(await walkMmd(path.join(dir, entry.name), relative)));
+    } else if (entry.isFile() && entry.name.toLowerCase().endsWith(".mmd")) {
+      files.push(relative);
+    }
+  }
+  return files.sort((a, b) => a.localeCompare(b));
+}
 
 /**
  * Copy the sample diagrams into an empty data directory.
@@ -31,7 +50,7 @@ export async function seedEmptyDataDir(): Promise<boolean> {
   if (entries.length > 0) return false;
 
   let copied = 0;
-  for (const relative of SAMPLE_FILES) {
+  for (const relative of await bundledSampleFiles(samples)) {
     const from = path.join(samples, relative);
     try {
       await fs.access(from);

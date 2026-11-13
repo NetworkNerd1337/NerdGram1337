@@ -135,7 +135,8 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
   const barVisibleRef = useRef(true);
   const idleRef = useRef(false);
   const hadSvg = useRef(false);
-  const press = useRef<{ x: number; y: number; dragged: boolean } | null>(null);
+  const press = useRef<{ x: number; y: number; dragged: boolean; target: EventTarget | null } | null>(null);
+  const handledPress = useRef(false);
 
   const [session, setSession] = useState<DrillSession>(() => sessionStart(slideFor(path, source, fileError)));
   const [linkMessage, setLinkMessage] = useState<string | null>(null);
@@ -435,13 +436,19 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
 
   function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (event.button !== 0 && event.pointerType === "mouse") return;
-    press.current = { x: event.clientX, y: event.clientY, dragged: false };
+    handledPress.current = false;
+    press.current = { x: event.clientX, y: event.clientY, dragged: false, target: event.target };
     const point = stagePoint(event);
     lastFocal.current = point;
     pointers.current.set(event.pointerId, point);
     dragging.current = true;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    // Capture only after the pointer actually moves. Capturing on pointer down
+    // retargets the click to this stage, so a linked node never receives it.
     if (pointers.current.size >= 2) {
+      const node = event.currentTarget;
+      if (typeof node.setPointerCapture === "function" && node.hasPointerCapture?.(event.pointerId) !== true) {
+        node.setPointerCapture(event.pointerId);
+      }
       const info = pairInfo();
       if (info) gesture.current = { kind: "pinch", ...info };
       return;
@@ -462,7 +469,13 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
     }
     const point = stagePoint(event);
     const origin = press.current;
-    if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 6) origin.dragged = true;
+    if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 6) {
+      origin.dragged = true;
+      const node = event.currentTarget;
+      if (typeof node.setPointerCapture === "function" && node.hasPointerCapture?.(event.pointerId) !== true) {
+        node.setPointerCapture(event.pointerId);
+      }
+    }
     pointers.current.set(event.pointerId, point);
     lastFocal.current = point;
     const current = gesture.current;
@@ -488,12 +501,21 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
   }
 
   function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const origin = press.current;
     pointers.current.delete(event.pointerId);
     if (pointers.current.size === 0) {
+      const dragged = origin?.dragged ?? false;
       gesture.current = { kind: "none" };
       dragging.current = false;
       setPanning(false);
       revealBar();
+      if (!dragged && origin && (event.button === 0 || event.pointerType !== "mouse")) {
+        const raw = frame.source ? clickTargetOnElement(frame.source, origin.target) : null;
+        if (raw) {
+          handledPress.current = true;
+          void openTarget(raw);
+        }
+      }
       return;
     }
     if (pointers.current.size === 1) {
@@ -580,6 +602,10 @@ export function PresentationView({ source, path, fileError = null, onExit }: Pre
         onClick={(event) => {
           const anchor = event.target instanceof Element ? event.target.closest("a") : null;
           if (anchor) event.preventDefault();
+          if (handledPress.current) {
+            handledPress.current = false;
+            return;
+          }
           if (press.current?.dragged) return;
           const raw = frame.source ? clickTargetOnElement(frame.source, event.target) : null;
           if (!raw) return;

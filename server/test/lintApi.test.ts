@@ -53,6 +53,18 @@ describe("lint API", () => {
     const broken = workspace.body.diagrams.find((item: { path: string }) => item.path === "Broken.mmd");
     expect(broken.diagnostics.some((item: { ruleId: string }) => item.ruleId === "unused-class")).toBe(true);
 
+    const syntax = await request(app)
+      .post("/api/lint")
+      .set("Host", HOST)
+      .set("Content-Type", "application/json")
+      .send({ source: "flowchart LR\n  A -->\n" });
+    expect(syntax.status).toBe(200);
+    const parseError = syntax.body.diagnostics.find((item: { ruleId: string }) => item.ruleId === "parse");
+    expect(parseError?.severity).toBe("error");
+    expect(parseError?.line).toBe(2);
+    expect(parseError?.message).toMatch(/Line 2/);
+    expect(parseError?.message).not.toMatch(/line 4/i);
+
     const rejected = await request(app)
       .post("/api/lint")
       .set("Host", HOST)

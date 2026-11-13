@@ -124,6 +124,13 @@ node -e 'const b=JSON.parse(process.argv[1]); if (!Array.isArray(b.templates) ||
 WELCOME="$(curl -fsS "http://127.0.0.1:${PORT}/api/file?path=Welcome.mmd" -H "Host: 127.0.0.1:${PORT}")"
 node -e 'const b=JSON.parse(process.argv[1]); if (typeof b.content !== "string" || b.content.length < 1) process.exit(1)' "$WELCOME"
 
+echo "every bundled sample is in the image and was seeded"
+while IFS= read -r rel; do
+  [ -n "$rel" ] || continue
+  docker exec "$NAME" test -f "/app/diagrams/$rel"
+  docker exec "$NAME" test -f "/data/$rel"
+done < <(find diagrams -name '*.mmd' -printf '%P\n' | sort)
+
 TOKEN_JSON="$(curl -fsS -X POST "http://127.0.0.1:${PORT}/api/tokens" \
   -H "Host: 127.0.0.1:${PORT}" \
   -H "Origin: http://127.0.0.1:${PORT}" \

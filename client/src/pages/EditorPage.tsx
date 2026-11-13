@@ -864,7 +864,6 @@ export function EditorPage() {
           <button
             type="button"
             className="btn btn-ghost"
-            style={{ color: "#e8eef5" }}
             onClick={() => setInfoOpen(true)}
             disabled={!loaded}
             aria-expanded={infoOpen}
@@ -875,7 +874,6 @@ export function EditorPage() {
             <button
               type="button"
               className="btn btn-ghost"
-              style={{ color: "#e8eef5" }}
               onClick={refreshFromData}
               disabled={!loaded}
             >
@@ -885,13 +883,12 @@ export function EditorPage() {
           <button
             type="button"
             className="btn btn-ghost"
-            style={{ color: "#e8eef5" }}
             onClick={() => setHistoryOpen(true)}
             disabled={!loaded}
           >
             History
           </button>
-          <Link className="btn btn-ghost" to="/reference" style={{ color: "#e8eef5" }}>
+          <Link className="btn btn-ghost" to="/reference">
             Open Syntax Reference Library
           </Link>
           <label className="export-label">

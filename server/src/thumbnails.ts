@@ -2,6 +2,7 @@ import * as cheerio from "cheerio";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { thumbnailCacheKey } from "./frontMatter.js";
+import { svgForImage } from "./svgImage.js";
 import { getMetaPath, resolveSafePath, toRelativePath } from "./paths.js";
 import {
   atomicWriteJson,
@@ -153,8 +154,8 @@ export function sanitizeThumbnailSvg(svg: string): string {
       /(\s(?:href|xlink:href|src)\s*=\s*)(["'])\s*(?:javascript|vbscript):[^"']*\2/gi,
       '$1$2#$2',
     );
-  if (swept === svg || swept === trimmed) return svg;
-  return swept;
+  const cleaned = swept === svg || swept === trimmed ? svg : swept;
+  return svgForImage(cleaned);
 }
 
 function assertSvg(svg: string): string {

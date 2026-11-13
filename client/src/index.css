@@ -591,6 +591,23 @@ a {
   color: #91a0b4;
 }
 
+.editor-top .btn,
+.editor-top .btn-ghost,
+.editor-top a.btn,
+.panel-header .btn,
+.panel-header .btn-ghost,
+.preview-toolbar .btn {
+  color: #f4f7fb;
+  background: transparent;
+  border-color: #8ea0b5;
+}
+
+.editor-top .kbd,
+.panel-header .kbd {
+  color: #f4f7fb;
+  border-color: #8ea0b5;
+}
+
 .breadcrumb {
   color: #91a0b4;
   font-size: 0.9rem;
@@ -969,15 +986,16 @@ a {
 
 .preview-stale-frame {
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
   max-width: 100%;
   opacity: 0.72;
 }
 
-.preview-stale-frame::after {
+.preview-stale-frame::before {
   content: "Out of date";
-  position: absolute;
-  top: 0.4rem;
-  right: 0.4rem;
+  margin: 0 0 0.35rem;
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
   background: #6b5430;
@@ -1164,10 +1182,22 @@ a {
 .modal {
   width: min(420px, 100%);
   background: var(--bg-elevated);
+  color: var(--ink);
   border-radius: 16px;
   border: 1px solid var(--line);
   box-shadow: var(--shadow);
   padding: 1.1rem;
+}
+
+.modal p,
+.modal li,
+.modal h3,
+.modal h4,
+.refresh-diff,
+.refresh-diff p,
+.refresh-diff li,
+.refresh-diff h4 {
+  color: var(--ink);
 }
 
 .modal h3 {
@@ -2479,5 +2509,22 @@ a {
 .refresh-diff code {
   font-family: var(--font-mono);
   font-size: 0.85rem;
+  color: var(--ink);
+}
+
+.settings-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.9rem;
+  margin-top: 0.65rem;
+}
+
+.settings-nav a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.sync-card[id] {
+  scroll-margin-top: 1rem;
 }
 
