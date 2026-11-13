@@ -18,6 +18,7 @@ import {
   type RuntimeMode,
 } from "./security.js";
 import * as search from "./search.js";
+import * as sync from "./sync/engine.js";
 import * as syntaxReference from "./syntaxReference.js";
 import * as templates from "./templates.js";
 import * as thumbnails from "./thumbnails.js";
@@ -587,6 +588,115 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
       }
       await locks.releaseLock(relative, token);
       res.status(204).send();
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.get("/api/sync/status", async (_req, res) => {
+    try {
+      res.json(await sync.getSyncStatus());
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/sync/client-id", async (req, res) => {
+    try {
+      if (typeof req.body?.clientId !== "string") {
+        res.status(400).json({ error: "clientId is required", code: "invalid" });
+        return;
+      }
+      res.json(await sync.saveClientId(req.body.clientId));
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/sync/device/start", async (_req, res) => {
+    try {
+      res.json(await sync.startDeviceFlow());
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/sync/connect", async (req, res) => {
+    try {
+      if (req.body?.name != null && typeof req.body.name !== "string") {
+        res.status(400).json({ error: "name must be a string", code: "invalid" });
+        return;
+      }
+      if (req.body?.private != null && typeof req.body.private !== "boolean") {
+        res.status(400).json({ error: "private must be a boolean", code: "invalid" });
+        return;
+      }
+      if (req.body?.confirmNonEmpty != null && typeof req.body.confirmNonEmpty !== "boolean") {
+        res.status(400).json({ error: "confirmNonEmpty must be a boolean", code: "invalid" });
+        return;
+      }
+      res.json(
+        await sync.connectRepo({
+          name: typeof req.body?.name === "string" ? req.body.name : undefined,
+          private: typeof req.body?.private === "boolean" ? req.body.private : undefined,
+          confirmNonEmpty: req.body?.confirmNonEmpty === true,
+        }),
+      );
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/sync/now", async (_req, res) => {
+    try {
+      res.json(await sync.syncNow());
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/sync/pull", async (_req, res) => {
+    try {
+      res.json(await sync.pullFromRemote());
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/sync/resolve", async (req, res) => {
+    try {
+      if (!Array.isArray(req.body?.choices)) {
+        res.status(400).json({ error: "choices is required", code: "invalid" });
+        return;
+      }
+      const choices: { path: string; choice: "local" | "remote" | "both" }[] = [];
+      for (const choice of req.body.choices) {
+        if (!choice || typeof choice !== "object") {
+          res.status(400).json({ error: "Each choice needs a path and local, remote, or both", code: "invalid" });
+          return;
+        }
+        const record = choice as { path?: unknown; choice?: unknown };
+        const side = record.choice;
+        const itemPath = typeof record.path === "string" ? record.path : "";
+        if (!itemPath || (side !== "local" && side !== "remote" && side !== "both")) {
+          res.status(400).json({ error: "Each choice needs a path and local, remote, or both", code: "invalid" });
+          return;
+        }
+        choices.push({ path: itemPath, choice: side });
+      }
+      res.json(await sync.resolveConflicts(choices));
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/sync/disable", async (req, res) => {
+    try {
+      if (req.body?.confirm != null && typeof req.body.confirm !== "boolean") {
+        res.status(400).json({ error: "confirm must be a boolean", code: "invalid" });
+        return;
+      }
+      res.json(await sync.disableSync(req.body?.confirm === true));
     } catch (err) {
       sendError(res, err);
     }

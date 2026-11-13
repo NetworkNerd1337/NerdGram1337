@@ -3,6 +3,7 @@ import type {
   DiagramSearchResponse,
   FilePayload,
   FileWriteResult,
+  SyncStatus,
   TemplateSummary,
   ThumbnailPayload,
   FolderListing,
@@ -261,6 +262,45 @@ export const api = {
           name: body.name ?? "",
           folder: body.folder ?? "",
         }),
+      },
+    ),
+  syncStatus: () => request<SyncStatus>("/api/sync/status"),
+  saveGithubClientId: (clientId: string) =>
+    request<SyncStatus>("/api/sync/client-id", {
+      method: "POST",
+      body: JSON.stringify({ clientId }),
+    }),
+  startGithubDevice: () =>
+    request<SyncStatus>("/api/sync/device/start", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  connectGithub: (input: { name?: string; private?: boolean; confirmNonEmpty?: boolean }) =>
+    request<SyncStatus>("/api/sync/connect", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  syncNow: () =>
+    request<SyncStatus>("/api/sync/now", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  pullGithub: () =>
+    request<SyncStatus>("/api/sync/pull", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  resolveGithub: (choices: { path: string; choice: "local" | "remote" | "both" }[]) =>
+    request<SyncStatus>("/api/sync/resolve", {
+      method: "POST",
+      body: JSON.stringify({ choices }),
+    }),
+  disableGithub: (confirm: boolean) =>
+    request<SyncStatus & { disconnected?: boolean; repoRemains?: boolean; grantRevoked?: boolean; revokeUrl?: string }>(
+      "/api/sync/disable",
+      {
+        method: "POST",
+        body: JSON.stringify({ confirm }),
       },
     ),
   referenceSync: () =>

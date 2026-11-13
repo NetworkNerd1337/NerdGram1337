@@ -15,6 +15,7 @@ import { syncTemplateCommands } from "../lib/templateCommands";
 import type { DiagramSearchHit } from "../types";
 import "../lib/builtinCommands";
 import "../lib/presentCommands";
+import "../lib/syncCommands";
 import { HighlightedText } from "./HighlightedText";
 import { PaletteContext, usePaletteControls, type PaletteControls } from "./commandPaletteContext";
 

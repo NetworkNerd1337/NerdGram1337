@@ -256,6 +256,7 @@ export async function writeFile(
   const stat = await fs.stat(abs);
   const search = await import("./search.js");
   await search.rememberSearchEntry(relative, content, stat.mtimeMs, stat.size);
+  noteSync({ kind: "content", summary: `Update ${relative}` });
   return {
     path: relative,
     mtimeMs: stat.mtimeMs,
@@ -288,7 +289,9 @@ export async function createFolder(relativePath: string): Promise<{ path: string
   if (!cleaned) throw httpFail(400, "Folder path required", "invalid");
   const abs = resolveSafePath(cleaned);
   await fs.mkdir(abs, { recursive: true });
-  return { path: toRelativePath(abs) };
+  const created = toRelativePath(abs);
+  noteSync({ kind: "structural", summary: `Create folder ${created}` });
+  return { path: created };
 }
 
 export async function renameItem(fromPath: string, toPath: string): Promise<{ path: string }> {
@@ -337,6 +340,7 @@ export async function renameItem(fromPath: string, toPath: string): Promise<{ pa
   await relocateThumbnails(fromRel, toRel, fromStat.isDirectory());
   const search = await import("./search.js");
   await search.moveSearchEntries(fromRel, toRel, fromStat.isDirectory());
+  noteSync({ kind: "structural", summary: `Rename ${fromRel} to ${toRel}` });
   return { path: toRel };
 }
 
@@ -385,7 +389,9 @@ export async function duplicateItem(
       await fs.rm(destAbs, { recursive: true, force: true });
       throw err;
     }
-    return { path: toRelativePath(destAbs), type: "folder" };
+    const copied = toRelativePath(destAbs);
+    noteSync({ kind: "structural", summary: `Duplicate ${fromRel} to ${copied}` });
+    return { path: copied, type: "folder" };
   }
 
   if (!stat.isFile() || !isDiagramFile(fromRel)) {
@@ -393,6 +399,7 @@ export async function duplicateItem(
   }
   const content = await fs.readFile(abs, "utf8");
   const written = await writeFile(destRel, content);
+  noteSync({ kind: "structural", summary: `Duplicate ${fromRel} to ${written.path}` });
   return { path: written.path, type: "file" };
 }
 
@@ -417,4 +424,13 @@ async function copyFolderContents(srcAbs: string, destAbs: string): Promise<void
 
 export async function deleteItem(relativePath: string): Promise<void> {
   await moveToTrash(relativePath);
+  noteSync({ kind: "structural", summary: `Delete ${normalizeRelative(relativePath)}` });
+}
+
+function noteSync(change: { kind: "content" | "structural"; summary: string }): void {
+  void import("./sync/hooks.js")
+    .then((mod) => mod.noteLocalChange(change))
+    .catch(() => {
+      console.error("GitHub sync could not record a local change");
+    });
 }

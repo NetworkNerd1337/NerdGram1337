@@ -2,7 +2,7 @@
 
 Local-first Mermaid diagramming app by **NetworkNerd1337**.
 
-Paste Mermaid markdown, preview it live with [mermaid.js](https://mermaid.js.org/), manage diagrams as real files and folders on disk, and export **SVG**, **PNG**, **JPG**, or **PDF**. No accounts, no cloud sync, no AI generation, no paywalls.
+Paste Mermaid markdown, preview it live with [mermaid.js](https://mermaid.js.org/), manage diagrams as real files and folders on disk, and export **SVG**, **PNG**, **JPG**, or **PDF**. No accounts, no AI generation, no paywalls. Optional GitHub sync copies those diagrams to a repository you own.
 
 The app is two programs on your computer. The **client** is a React app that shows the dashboard, the paste page, and the split editor. The **server** is an Express API that reads and writes `.mmd` files in a folder on disk. In development they run side by side. A production build serves the built client and the API from one process.
 
@@ -534,6 +534,76 @@ Then `npm run dev`, or `npm run build` and `npm start`. `git pull` updates track
 
 **If you used the ZIP**, download a fresh ZIP from the link in step 2 and extract it to a new folder. `cd` into that folder and run `npm run install:all` again. The ZIP does not include `node_modules`. If your diagrams are still in the old project's `diagrams/` folder, copy that folder into the new project. If you set `NERDGRAM_DATA_DIR`, point the new copy at the same path and leave the files where they are.
 
+## GitHub sync
+
+GitHub sync is optional. The folder on this computer stays the copy NerdGram edits. A separate hidden folder, `.nerdgram-git` inside the data directory, is the git working copy. NerdGram does not turn the data directory into a git repository. Turning sync off deletes that hidden folder and the saved authorization. The repository on GitHub stays in your account.
+
+NerdGram does not ship a client ID or a client secret. You register an OAuth app in your own GitHub account.
+
+### What is copied
+
+Synced files are the `.mmd` diagrams and the folders that contain them. The commit also includes a short README, `.gitignore`, and `.gitattributes` so the GitHub repository can be read on its own.
+
+These stay on this computer and are not pushed:
+
+- `.meta` (favorites, syntax overrides, trash, version history, editor locks, thumbnails, the search index, and the GitHub token)
+- any other hidden path
+- `templates/` and `reference/`, which live outside the data directory
+
+Empty folders are not stored, because git does not keep empty directories. A folder appears once it contains a diagram.
+
+Edits wait until the workspace has been idle for 20 seconds (`NERDGRAM_SYNC_IDLE_MS`) and then become one commit, such as `Update Network/Core.mmd`. Autosave still writes the file about 500ms after you type; that does not create a commit per keystroke. Renames, moves, deletes, imports, and restores commit after about a second. A change made in another program is picked up by a reconciliation scan about once a minute, or when you choose **Sync now**.
+
+If GitHub has commits that this computer does not, NerdGram does not force-push. **Pull** brings those changes into the local folder through the normal save path, including a local revision snapshot. An open editor is not overwritten. When both copies changed, you choose **Keep local**, **Keep both**, or **Use GitHub copy**.
+
+### 1. Register an OAuth app
+
+1. Open [GitHub → Settings → Developer settings → OAuth Apps](https://github.com/settings/developers) and choose **New OAuth App**.
+2. **Application name:** `NerdGram1337` (or any name you will recognize).
+3. **Homepage URL:** `http://127.0.0.1:8787`
+4. **Authorization callback URL:** `http://127.0.0.1:8787` (Device flow does not open this URL. GitHub's form still requires one.)
+5. Register the app, then open it and enable **Device flow**.
+6. Copy the **Client ID**. Leave the client secret unused. Do not commit it or put it in the NerdGram image.
+
+The Device flow requests the `repo` scope. That is the smallest classic OAuth scope that can create a private repository and read and write its contents. It is broader than a single-file permission because GitHub does not offer a contents-only OAuth scope that can also create the repository.
+
+If the repository already exists, you can skip Device flow and set `NERDGRAM_GITHUB_TOKEN` to a fine-grained personal access token with **Contents: Read and write** on that one repository. No other repository permission is required. A GitHub App installed on that same repository can use the same limit: **Contents** read and write, and **Metadata** read. Put an installation or user token in `NERDGRAM_GITHUB_TOKEN`. NerdGram's Device flow itself is for an OAuth app, which is the flow above.
+
+### 2. Connect
+
+In the app, open **GitHub sync** (or run **GitHub sync status** from the command palette). Paste the client ID and choose **Connect to GitHub**. The page shows a code and a link to [https://github.com/login/device](https://github.com/login/device). Approve the app there. Then create the repository. The default name is `nerdgram-diagrams` and it is private. If that name already has commits, NerdGram asks before adding your diagrams on top. It does not erase the existing history and it does not force-push.
+
+You can also set the client ID in the environment instead of the form:
+
+```bash
+NERDGRAM_GITHUB_CLIENT_ID=Iv1.yourClientId
+```
+
+On a container, pass the same variable and keep the data directory on a volume. The token file is under that directory's `.meta` folder, so it survives a new container:
+
+```bash
+NERDGRAM_GITHUB_CLIENT_ID=Iv1.yourClientId
+NERDGRAM_DATA_DIR=/data
+```
+
+There is no operating-system keychain in a typical container. The file mode `0600` is the stored token.
+
+### 3. Where the token is stored
+
+| What | Where |
+| --- | --- |
+| Access token | `<data directory>/.meta/github-token`, mode `0600`, or `NERDGRAM_GITHUB_TOKEN` if that variable is set. The variable is not copied into the file. |
+| Sync settings (account, repository URL, no token) | `<data directory>/.meta/github-sync.json`, mode `0600` |
+| Git working copy | `<data directory>/.nerdgram-git` (hidden; the app cannot open it as a diagram) |
+
+The token is not returned to the browser, not written into the git remote URL or `.git/config`, and not put in a commit. Git pushes send it only as an `Authorization` header for that request.
+
+Optional: `NERDGRAM_GITHUB_CLIENT_SECRET` is read from the environment only, never stored, and is used solely to revoke the OAuth grant on disconnect. Without it, disconnect still deletes the local token. Revoke the grant yourself at [GitHub → Settings → Applications](https://github.com/settings/apps/authorizations). Delete the OAuth app from Developer settings when you want the app registration gone too. Disconnect does not delete the repository.
+
+### 4. Disconnect
+
+**Disconnect** asks you to confirm. The dialog states that the GitHub repository stays in your account. NerdGram then stops syncing, deletes `.nerdgram-git`, and deletes the saved token and sync settings. Diagrams in the data directory stay where they are.
+
 ## Security model
 
 NerdGram1337 is a local, single-user personal tool. It has no accounts and no authentication, by design. Diagrams are plain `.mmd` files, and your operating-system account and file permissions are the access control. Do not run it as a shared service, on a NAS, or on a host other people can reach. That use is unsupported.
@@ -548,6 +618,8 @@ Two browser checks sit in front of that bind:
 `NERDGRAM_CORS_ORIGINS` is an optional comma-separated list of extra origins, for example when Vite falls over to port 5174 (see troubleshooting). It is not a wildcard.
 
 Paths stay inside the data directory. The server rejects null bytes, hidden paths such as `.meta`, and any path that escapes that directory. Diagram writes must be `.mmd` files. Editor locks only keep two windows from writing the same diagram. They are not authentication.
+
+GitHub sync is an optional copy of the `.mmd` files, not a second account system. The access token is stored in `.meta/github-token` with mode `0600`, or taken from `NERDGRAM_GITHUB_TOKEN`. It is not sent to the browser, not logged, and not written into the git remote. Sync routes use the same Host, Origin, and JSON checks as the rest of the API. Disconnect leaves the GitHub repository in your account and deletes the local mirror and the saved token. See [GitHub sync](#github-sync).
 
 ## Troubleshooting
 

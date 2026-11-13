@@ -113,6 +113,13 @@ export function Sidebar({
       </div>
 
       <div className="nav-section">
+        <div className="nav-label">Sync</div>
+        <Link className="nav-link" to="/settings">
+          GitHub sync
+        </Link>
+      </div>
+
+      <div className="nav-section">
         <div className="nav-label">Reference</div>
         <Link className="nav-link" to="/reference">
           Open Syntax Reference Library

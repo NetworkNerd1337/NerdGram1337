@@ -113,3 +113,35 @@ export type ImportFileResult = {
   code?: string;
   error?: string;
 };
+
+export type SyncConflict = {
+  path: string;
+  reason: "both_changed" | "locked" | "remote_deleted" | "local_deleted";
+  locked: boolean;
+  localPreview: string | null;
+  remotePreview: string | null;
+};
+
+export type SyncStatus = {
+  enabled: boolean;
+  login: string | null;
+  clientId: string | null;
+  clientIdSource: "env" | "config" | null;
+  tokenSource: "env" | "file" | null;
+  repo: { owner: string; name: string; private: boolean; htmlUrl: string } | null;
+  lastSyncAt: string | null;
+  pending: boolean;
+  ahead: number;
+  behind: number;
+  idleMs: number;
+  syncing: boolean;
+  error: { code: string; message: string; docsUrl?: string } | null;
+  conflicts: SyncConflict[];
+  device: { userCode: string; verificationUri: string; expiresAt: string } | null;
+  docsUrl: string;
+  mirror: string;
+  disconnected?: boolean;
+  repoRemains?: boolean;
+  grantRevoked?: boolean;
+  revokeUrl?: string;
+};
