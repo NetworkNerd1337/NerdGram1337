@@ -2,8 +2,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { lintDiagramSource } from "./mermaidSyntax.js";
-import { closeRenderer, renderDiagram, type RenderFormat } from "./renderDiagram.js";
+import type { RenderFormat } from "./renderDiagram.js";
 
 /**
  * `nerdgram` talks to a local NerdGram server, except `render` and `lint`
@@ -74,6 +73,25 @@ app. --dry-run is the default and writes nothing. --apply saves the previewed
 rewrites. If the data file moved with that diagram, the same confirmation
 updates nerdgram.source. An ambiguous match is listed and left unchanged.
 `;
+
+type RenderModule = typeof import("./renderDiagram.js");
+
+let renderModule: Promise<RenderModule> | null = null;
+
+function loadRender(): Promise<RenderModule> {
+  renderModule ??= import("./renderDiagram.js");
+  return renderModule;
+}
+
+async function loadLint(): Promise<typeof import("./mermaidSyntax.js")> {
+  return import("./mermaidSyntax.js");
+}
+
+export async function shutdownCli(): Promise<void> {
+  if (!renderModule) return;
+  const { closeRenderer } = await renderModule;
+  await closeRenderer();
+}
 
 class CliError extends Error {
   readonly status: number | undefined;
@@ -214,6 +232,7 @@ async function renderCommand(parsed: Parsed, io: Io): Promise<void> {
   let bytes: Buffer;
   if (local) {
     const source = await fs.readFile(target, "utf8");
+    const { renderDiagram } = await loadRender();
     const rendered = await renderDiagram({ source, format });
     bytes = rendered.body;
   } else {
@@ -306,6 +325,7 @@ async function lintCommand(parsed: Parsed, io: Io): Promise<number> {
   let label = target ?? "(workspace)";
   if (target && (flagString(parsed.flags, "source") || (await pathExists(target)))) {
     const source = await fs.readFile(target, "utf8");
+    const { lintDiagramSource } = await loadLint();
     diagnostics = await lintDiagramSource(source, { sourcePath: target });
     label = target;
   } else {
@@ -574,12 +594,12 @@ function isDirectRun(): boolean {
 if (isDirectRun()) {
   main(process.argv.slice(2))
     .then(async (code) => {
-      await closeRenderer();
+      await shutdownCli();
       process.exit(code);
     })
     .catch(async (err: unknown) => {
       console.error(err instanceof Error ? err.message : String(err));
-      await closeRenderer().catch(() => undefined);
+      await shutdownCli().catch(() => undefined);
       process.exit(1);
     });
 }

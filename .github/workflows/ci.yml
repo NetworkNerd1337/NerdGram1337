@@ -41,6 +41,9 @@ jobs:
       - name: Test
         run: npm test
 
+      - name: Pack the CLI and smoke-test --help
+        run: bash scripts/pack-cli-smoke.sh
+
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 30

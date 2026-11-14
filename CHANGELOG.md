@@ -4,6 +4,10 @@ Release notes for GitHub Releases. The heading for a release is `## X.Y.Z "Code 
 
 ## Unreleased
 
+### npm package
+
+From #43. The `nerdgram` command is published as the npm package `nerdgram1337`. The command name stays `nerdgram`. Install it with `npm install -g nerdgram1337`, or run `npx nerdgram1337 --help`. A `vX.Y.Z` tag publishes that package when the `NPM_TOKEN` repository secret is set, and refuses when the tag does not match `cli/package.json`. If the secret is missing, the release warns and the GitHub Release still goes out.
+
 ### Diagram checks
 
 From #45. Class diagrams warn when the same class is defined again with a different label, and when a relationship names a class that was never declared once any class is declared. A diagram made only of relationships is left alone. ER diagrams warn about a repeated attribute and a relationship to an entity that was never declared once any entity is declared. Gantt charts warn about a task that depends on an unknown id, and about a date that does not match `dateFormat` or is not a real calendar date. Mindmaps and timelines warn about an empty node and a repeated sibling. A quick fix can rename the duplicate class, declare the missing class or entity, remove the extra attribute, or remove the empty or repeated node. The same checks run in the editor, `POST /api/lint`, `/api/v1/lint`, and `nerdgram lint`. A sequence return arrow (`-->>`) is read as the arrow, so a name such as `Mermaid.js` is not reported as unlabeled.

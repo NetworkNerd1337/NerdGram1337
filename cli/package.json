@@ -1,16 +1,50 @@
 {
-  "name": "nerdgram",
+  "name": "nerdgram1337",
   "version": "1.1.0",
-  "description": "Command-line tool for a local NerdGram1337 server",
+  "description": "Command-line client for a local NerdGram1337 server",
   "type": "module",
+  "license": "MIT",
+  "author": "Ryan Thomas Huff",
   "bin": {
     "nerdgram": "./bin/nerdgram.js"
   },
   "files": [
-    "bin"
+    "bin",
+    "dist",
+    "LICENSE",
+    "README.md"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "npm": ">=10"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/NetworkNerd1337/NerdGram1337.git",
+    "directory": "cli"
+  },
+  "homepage": "https://github.com/NetworkNerd1337/NerdGram1337#command-line-tool",
+  "bugs": {
+    "url": "https://github.com/NetworkNerd1337/NerdGram1337/issues"
+  },
+  "keywords": [
+    "mermaid",
+    "diagram",
+    "cli",
+    "nerdgram"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "prepack": "node ../scripts/build-cli-package.mjs"
+  },
+  "dependencies": {
+    "cheerio": "^1.2.0",
+    "mermaid": "^12.3.0",
+    "puppeteer": "^24.43.1",
+    "yaml": "^2.9.1"
   },
   "private": false
 }
