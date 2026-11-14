@@ -7,6 +7,7 @@ import { ItemActions } from "../components/ItemActions";
 import { HighlightedText } from "../components/HighlightedText";
 import { MermaidThumbnail } from "../components/MermaidThumbnail";
 import { AffectedLinksDialog } from "../components/AffectedLinksDialog";
+import { DataFileDialog } from "../components/DataFileDialog";
 import { RepairLinksDialog } from "../components/RepairLinksDialog";
 import { Modal } from "../components/Modal";
 import { MoveDialog } from "../components/MoveDialog";
@@ -20,6 +21,7 @@ import {
   type DragItem,
   type DragPayload,
 } from "../lib/drag";
+import { dataMoveSentence, deleteDataPrompt, duplicateDataPrompt, duplicateStatus } from "../lib/dataFiles";
 import { draftsFromFiles, type ImportDraft } from "../lib/importDrafts";
 import {
   collectPaths,
@@ -51,6 +53,18 @@ function sameOver(current: OverTarget | null, next: OverTarget | null): boolean 
   if (!current || !next || current.kind !== next.kind || current.valid !== next.valid) return false;
   if (current.kind === "folder" && next.kind === "folder") return current.path === next.path;
   return true;
+}
+
+function organizeStatus(
+  fallback: string,
+  result: { updated?: string[]; dataFiles?: { from: string; to: string }[] },
+): string {
+  const parts: string[] = [];
+  if (result.updated?.length) parts.push(`Updated links in ${result.updated.join(", ")}.`);
+  const data = dataMoveSentence(result.dataFiles ?? []);
+  if (data) parts.push(data);
+  if (parts.length === 0) return fallback;
+  return fallback ? `${fallback} ${parts.join(" ")}` : parts.join(" ");
 }
 
 export function DashboardPage() {
@@ -87,6 +101,16 @@ export function DashboardPage() {
     run: () => Promise<void>;
   } | null>(null);
   const [linkBusy, setLinkBusy] = useState(false);
+  const [dataPrompt, setDataPrompt] = useState<{
+    title: string;
+    intro: string;
+    files: string[];
+    primaryLabel: string;
+    secondaryLabel: string;
+    primary: () => Promise<void>;
+    secondary: () => Promise<void>;
+  } | null>(null);
+  const [dataBusy, setDataBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [showTrash, setShowTrash] = useState(false);
   const [trash, setTrash] = useState<TrashItem[]>([]);
@@ -304,7 +328,7 @@ export function DashboardPage() {
         try {
           const result = await api.rename(from, to);
           await refresh();
-          if (result.updated?.length) setStatus(`Updated links in ${result.updated.join(", ")}.`);
+          setStatus(organizeStatus("Renamed.", result));
         } catch (err) {
           if (err instanceof ApiError && err.code === "links") {
             setModal(null);
@@ -316,7 +340,7 @@ export function DashboardPage() {
               run: async () => {
                 const result = await api.rename(from, to, true);
                 await refresh();
-                setStatus(result.updated?.length ? `Updated links in ${result.updated.join(", ")}.` : "Renamed.");
+                setStatus(organizeStatus("Renamed.", result));
               },
             });
             return;
@@ -330,8 +354,26 @@ export function DashboardPage() {
     }
   };
 
-  const finishDelete = async (path: string, confirmLinks: boolean) => {
-    await api.delete(path, confirmLinks);
+  const finishDelete = async (path: string, confirmLinks: boolean, deleteData?: boolean) => {
+    try {
+      await api.delete(path, confirmLinks, deleteData);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "data") {
+        const prompt = deleteDataPrompt();
+        setDataPrompt({
+          ...prompt,
+          files: err.files ?? [],
+          primary: async () => {
+            await finishDelete(path, confirmLinks, true);
+          },
+          secondary: async () => {
+            await finishDelete(path, confirmLinks, false);
+          },
+        });
+        return;
+      }
+      throw err;
+    }
     if (folder === path || folder.startsWith(`${path}/`)) setFolder("");
     await refresh();
     await loadTrash();
@@ -403,11 +445,17 @@ export function DashboardPage() {
     }
   };
 
-  const afterMove = async (from: string, to: string, isFolder: boolean) => {
+  const afterMove = async (
+    from: string,
+    to: string,
+    isFolder: boolean,
+    detail?: string,
+  ) => {
     setFolder((current) => relocatedFolder(current, from, to, isFolder));
     setMoveTarget(null);
     setActionError(null);
-    setStatus(`Moved ${basename(from)} to ${to || "the workspace root"}.`);
+    const base = `Moved ${basename(from)} to ${to || "the workspace root"}.`;
+    setStatus(detail ? `${base} ${detail}` : base);
     await refresh();
   };
 
@@ -420,8 +468,7 @@ export function DashboardPage() {
     }
     try {
       const result = await api.move(from, toFolder);
-      await afterMove(from, result.path, isFolder);
-      if (result.updated?.length) setStatus(`Updated links in ${result.updated.join(", ")}.`);
+      await afterMove(from, result.path, isFolder, organizeStatus("", result));
     } catch (err) {
       setStatus(null);
       if (err instanceof ApiError && err.code === "links") {
@@ -432,8 +479,7 @@ export function DashboardPage() {
           confirmLabel: "Move and update links",
           run: async () => {
             const result = await api.move(from, toFolder, true);
-            await afterMove(from, result.path, isFolder);
-            if (result.updated?.length) setStatus(`Updated links in ${result.updated.join(", ")}.`);
+            await afterMove(from, result.path, isFolder, organizeStatus("", result));
           },
         });
         return;
@@ -446,14 +492,28 @@ export function DashboardPage() {
     }
   };
 
-  const duplicateItem = async (itemPath: string) => {
+  const duplicateItem = async (itemPath: string, copyData?: boolean) => {
     setActionError(null);
     try {
-      const result = await api.duplicate(itemPath);
-      setStatus(`Duplicated as ${result.path}.`);
+      const result = await api.duplicate(itemPath, copyData);
+      setStatus(duplicateStatus(result.path, result.dataFiles ?? [], copyData === false));
       await refresh();
     } catch (err) {
       setStatus(null);
+      if (err instanceof ApiError && err.code === "data") {
+        const prompt = duplicateDataPrompt();
+        setDataPrompt({
+          ...prompt,
+          files: err.files ?? [],
+          primary: async () => {
+            await duplicateItem(itemPath, true);
+          },
+          secondary: async () => {
+            await duplicateItem(itemPath, false);
+          },
+        });
+        return;
+      }
       setActionError(explainOrganizeError(err));
     }
   };
@@ -1058,6 +1118,40 @@ export function DashboardPage() {
         </Modal>
       )}
 
+      {dataPrompt ? (
+        <DataFileDialog
+          title={dataPrompt.title}
+          intro={dataPrompt.intro}
+          files={dataPrompt.files}
+          primaryLabel={dataPrompt.primaryLabel}
+          secondaryLabel={dataPrompt.secondaryLabel}
+          busy={dataBusy}
+          onClose={() => {
+            if (!dataBusy) setDataPrompt(null);
+          }}
+          onPrimary={() => {
+            const prompt = dataPrompt;
+            setDataBusy(true);
+            setActionError(null);
+            void prompt
+              .primary()
+              .then(() => setDataPrompt(null))
+              .catch((err: unknown) => setActionError(explainOrganizeError(err)))
+              .finally(() => setDataBusy(false));
+          }}
+          onSecondary={() => {
+            const prompt = dataPrompt;
+            setDataBusy(true);
+            setActionError(null);
+            void prompt
+              .secondary()
+              .then(() => setDataPrompt(null))
+              .catch((err: unknown) => setActionError(explainOrganizeError(err)))
+              .finally(() => setDataBusy(false));
+          }}
+        />
+      ) : null}
+
       {linkPrompt ? (
         <AffectedLinksDialog
           title={linkPrompt.title}
@@ -1088,7 +1182,7 @@ export function DashboardPage() {
           tree={tree}
           initialFolder={folder}
           onClose={() => setMoveTarget(null)}
-          onMoved={(from, to) => void afterMove(from, to, moveTarget.isFolder)}
+          onMoved={(from, to, detail) => void afterMove(from, to, moveTarget.isFolder, detail)}
         />
       ) : null}
 

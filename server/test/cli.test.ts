@@ -72,6 +72,9 @@ describe("nerdgram CLI", () => {
     const help = await runCli(["--help"]);
     expect(help.code).toBe(0);
     expect(help.stdout).toContain("nerdgram list");
+    expect(help.stdout).toContain("nerdgram duplicate");
+    expect(help.stdout).toContain("--copy-data");
+    expect(help.stdout).toContain("--with-data");
     expect(help.stdout).toContain("NERDGRAM_TOKEN");
 
     const unknown = await runCli(["nope"]);
@@ -209,6 +212,30 @@ describe("nerdgram CLI", () => {
       stdout.length = 0;
       expect(await main(["refresh", "Campus.mmd", ...flags], io)).toBe(0);
       expect(JSON.parse(stdout.join("")).saved).toBe(true);
+
+      stdout.length = 0;
+      expect(await main(["move", "Campus.mmd", "Sites", ...flags], io)).toBe(0);
+      expect(JSON.parse(stdout.join(""))).toMatchObject({
+        ok: true,
+        path: "Sites/Campus.mmd",
+        dataFiles: [{ from: "Campus.csv", to: "Sites/Campus.csv" }],
+      });
+
+      stdout.length = 0;
+      expect(await main(["duplicate", "Sites/Campus.mmd", "--copy-data", ...flags], io)).toBe(0);
+      expect(JSON.parse(stdout.join(""))).toMatchObject({
+        ok: true,
+        path: "Sites/Campus (copy).mmd",
+        dataFiles: [{ from: "Sites/Campus.csv", to: "Sites/Campus (copy).csv" }],
+      });
+      const originalCsv = await fs.readFile(path.join(dir, "Sites", "Campus.csv"), "utf8");
+      const copiedCsv = await fs.readFile(path.join(dir, "Sites", "Campus (copy).csv"), "utf8");
+      expect(copiedCsv).toBe(originalCsv);
+
+      stdout.length = 0;
+      expect(await main(["delete", "Sites/Campus.mmd", "--keep-data", ...flags], io)).toBe(0);
+      expect(JSON.parse(stdout.join(""))).toMatchObject({ ok: true, trashed: true });
+      expect(await fs.readFile(path.join(dir, "Sites", "Campus.csv"), "utf8")).toBe(originalCsv);
 
       stdout.length = 0;
       expect(await main(["lint", "Notes.mmd", ...flags], io)).toBe(0);

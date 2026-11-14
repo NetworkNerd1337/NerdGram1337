@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { relocatedCompanionPath, rewriteSourcePrefix } from "./diagramCompanions.js";
+import { readDataSource, replaceDataSourcePaths } from "./diagramData.js";
 import { addFavorites, favoritePathsFor, getFavorites, takeFavorites } from "./favorites.js";
 import { archiveHistory, unarchiveHistory } from "./history.js";
 import { archiveThumbnails, unarchiveThumbnails } from "./thumbnails.js";
@@ -27,7 +29,16 @@ export type TrashItem = {
   favorites: string[];
 };
 
-type TrashManifest = TrashItem & { ready: boolean };
+type TrashDataFile = {
+  originalPath: string;
+  name: string;
+  storedName: string;
+};
+
+type TrashManifest = TrashItem & {
+  ready: boolean;
+  dataFiles?: TrashDataFile[];
+};
 
 function itemsRoot(): string {
   return path.join(getTrashRoot(), "items");
@@ -43,6 +54,10 @@ function manifestFile(id: string): string {
 
 function payloadFile(id: string, type: "file" | "folder"): string {
   return path.join(itemDir(id), type === "file" ? "payload.mmd" : "payload");
+}
+
+function dataStore(id: string): string {
+  return path.join(itemDir(id), "data");
 }
 
 function versionsArchive(id: string): string {
@@ -78,8 +93,32 @@ async function readManifest(id: string): Promise<TrashManifest | null> {
     ...parsed,
     name: parsed.name || path.basename(parsed.originalPath),
     favorites: Array.isArray(parsed.favorites) ? parsed.favorites : [],
+    dataFiles: readDataFiles(parsed.dataFiles),
     ready: parsed.ready === true,
   };
+}
+
+function readDataFiles(value: unknown): TrashDataFile[] {
+  if (!Array.isArray(value)) return [];
+  const files: TrashDataFile[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const record = item as Partial<TrashDataFile>;
+    if (
+      typeof record.originalPath !== "string" ||
+      typeof record.name !== "string" ||
+      typeof record.storedName !== "string" ||
+      !/^[a-z0-9][a-z0-9._-]{0,160}$/i.test(record.storedName)
+    ) {
+      continue;
+    }
+    files.push({
+      originalPath: record.originalPath,
+      name: record.name,
+      storedName: record.storedName,
+    });
+  }
+  return files;
 }
 
 export async function relativePathTaken(relativePath: string): Promise<boolean> {
@@ -129,7 +168,10 @@ export async function listTrash(): Promise<TrashItem[]> {
   return items;
 }
 
-export async function moveToTrash(relativePath: string): Promise<TrashItem> {
+export async function moveToTrash(
+  relativePath: string,
+  options: { dataFiles?: readonly string[] } = {},
+): Promise<TrashItem> {
   const normalized = normalizeRelative(relativePath);
   if (!normalized) throw httpFail(400, "path is required", "invalid");
 
@@ -172,9 +214,41 @@ export async function moveToTrash(relativePath: string): Promise<TrashItem> {
   };
   await writeManifest(manifest);
   await fs.rename(abs, payloadFile(id, type));
+  const stored = await storeCompanionData(id, options.dataFiles ?? []);
+  if (stored.length > 0) {
+    manifest.dataFiles = stored;
+    await writeManifest(manifest);
+  }
   const search = await import("./search.js");
   await search.removeSearchEntries(originalPath, type === "folder");
   return finishMove(manifest);
+}
+
+async function storeCompanionData(id: string, dataFiles: readonly string[]): Promise<TrashDataFile[]> {
+  if (dataFiles.length === 0) return [];
+  await fs.mkdir(dataStore(id), { recursive: true });
+  const stored: TrashDataFile[] = [];
+  for (const [index, relativePath] of dataFiles.entries()) {
+    const normalized = normalizeRelative(relativePath);
+    if (!normalized) continue;
+    const abs = resolveSafePath(normalized);
+    let stat: Awaited<ReturnType<typeof fs.lstat>>;
+    try {
+      stat = await fs.lstat(abs);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === "ENOENT") continue;
+      throw err;
+    }
+    if (stat.isSymbolicLink() || !stat.isFile()) continue;
+    const storedName = `${index}-${path.basename(abs)}`.replace(/[^a-z0-9.-]/gi, "_");
+    await fs.copyFile(abs, path.join(dataStore(id), storedName));
+    stored.push({ originalPath: normalized, name: path.basename(abs), storedName });
+  }
+  for (const item of stored) {
+    await fs.rm(resolveSafePath(item.originalPath), { force: true });
+  }
+  return stored;
 }
 
 export async function restoreTrashItem(
@@ -213,6 +287,15 @@ export async function restoreTrashItem(
   }
 
   await fs.mkdir(path.dirname(destAbs), { recursive: true });
+  const dataPlan =
+    manifest.type === "file" ? await companionRestorePlan(manifest, destination) : [];
+  if (manifest.type === "folder" && destination !== manifest.originalPath) {
+    await rewritePayloadSources(payloadFile(id, "folder"), manifest.originalPath, destination);
+  }
+  if (manifest.type === "file" && dataPlan.length > 0) {
+    await retargetPayloadData(id, dataPlan);
+    await restoreCompanionData(id, dataPlan);
+  }
   await fs.rename(payloadFile(id, manifest.type), destAbs);
   await unarchiveHistory(
     versionsArchive(id),
@@ -234,6 +317,72 @@ export async function restoreTrashItem(
   const restored = toRelativePath(destAbs);
   noteSync({ kind: "structural", summary: `Restore ${restored}` });
   return { path: restored, type: manifest.type };
+}
+
+async function companionRestorePlan(
+  manifest: TrashManifest,
+  destination: string,
+): Promise<{ storedName: string; originalPath: string; dest: string }[]> {
+  const plan: { storedName: string; originalPath: string; dest: string }[] = [];
+  for (const data of manifest.dataFiles ?? []) {
+    const desired =
+      relocatedCompanionPath(manifest.originalPath, destination, data.originalPath) ?? data.originalPath;
+    const dest = await resolveAvailablePath(desired, relativePathTaken, { word: "copy" });
+    plan.push({ storedName: data.storedName, originalPath: data.originalPath, dest });
+  }
+  return plan;
+}
+
+async function retargetPayloadData(
+  id: string,
+  plan: readonly { originalPath: string; dest: string }[],
+): Promise<void> {
+  const payload = payloadFile(id, "file");
+  const text = await fs.readFile(payload, "utf8");
+  const source = readDataSource(text);
+  if (!source) return;
+  const file = plan.find((item) => normalizeRelative(item.originalPath) === normalizeRelative(source.file))?.dest;
+  const edgesFile = source.edgesFile
+    ? plan.find((item) => normalizeRelative(item.originalPath) === normalizeRelative(source.edgesFile ?? ""))?.dest
+    : undefined;
+  const next = replaceDataSourcePaths(text, {
+    ...(file ? { file } : {}),
+    ...(edgesFile ? { edgesFile } : {}),
+  });
+  if (next !== text) await fs.writeFile(payload, next);
+}
+
+async function restoreCompanionData(
+  id: string,
+  plan: readonly { storedName: string; dest: string }[],
+): Promise<void> {
+  for (const item of plan) {
+    const stored = path.join(dataStore(id), item.storedName);
+    const destAbs = resolveSafePath(item.dest);
+    await fs.mkdir(path.dirname(destAbs), { recursive: true });
+    await fs.copyFile(stored, destAbs);
+  }
+}
+
+async function rewritePayloadSources(payloadDir: string, fromDir: string, toDir: string): Promise<void> {
+  let entries: import("node:fs").Dirent[] = [];
+  try {
+    entries = await fs.readdir(payloadDir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") || entry.isSymbolicLink()) continue;
+    const abs = path.join(payloadDir, entry.name);
+    if (entry.isDirectory()) {
+      await rewritePayloadSources(abs, fromDir, toDir);
+      continue;
+    }
+    if (!entry.isFile() || !entry.name.toLowerCase().endsWith(".mmd")) continue;
+    const text = await fs.readFile(abs, "utf8");
+    const next = rewriteSourcePrefix(text, fromDir, toDir);
+    if (next !== text) await fs.writeFile(abs, next);
+  }
 }
 
 function noteSync(change: { kind: "content" | "structural"; summary: string }): void {

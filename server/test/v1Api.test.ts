@@ -269,9 +269,17 @@ describe("automation API", () => {
     const onDisk = await fs.readFile(path.join(dir, "Campus.mmd"), "utf8");
     expect(onDisk).toContain("%% nerdgram:generated");
 
-    const trashed = await request(server).delete("/api/v1/diagrams").set(auth).send({ path: "Campus.mmd" });
+    const asked = await request(server).delete("/api/v1/diagrams").set(auth).send({ path: "Campus.mmd" });
+    expect(asked.status).toBe(409);
+    expect(asked.body.code).toBe("data");
+    expect(asked.body.files).toEqual(["Campus.csv"]);
+    const trashed = await request(server)
+      .delete("/api/v1/diagrams")
+      .set(auth)
+      .send({ path: "Campus.mmd", deleteData: true });
     expect(trashed.status).toBe(200);
     expect(trashed.body.trashed).toBe(true);
+    await expect(fs.access(path.join(dir, "Campus.csv"))).rejects.toThrow();
     const gone = await request(server).get("/api/v1/diagrams/content").set(auth).query({ path: "Campus.mmd" });
     expect(gone.status).toBe(404);
     const trash = await request(server).get("/api/trash").set("Host", HOST);

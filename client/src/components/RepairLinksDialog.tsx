@@ -46,6 +46,7 @@ export function RepairLinksDialog({ lockToken = null, onClose, onApplied }: Repa
 
   const choices = plan ? confirmedChoices(plan) : [];
   const ambiguous = plan?.suggestions.filter((item) => item.to == null || item.match === "ambiguous") ?? [];
+  const dataFiles = plan?.dataFiles ?? [];
   const canApply = choices.length > 0 && !busy;
 
   return (
@@ -107,6 +108,18 @@ export function RepairLinksDialog({ lockToken = null, onClose, onApplied }: Repa
               </li>
             ))}
           </ul>
+        ) : null}
+        {dataFiles.length > 0 ? (
+          <>
+            <p>The data file moved with the diagram. Repair updates the source path in the front matter.</p>
+            <ul className="affected-links">
+              {dataFiles.map((item) => (
+                <li key={`${item.diagram}:${item.from}`}>
+                  <strong>{item.diagram}</strong>: <code>{item.from}</code> → <code>{item.to}</code>
+                </li>
+              ))}
+            </ul>
+          </>
         ) : null}
         {ambiguous.length > 0 ? (
           <>

@@ -25,7 +25,20 @@ type Parsed = {
   flags: Map<string, string | boolean>;
 };
 
-const BOOL_FLAGS = new Set(["json", "server", "strict", "help", "h", "no-update-links", "dry-run", "apply"]);
+const BOOL_FLAGS = new Set([
+  "json",
+  "server",
+  "strict",
+  "help",
+  "h",
+  "no-update-links",
+  "dry-run",
+  "apply",
+  "copy-data",
+  "share-data",
+  "with-data",
+  "keep-data",
+]);
 
 const HELP = `nerdgram — automation client for NerdGram1337
 
@@ -37,6 +50,10 @@ Usage
   nerdgram put <path> <file>
   nerdgram export <folder> -o dir/
   nerdgram lint [path|file] [--strict]
+  nerdgram rename <from> <to>
+  nerdgram move <from> [folder]
+  nerdgram duplicate <path> (--copy-data | --share-data)
+  nerdgram delete <path> (--with-data | --keep-data)
   nerdgram repair-links [--dry-run] [--apply]
   nerdgram generate --path Diagram.mmd --data data.csv
   nerdgram generate --path Diagram.mmd --data neighbors.lldp --format lldp --local-device edge-sw
@@ -46,9 +63,16 @@ A local .mmd file is rendered and linted in this process. Anything else uses
 NERDGRAM_URL (default http://127.0.0.1:8787) and NERDGRAM_TOKEN.
 --url and --token override those. --json prints one JSON object.
 --server forces render to use the API. Exit status is 1 on errors.
+Rename and move also move a CSV, JSON, CDP, or LLDP file that sits next to the
+diagram and update nerdgram.source. duplicate --copy-data gives the copy its
+own data file. duplicate --share-data keeps both diagrams on the original file.
+delete --with-data moves that file to the trash with the diagram.
+delete --keep-data leaves it in the workspace. When a data file is present and
+the flag is omitted, duplicate and delete stop and list the file.
 repair-links previews click repairs after a rename or move made outside the
 app. --dry-run is the default and writes nothing. --apply saves the previewed
-rewrites. An ambiguous match is listed and left unchanged.
+rewrites. If the data file moved with that diagram, the same confirmation
+updates nerdgram.source. An ambiguous match is listed and left unchanged.
 `;
 
 class CliError extends Error {
@@ -325,6 +349,7 @@ async function repairLinksCommand(parsed: Parsed, io: Io): Promise<void> {
   const body = result.json as {
     suggestions?: { from: string; to: string | null; match: string; candidates: string[] }[];
     changes?: { path: string; links: { line: number; target: string; next: string }[] }[];
+    dataFiles?: { diagram: string; from: string; to: string }[];
     applied?: boolean;
     saved?: string[];
   };
@@ -334,6 +359,9 @@ async function repairLinksCommand(parsed: Parsed, io: Io): Promise<void> {
     for (const link of change.links) lines.push(`  line ${link.line}: ${link.target} -> ${link.next}`);
   }
   const ambiguous = (body.suggestions ?? []).filter((item) => item.to == null || item.match === "ambiguous");
+  for (const dataFile of body.dataFiles ?? []) {
+    lines.push(`${dataFile.diagram}: ${dataFile.from} -> ${dataFile.to}`);
+  }
   if (ambiguous.length > 0) {
     lines.push("Ambiguous, not changed:");
     for (const item of ambiguous) lines.push(`  ${item.from} matches ${item.candidates.join(", ")}`);
@@ -350,9 +378,78 @@ async function repairLinksCommand(parsed: Parsed, io: Io): Promise<void> {
       saved: body.saved ?? [],
       suggestions: body.suggestions ?? [],
       changes: body.changes ?? [],
+      dataFiles: body.dataFiles ?? [],
     },
     lines.join("\n"),
   );
+}
+
+async function renameCommand(parsed: Parsed, io: Io): Promise<void> {
+  const from = parsed.positionals[0];
+  const to = parsed.positionals[1];
+  if (!from || !to) throw new CliError("rename needs the current path and the new path.");
+  const { base, token } = configOf(parsed.flags, io.env);
+  const result = await callApi(base, requireToken(token), "POST", "/api/v1/diagrams/rename", {
+    from,
+    to,
+    updateLinks: parsed.flags.get("no-update-links") !== true,
+  });
+  const body = result.json as { path?: string; dataFiles?: { to: string }[] };
+  const moved = (body.dataFiles ?? []).map((item) => item.to).join(", ");
+  writeOut(io, isJson(parsed.flags), body, moved ? `Renamed ${body.path}. Data file ${moved}.` : `Renamed ${body.path}`);
+}
+
+async function moveCommand(parsed: Parsed, io: Io): Promise<void> {
+  const from = parsed.positionals[0];
+  if (!from) throw new CliError("move needs the diagram or folder to move.");
+  const { base, token } = configOf(parsed.flags, io.env);
+  const result = await callApi(base, requireToken(token), "POST", "/api/v1/diagrams/move", {
+    from,
+    toFolder: parsed.positionals[1] ?? "",
+    updateLinks: parsed.flags.get("no-update-links") !== true,
+  });
+  const body = result.json as { path?: string; dataFiles?: { to: string }[] };
+  const moved = (body.dataFiles ?? []).map((item) => item.to).join(", ");
+  writeOut(io, isJson(parsed.flags), body, moved ? `Moved to ${body.path}. Data file ${moved}.` : `Moved to ${body.path}`);
+}
+
+async function duplicateCommand(parsed: Parsed, io: Io): Promise<void> {
+  const itemPath = parsed.positionals[0];
+  if (!itemPath) throw new CliError("duplicate needs a diagram or folder path.");
+  const copyData = parsed.flags.get("copy-data") === true;
+  const shareData = parsed.flags.get("share-data") === true;
+  if (copyData && shareData) throw new CliError("Pass either --copy-data or --share-data.");
+  const { base, token } = configOf(parsed.flags, io.env);
+  const result = await callApi(base, requireToken(token), "POST", "/api/v1/diagrams/duplicate", {
+    path: itemPath,
+    ...(copyData ? { copyData: true } : {}),
+    ...(shareData ? { copyData: false } : {}),
+  });
+  const body = result.json as { path?: string; dataFiles?: { to: string }[] };
+  const copied = (body.dataFiles ?? []).map((item) => item.to).join(", ");
+  const human = copied
+    ? `Duplicated as ${body.path}. Data file ${copied}.`
+    : shareData
+      ? `Duplicated as ${body.path}. It shares the original data file.`
+      : `Duplicated as ${body.path}`;
+  writeOut(io, isJson(parsed.flags), body, human);
+}
+
+async function deleteCommand(parsed: Parsed, io: Io): Promise<void> {
+  const itemPath = parsed.positionals[0];
+  if (!itemPath) throw new CliError("delete needs a diagram or folder path.");
+  const withData = parsed.flags.get("with-data") === true;
+  const keepData = parsed.flags.get("keep-data") === true;
+  if (withData && keepData) throw new CliError("Pass either --with-data or --keep-data.");
+  const { base, token } = configOf(parsed.flags, io.env);
+  const result = await callApi(base, requireToken(token), "DELETE", "/api/v1/diagrams", {
+    path: itemPath,
+    confirmLinks: true,
+    ...(withData ? { deleteData: true } : {}),
+    ...(keepData ? { deleteData: false } : {}),
+  });
+  const body = result.json as { path?: string; trashed?: boolean };
+  writeOut(io, isJson(parsed.flags), body, `Moved ${body.path ?? itemPath} to the trash.`);
 }
 
 async function generateCommand(parsed: Parsed, io: Io): Promise<void> {
@@ -435,6 +532,18 @@ export async function main(argv: string[], io: Partial<Io> = {}): Promise<number
         return await lintCommand(parsed, streams);
       case "repair-links":
         await repairLinksCommand(parsed, streams);
+        return 0;
+      case "rename":
+        await renameCommand(parsed, streams);
+        return 0;
+      case "move":
+        await moveCommand(parsed, streams);
+        return 0;
+      case "duplicate":
+        await duplicateCommand(parsed, streams);
+        return 0;
+      case "delete":
+        await deleteCommand(parsed, streams);
         return 0;
       case "generate":
         await generateCommand(parsed, streams);

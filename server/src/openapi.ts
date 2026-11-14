@@ -82,7 +82,15 @@ export const V1_ROUTES: readonly V1Route[] = [
     path: "/diagrams/move",
     scope: "write",
     operationId: "moveDiagram",
-    summary: "Move a diagram or folder and update click links.",
+    summary: "Move a diagram or folder, update click links, and move a sibling data file with it.",
+    tag: "Diagrams",
+  },
+  {
+    method: "post",
+    path: "/diagrams/duplicate",
+    scope: "write",
+    operationId: "duplicateDiagram",
+    summary: "Duplicate a diagram or folder. copyData is required when a sibling data file exists.",
     tag: "Diagrams",
   },
   {
@@ -90,7 +98,7 @@ export const V1_ROUTES: readonly V1Route[] = [
     path: "/diagrams",
     scope: "write",
     operationId: "deleteDiagram",
-    summary: "Move a diagram or folder to the trash.",
+    summary: "Move a diagram or folder to the trash. deleteData chooses whether a sibling data file goes too.",
     tag: "Diagrams",
   },
   {
@@ -230,7 +238,7 @@ function operationBody(operationId: string): Record<string, unknown> | undefined
       return jsonBody("Rename.", {
         from: { type: "string" },
         to: { type: "string" },
-        updateLinks: { type: "boolean", description: "Defaults to true. Rewrites click targets the way the editor does." },
+        updateLinks: { type: "boolean", description: "Defaults to true. Rewrites click targets the way the editor does. A sibling data file moves with the diagram and nerdgram.source is updated." },
       }, ["from", "to"]);
     case "moveDiagram":
       return jsonBody("Move.", {
@@ -238,10 +246,22 @@ function operationBody(operationId: string): Record<string, unknown> | undefined
         toFolder: { type: "string", description: "Empty moves to the workspace root." },
         updateLinks: { type: "boolean" },
       }, ["from"]);
+    case "duplicateDiagram":
+      return jsonBody("Duplicate. copyData is required when a CSV, JSON, CDP, or LLDP file sits beside the diagram.", {
+        path: { type: "string" },
+        copyData: {
+          type: "boolean",
+          description: "True copies the data file and points the duplicate at the copy. False shares the original file. Omit it and the call returns 409 with the file list when a sibling data file exists.",
+        },
+      }, ["path"]);
     case "deleteDiagram":
       return jsonBody("Trash.", {
         path: { type: "string" },
         confirmLinks: { type: "boolean", description: "Defaults to true. False returns 409 when other diagrams link here." },
+        deleteData: {
+          type: "boolean",
+          description: "True moves a sibling data file to the trash with the diagram. False leaves that file in the workspace. Omit it and the call returns 409 with the file list when a sibling data file exists.",
+        },
       }, ["path"]);
     case "createFolder":
       return jsonBody("Folder.", { path: { type: "string" } }, ["path"]);

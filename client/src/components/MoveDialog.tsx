@@ -7,6 +7,7 @@ import {
   moveBlockReason,
   nextAvailablePath,
 } from "../lib/organize";
+import { dataMoveSentence } from "../lib/dataFiles";
 import { basename, displayName } from "../lib/paths";
 import type { TreeNode } from "../types";
 import { AffectedLinksDialog } from "./AffectedLinksDialog";
@@ -18,7 +19,7 @@ type MoveDialogProps = {
   tree: TreeNode[];
   initialFolder: string;
   onClose: () => void;
-  onMoved: (from: string, to: string) => void;
+  onMoved: (from: string, to: string, detail?: string) => void;
 };
 
 function startingFolder(itemPath: string, isFolder: boolean, preferred: string): string {
@@ -58,7 +59,7 @@ export function MoveDialog({
     setError(null);
     try {
       const result = await api.rename(itemPath, renameTarget);
-      onMoved(itemPath, result.path);
+      onMoved(itemPath, result.path, dataMoveSentence(result.dataFiles ?? []));
     } catch (err) {
       if (err instanceof ApiError && err.code === "links") {
         setPending({ kind: "rename", to: renameTarget });
@@ -80,7 +81,7 @@ export function MoveDialog({
     setError(null);
     try {
       const result = await api.move(itemPath, folder);
-      onMoved(itemPath, result.path);
+      onMoved(itemPath, result.path, dataMoveSentence(result.dataFiles ?? []));
     } catch (err) {
       if (err instanceof ApiError && err.code === "links") {
         setPending({ kind: "move" });
@@ -109,7 +110,7 @@ export function MoveDialog({
           : await api.move(itemPath, folder, true);
       setLinkFiles(null);
       setPending(null);
-      onMoved(itemPath, result.path);
+      onMoved(itemPath, result.path, dataMoveSentence(result.dataFiles ?? []));
     } catch (err) {
       setError(explainOrganizeError(err));
     } finally {

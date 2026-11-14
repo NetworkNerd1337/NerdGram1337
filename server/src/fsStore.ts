@@ -1,6 +1,18 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
+  applyExternalDataRepairs,
+  existingCompanions,
+  externalDataRepairs,
+  parkDataFiles,
+  relocateCompanions,
+  rewriteSourcePrefix,
+  unparkDataFiles,
+  copyCompanionsBeside,
+  copyFolderCompanions,
+  type DataFileMove,
+} from "./diagramCompanions.js";
+import {
   inboundLinkFiles,
   indexDiagramLinks,
   linksFor,
@@ -339,11 +351,11 @@ export async function renameItem(
   fromPath: string,
   toPath: string,
   options: RenameOptions = {},
-): Promise<{ path: string; updated: string[] }> {
+): Promise<{ path: string; updated: string[]; dataFiles: DataFileMove[] }> {
   const fromAbs = resolveSafePath(fromPath);
   const toAbs = resolveSafePath(toPath);
   if (path.resolve(fromAbs) === path.resolve(toAbs)) {
-    return { path: toRelativePath(fromAbs), updated: [] };
+    return { path: toRelativePath(fromAbs), updated: [], dataFiles: [] };
   }
 
   let fromStat: Awaited<ReturnType<typeof fs.stat>>;
@@ -376,7 +388,8 @@ export async function renameItem(
     });
   }
 
-  const rewrites = planLinkRewrites(await readDiagramSources(), fromRel, toRel, fromStat.isDirectory());
+  const sources = await readDiagramSources();
+  const rewrites = planLinkRewrites(sources, fromRel, toRel, fromStat.isDirectory());
   if (rewrites.length > 0 && !options.updateLinks) {
     throw httpFail(409, "Other diagrams link here. Confirm to update those links.", "links", {
       files: rewrites.map((item) => item.path),
@@ -386,6 +399,15 @@ export async function renameItem(
     const inside =
       rewrite.path === fromRel || (fromStat.isDirectory() && rewrite.path.startsWith(`${fromRel}/`));
     if (!inside) await assertUnlocked(rewrite.path, false);
+  }
+  if (fromStat.isDirectory()) {
+    for (const file of sources) {
+      const inside = file.path === fromRel || file.path.startsWith(`${fromRel}/`);
+      if (inside) continue;
+      if (rewriteSourcePrefix(file.content, fromRel, toRel) !== file.content) {
+        await assertUnlocked(file.path, false);
+      }
+    }
   }
 
   await assertUnlocked(fromRel, fromStat.isDirectory());
@@ -398,20 +420,32 @@ export async function renameItem(
   await relocateThumbnails(fromRel, toRel, fromStat.isDirectory());
   const search = await import("./search.js");
   await search.moveSearchEntries(fromRel, toRel, fromStat.isDirectory());
+  const companions = await relocateCompanions(sources, fromRel, toRel, fromStat.isDirectory());
+  const pending = new Map<string, string>();
+  for (const rewrite of rewrites) pending.set(rewrite.nextPath, rewrite.content);
+  for (const update of companions.updates) {
+    const base = pending.get(update.path) ?? update.original;
+    pending.set(update.path, update.apply(base));
+  }
   noteSync({ kind: "structural", summary: `Rename ${fromRel} to ${toRel}` });
   const updated: string[] = [];
   for (const rewrite of rewrites) {
-    await writeFile(rewrite.nextPath, rewrite.content, { force: true });
+    const content = pending.get(rewrite.nextPath) ?? rewrite.content;
+    await writeFile(rewrite.nextPath, content, { force: true });
     updated.push(rewrite.nextPath);
+    pending.delete(rewrite.nextPath);
   }
-  return { path: toRel, updated };
+  for (const [dest, content] of pending) {
+    await writeFile(dest, content, { force: true });
+  }
+  return { path: toRel, updated, dataFiles: companions.dataFiles };
 }
 
 export async function moveItem(
   fromPath: string,
   toFolder: string,
   options: RenameOptions = {},
-): Promise<{ path: string; updated: string[] }> {
+): Promise<{ path: string; updated: string[]; dataFiles: DataFileMove[] }> {
   const name = path.posix.basename(normalizeRelative(fromPath));
   const folder = normalizeRelative(toFolder);
   const dest = folder ? `${folder}/${name}` : name;
@@ -425,9 +459,19 @@ export async function moveItem(
  * builds history for the copy only. The source lock is left where it is, and
  * the copy does not inherit it.
  */
+export type DuplicateOptions = {
+  /**
+   * When the diagram has a sibling data file, true copies that file and points
+   * the duplicate at the copy. False leaves both diagrams on the original file.
+   * Omitted while a sibling data file exists is refused so the caller chooses.
+   */
+  copyData?: boolean;
+};
+
 export async function duplicateItem(
   relativePath: string,
-): Promise<{ path: string; type: "file" | "folder" }> {
+  options: DuplicateOptions = {},
+): Promise<{ path: string; type: "file" | "folder"; dataFiles: DataFileMove[] }> {
   const normalized = normalizeRelative(relativePath);
   if (!normalized) throw httpFail(400, "path is required", "invalid");
   const abs = resolveSafePath(normalized);
@@ -445,6 +489,16 @@ export async function duplicateItem(
   }
 
   const fromRel = toRelativePath(abs);
+  const sources = await readDiagramSources();
+  const companions = await existingCompanions(sources, fromRel, stat.isDirectory());
+  if (companions.length > 0 && options.copyData == null) {
+    throw httpFail(
+      409,
+      "This diagram has a data file beside it. Choose whether to copy that file or share it.",
+      "data",
+      { files: companions },
+    );
+  }
   const destRel = await resolveAvailablePath(fromRel, relativePathTaken, { word: "copy" });
   const destAbs = resolveSafePath(destRel);
 
@@ -452,22 +506,42 @@ export async function duplicateItem(
     await fs.mkdir(destAbs);
     try {
       await copyFolderContents(abs, destAbs);
+      const dataFiles =
+        options.copyData === true ? await copyFolderCompanions(fromRel, destRel, companions) : [];
+      if (options.copyData === true) {
+        await rewriteCopiedFolderSources(destRel, fromRel);
+      }
+      const copied = toRelativePath(destAbs);
+      noteSync({ kind: "structural", summary: `Duplicate ${fromRel} to ${copied}` });
+      return { path: copied, type: "folder", dataFiles };
     } catch (err) {
       await fs.rm(destAbs, { recursive: true, force: true });
       throw err;
     }
-    const copied = toRelativePath(destAbs);
-    noteSync({ kind: "structural", summary: `Duplicate ${fromRel} to ${copied}` });
-    return { path: copied, type: "folder" };
   }
 
   if (!stat.isFile() || !isDiagramFile(fromRel)) {
     throw httpFail(400, "Only .mmd diagram files are supported", "invalid");
   }
   const content = await fs.readFile(abs, "utf8");
+  if (options.copyData === true) {
+    const copied = await copyCompanionsBeside(fromRel, destRel, content, companions);
+    const written = await writeFile(destRel, copied.content);
+    noteSync({ kind: "structural", summary: `Duplicate ${fromRel} to ${written.path}` });
+    return { path: written.path, type: "file", dataFiles: copied.dataFiles };
+  }
   const written = await writeFile(destRel, content);
   noteSync({ kind: "structural", summary: `Duplicate ${fromRel} to ${written.path}` });
-  return { path: written.path, type: "file" };
+  return { path: written.path, type: "file", dataFiles: [] };
+}
+
+async function rewriteCopiedFolderSources(destDir: string, fromDir: string): Promise<void> {
+  const tree = flattenFiles(await buildTree(destDir));
+  for (const file of tree) {
+    const current = await readFile(file.path);
+    const next = rewriteSourcePrefix(current.content, fromDir, destDir);
+    if (next !== current.content) await writeFile(file.path, next, { force: true, expectedHash: current.hash });
+  }
 }
 
 async function copyFolderContents(srcAbs: string, destAbs: string): Promise<void> {
@@ -489,10 +563,17 @@ async function copyFolderContents(srcAbs: string, destAbs: string): Promise<void
   }
 }
 
-export async function deleteItem(
-  relativePath: string,
-  options: { confirmLinks?: boolean } = {},
-): Promise<void> {
+export type DeleteOptions = {
+  confirmLinks?: boolean;
+  /**
+   * When a sibling data file exists, true moves it to the trash with the diagram.
+   * False leaves the file in the workspace. Omitted while a sibling exists is
+   * refused so the caller chooses.
+   */
+  deleteData?: boolean;
+};
+
+export async function deleteItem(relativePath: string, options: DeleteOptions = {}): Promise<void> {
   const abs = resolveSafePath(relativePath);
   let stat: Awaited<ReturnType<typeof fs.stat>>;
   try {
@@ -503,8 +584,9 @@ export async function deleteItem(
     throw err;
   }
   const rel = toRelativePath(abs);
+  const sources = await readDiagramSources();
   if (!options.confirmLinks) {
-    const inbound = inboundLinkFiles(indexDiagramLinks(await readDiagramSources()), rel, stat.isDirectory());
+    const inbound = inboundLinkFiles(indexDiagramLinks(sources), rel, stat.isDirectory());
     if (inbound.length > 0) {
       throw httpFail(
         409,
@@ -514,7 +596,29 @@ export async function deleteItem(
       );
     }
   }
-  await moveToTrash(relativePath);
+  const companions = await existingCompanions(sources, rel, stat.isDirectory());
+  if (companions.length > 0 && options.deleteData == null) {
+    throw httpFail(
+      409,
+      "A data file sits next to this diagram. Choose whether to trash that file or keep it.",
+      "data",
+      { files: companions },
+    );
+  }
+  if (options.deleteData === false && stat.isDirectory() && companions.length > 0) {
+    const parked = await parkDataFiles(rel, companions);
+    try {
+      await moveToTrash(relativePath);
+    } catch (err) {
+      await unparkDataFiles(parked);
+      throw err;
+    }
+    await unparkDataFiles(parked);
+  } else if (options.deleteData === true && !stat.isDirectory()) {
+    await moveToTrash(relativePath, { dataFiles: companions });
+  } else {
+    await moveToTrash(relativePath);
+  }
   await forgetDiagramSighting(rel, stat.isDirectory());
   noteSync({ kind: "structural", summary: `Delete ${normalizeRelative(relativePath)}` });
 }
@@ -639,32 +743,50 @@ export async function repairDiagramLinks(options: RepairOptions = {}): Promise<L
   const applicable = suggestions.filter(
     (item): item is LinkRepairSuggestion & { to: string } => item.to != null && item.match !== "ambiguous",
   );
-  const preview = planRepairRewrites(
-    files,
-    applicable.map((item) => ({ from: item.from, to: item.to })),
-  );
+  const applicableMoves = applicable.map((item) => ({ from: item.from, to: item.to }));
+  const preview = planRepairRewrites(files, applicableMoves);
   const previewChanges = preview.map((item) => ({ path: item.path, links: item.links }));
+  const dataFiles = await externalDataRepairs(files, applicableMoves);
   if (dryRun || !confirm) {
-    return { suggestions, changes: previewChanges, applied: false, saved: [] };
+    return { suggestions, changes: previewChanges, dataFiles, applied: false, saved: [] };
   }
 
   const selected = selectRepairs(options.choices, applicable);
   const rewrites = planRepairRewrites(files, selected);
+  const selectedFrom = new Set(selected.map((item) => item.from));
+  const selectedData = dataFiles.filter((item) =>
+    selected.some((choice) => choice.to === item.diagram && selectedFrom.has(choice.from)),
+  );
+  const pendingWrites = new Map<string, string>();
+  for (const rewrite of rewrites) pendingWrites.set(rewrite.path, rewrite.content);
+  const dataByDiagram = new Map<string, { from: string; to: string }[]>();
+  for (const repair of selectedData) {
+    const list = dataByDiagram.get(repair.diagram) ?? [];
+    list.push({ from: repair.from, to: repair.to });
+    dataByDiagram.set(repair.diagram, list);
+  }
+  for (const [diagram, repairs] of dataByDiagram) {
+    const base = pendingWrites.get(diagram) ?? files.find((file) => file.path === diagram)?.content;
+    if (base == null) continue;
+    pendingWrites.set(diagram, applyExternalDataRepairs(base, repairs));
+  }
   const saved: string[] = [];
-  for (const rewrite of rewrites) {
-    const disk = files.find((file) => file.path === rewrite.path);
-    if (!disk || disk.content === rewrite.content) continue;
-    await writeFile(rewrite.path, rewrite.content, {
+  for (const [diagramPath, content] of pendingWrites) {
+    const disk = files.find((file) => file.path === diagramPath);
+    if (!disk || disk.content === content) continue;
+    await writeFile(diagramPath, content, {
       expectedHash: disk.hash,
       lockToken: options.lockToken ?? null,
     });
-    saved.push(rewrite.path);
+    saved.push(diagramPath);
   }
+  saved.sort((a, b) => a.localeCompare(b));
   const appliedFrom = new Set(selected.map((item) => item.from));
   await setPendingRepairs(pending.filter((item) => !appliedFrom.has(item.from)));
   return {
     suggestions: suggestions.filter((item) => !appliedFrom.has(item.from)),
     changes: rewrites.map((item) => ({ path: item.path, links: item.links })),
+    dataFiles: selectedData,
     applied: true,
     saved,
   };
