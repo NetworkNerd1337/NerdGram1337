@@ -335,7 +335,7 @@ Description, notes, and tags live under `nerdgram:` because Mermaid has no field
 
 The code pane checks the diagram while you type. The check waits about **400 ms** after the last key so a large file does not lag. Mermaid's parser supplies the syntax error, including the line and column. The other checks are warnings. They do not block the preview or autosave. A warning is a gutter mark and a row in the problems list under the code. Click a row to jump to that line. `nerdgram lint` runs the same checks on a file, or on the workspace when you point it at a running server. A Mermaid syntax error is reported as an error, with the line and column, and the command exits non-zero. `POST /api/lint` and `POST /api/v1/lint` do the same for one diagram. `GET /api/diagram-lint` and `GET /api/v1/lint` run the checks on the workspace.
 
-The problems list can also offer a fix. **Rename** gives a duplicate id a new name. **Remove unused class** deletes a `classDef` nothing uses. **Create class** inserts a `classDef` for a name you already applied. **Jump to definition** moves the cursor to the first definition of a duplicate id. Each of those can be undone with Ctrl+Z (Cmd+Z on a Mac). **Repair links** on a broken diagram link opens a preview of the rewrites. Confirming it saves the diagrams. Nothing is written before that confirmation.
+The problems list can also offer a fix. **Rename** gives a duplicate id, or a class defined again with a different label, a new name. **Remove unused class** deletes a `classDef` nothing uses. **Create class** inserts a `classDef` for a name you already applied. **Declare class** and **Declare entity** insert the missing name. **Remove duplicate attribute** deletes the extra attribute line. **Remove duplicate** and **Remove empty node** delete a repeated or blank mindmap node, or a repeated or blank timeline event, when that line has no children. **Jump to definition** moves the cursor to the first definition of a duplicate id or class. Each of those can be undone with Ctrl+Z (Cmd+Z on a Mac). **Repair links** on a broken diagram link opens a preview of the rewrites. Confirming it saves the diagrams. Nothing is written before that confirmation.
 
 Turn a warning off under **Diagram checks** on the settings page (`/settings#diagram-checks`). The sidebar links there on its own, next to GitHub sync and automation tokens. The switches are saved in this browser. A diagram Mermaid cannot parse is always marked.
 
@@ -348,6 +348,14 @@ Turn a warning off under **Diagram checks** on the settings page (`/settings#dia
 | Undefined classes | A `class` or `:::` name has no `classDef`. |
 | Front matter | The YAML header cannot be parsed, or a theme, look, layout, curve, ELK placement, title, description, or tag list is not one the file format accepts. |
 | Broken diagram links | A `click` target that points at a workspace diagram (`nerdgram:`, `diagram:`, or a relative `.mmd` path) is missing, or the path leaves the workspace. Web links are not checked. |
+| Duplicate classes | The same class name is defined again with a different label. Repeating `class Animal` to add members is left alone. |
+| Undeclared classes | A class diagram relationship names a class that was never declared with `class` or a member line. A diagram that only uses relationships, with no `class` statement and no member line, is left alone. |
+| Duplicate attributes | An entity lists the same attribute name more than once. The same name on two entities is left alone. |
+| Undeclared entities | An ER relationship names an entity that was never declared with an attribute block or a bare entity line. A diagram that only uses relationships is left alone. |
+| Missing task ids | A Gantt task uses `after` or `until` with an id that no task defines. An id defined later in the file still counts. |
+| Invalid dates | A Gantt date does not match the diagram's `dateFormat`, or is not a real calendar date. Durations such as `3d`, and `excludes weekends`, are left alone. A `dateFormat` this check does not understand is left alone. |
+| Duplicate siblings | A mindmap repeats a label under the same parent, or a timeline repeats an event in one period. The same label under a different parent, or the same event in a different period, is left alone. |
+| Empty nodes | A mindmap node or a timeline event has no text. An icon line (`::icon(...)`) is not a node. |
 
 On the dashboard, open **Workspace problems** to list those warnings for every diagram. When a warning is a broken diagram link, **Repair links** is on that list. A thumbnail whose diagram cannot be drawn shows a **Parse error** badge. A header that cannot be parsed shows **Front matter**.
 

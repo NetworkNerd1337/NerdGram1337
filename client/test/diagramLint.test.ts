@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { applyEdits, lintDiagram } from "../../server/src/diagramLint.ts";
+import { applyEdits, LINT_RULES, lintDiagram } from "../../server/src/diagramLint.ts";
 import { readAstFacts } from "../src/lib/mermaidFacts";
 import { lintMermaidDoc, LINT_DELAY_MS } from "../src/lib/mermaidLint";
 import { locateParseError } from "../src/lib/parseError";
@@ -56,6 +56,41 @@ describe("quick fixes undo", () => {
     const jump = diagnostics.flatMap((item) => item.fixes).find((item) => item.id === "jump-to-definition");
     expect(jump?.edits).toEqual([]);
     expect(source.slice(jump?.jump?.from, jump?.jump?.to)).toBe("A");
+  });
+});
+
+describe("diagram checks for more diagram types", () => {
+  it("lists a switch for each new rule, which is what Diagram checks renders", () => {
+    const ids = LINT_RULES.map((rule) => rule.id);
+    for (const id of [
+      "duplicate-class",
+      "undeclared-class",
+      "duplicate-attribute",
+      "undeclared-entity",
+      "missing-dependency",
+      "invalid-date",
+      "duplicate-sibling",
+      "empty-node",
+    ]) {
+      expect(ids).toContain(id);
+    }
+  });
+
+  it("renames a duplicate class and removes a duplicate attribute in one edit each", () => {
+    const source = 'classDiagram\n  class Animal["Cat"]\n  class Animal["Dog"]\n';
+    const rename = lintDiagram(source)
+      .flatMap((item) => item.fixes)
+      .find((item) => item.id === "rename-duplicate");
+    expect(rename).toBeTruthy();
+    if (!rename) return;
+    const next = applyEdits(source, rename.edits);
+    expect(next).toContain("Animal2");
+    const inverse = rename.edits.map((edit) => ({
+      from: edit.from,
+      to: edit.from + edit.insert.length,
+      insert: source.slice(edit.from, edit.to),
+    }));
+    expect(applyEdits(next, inverse)).toBe(source);
   });
 });
 

@@ -4,6 +4,10 @@ Release notes for GitHub Releases. The heading for a release is `## X.Y.Z "Code 
 
 ## Unreleased
 
+### Diagram checks
+
+From #45. Class diagrams warn when the same class is defined again with a different label, and when a relationship names a class that was never declared once any class is declared. A diagram made only of relationships is left alone. ER diagrams warn about a repeated attribute and a relationship to an entity that was never declared once any entity is declared. Gantt charts warn about a task that depends on an unknown id, and about a date that does not match `dateFormat` or is not a real calendar date. Mindmaps and timelines warn about an empty node and a repeated sibling. A quick fix can rename the duplicate class, declare the missing class or entity, remove the extra attribute, or remove the empty or repeated node. The same checks run in the editor, `POST /api/lint`, `/api/v1/lint`, and `nerdgram lint`. A sequence return arrow (`-->>`) is read as the arrow, so a name such as `Mermaid.js` is not reported as unlabeled.
+
 ### Link repair
 
 From #44. A rename or move made outside the app (the file manager, `git mv`, or a GitHub sync pull) leaves `click` links on the old path. **Repair links**, on the dashboard warnings list and on a broken-link warning, previews every rewrite and saves them on confirmation. A match is one missing path and one new file from the same gap, by content hash, or by file name when the hash does not decide. Two equal matches are shown and left unchanged. Nothing is written on a preview. `GET /api/v1/link-repairs` and `nerdgram repair-links` preview. `POST /api/v1/link-repairs` with `{"dryRun":false,"confirm":true}` and `nerdgram repair-links --apply` write those saves, including revision history.

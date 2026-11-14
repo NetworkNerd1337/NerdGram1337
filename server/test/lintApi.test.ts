@@ -47,6 +47,21 @@ describe("lint API", () => {
     expect(clean.status).toBe(200);
     expect(clean.body.diagnostics).toEqual([]);
 
+    const classSource = 'classDiagram\n  class Animal["Cat"]\n  class Animal["Dog"]\n';
+    const classes = await request(app)
+      .post("/api/lint")
+      .set("Host", HOST)
+      .set("Content-Type", "application/json")
+      .send({ source: classSource });
+    expect(classes.status).toBe(200);
+    expect(classes.body.diagnostics.some((item: { ruleId: string }) => item.ruleId === "duplicate-class")).toBe(true);
+    const classesOff = await request(app)
+      .post("/api/lint")
+      .set("Host", HOST)
+      .set("Content-Type", "application/json")
+      .send({ source: classSource, rules: { "duplicate-class": false } });
+    expect(classesOff.body.diagnostics.some((item: { ruleId: string }) => item.ruleId === "duplicate-class")).toBe(false);
+
     const workspace = await request(app).get("/api/diagram-lint").set("Host", HOST);
     expect(workspace.status).toBe(200);
     expect(workspace.body.checked).toBeGreaterThan(0);
