@@ -548,7 +548,7 @@ The token is not returned to the browser, not written into the git remote URL or
 
 ### In-app updates
 
-The running version is the **About** line at the bottom of the sidebar and **About NerdGram1337** in the command palette. Both show the version and its code name, for example `v1.1.0 "Atlas"`. `GET /api/version` returns `name`, `version`, `codename`, `commit`, and `installKind`. `GET /api/health` returns those fields plus `"ok": true` and `dataDir`. `installKind` is `git`, `docker`, `zip`, or `unknown`. `commit` is a SHA when the build or the git checkout has one, and null otherwise. Docker never shells out to git to discover a commit. Set `NERDGRAM_COMMIT` at image build time when you want one. When a newer release is available, the banner and the release dialog show that release's code name. The version still comes from the tag. The code name comes from the major number of that tag.
+The running version is the **About** line at the bottom of the sidebar and **About NerdGram1337** in the command palette. Both show the version and its code name, for example `v1.1.5 "Atlas"`. `GET /api/version` returns `name`, `version`, `codename`, `commit`, and `installKind`. `GET /api/health` returns those fields plus `"ok": true` and `dataDir`. `installKind` is `git`, `docker`, `zip`, or `unknown`. `commit` is a SHA when the build or the git checkout has one, and null otherwise. Docker never shells out to git to discover a commit. Set `NERDGRAM_COMMIT` at image build time when you want one. When a newer release is available, the banner and the release dialog show that release's code name. The version still comes from the tag. The code name comes from the major number of that tag.
 
 The server asks GitHub, with no token, whether `NetworkNerd1337/NerdGram1337` has a newer full release. That request uses the public Releases API for the latest stable release. It does not offer a prerelease. It does not use the GitHub sync token or `NERDGRAM_GITHUB_TOKEN`, and it does not send telemetry. The answer is cached for about 24 hours in `<data>/.meta/updates.json`. If GitHub is offline, rate-limits the check, or has not published a release yet, the automatic check stays quiet. **Check for updates** in the command palette can say that GitHub could not be reached. It has no keyboard shortcut. How a checkout of `main` differs from a checkout of a release tag is under [Pin a version or move to another](#pin-a-version-or-move-to-another).
 
@@ -910,7 +910,7 @@ There is no **Update now** for a ZIP. About shows the hand steps.
 
 Releases are semantic versions: `vX.Y.Z`, three numbers with no prerelease suffix. `X` is the major line, `Y` is the maintenance line, and `Z` is the patch. The root `package.json` `version` is the version of the tree you have. A GitHub Release and its git tag use the same numbers with a leading `v`.
 
-This tree is v1.1.0, code name Atlas. v1.0.5 was the first release on this line, and v1.0.6 was the patch after it. Each published tag has a GitHub Release and a container image. Both are listed on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases). Later 1.x.y releases stay Atlas. The image for this tree is `ghcr.io/networknerd1337/nerdgram1337:v1.1.0` once the `v1.1.0` tag is pushed.
+This tree is v1.1.5, code name Atlas. v1.0.5 was the first release on this line, and v1.0.6 was the patch after it. Each published tag has a GitHub Release and a container image. Both are listed on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases). Later 1.x.y releases stay Atlas. The image for this tree is `ghcr.io/networknerd1337/nerdgram1337:v1.1.5` once the `v1.1.5` tag is pushed.
 
 ### Version numbers and code names
 
@@ -921,7 +921,7 @@ Each major number has one code name for as long as that line is published. Maint
 | 1 | Atlas | v1.0.5 |
 | 2 | Meridian | v2.0.0 |
 
-v1.0.5 was the first release. Every later 1.x.y release is still Atlas. v1.1.0 is the version of this tree. Meridian begins at v2.0.0 and is the name of every 2.x.y release after that.
+v1.0.5 was the first release. Every later 1.x.y release is still Atlas. v1.1.5 is the version of this tree. Meridian begins at v2.0.0 and is the name of every 2.x.y release after that.
 
 Which number moves:
 
@@ -933,7 +933,7 @@ The running app shows the version and the code name together. A 1.x.y build is A
 
 ### Where the version is shown
 
-- The bottom of the sidebar is **About** and the version with its code name, written `v1.1.0 "Atlas"`.
+- The bottom of the sidebar is **About** and the version with its code name, written `v1.1.5 "Atlas"`.
 - **About NerdGram1337** in the command palette opens the same panel: that same version line, commit when there is one, and the install kind (git clone, Docker, ZIP, or unknown).
 - `GET /api/version` returns `name`, `version`, `codename`, `commit`, and `installKind`.
 - `GET /api/health` returns those fields plus `"ok": true` and `dataDir`.
@@ -943,7 +943,7 @@ The running app shows the version and the code name together. A 1.x.y build is A
 
 ### Pin a version or move to another
 
-Install commands elsewhere in this file write the tag as `vX.Y.Z`. Substitute the release you want. `v1.1.0` is the Atlas tag for this tree. The full list of tags that are already published is on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases). `:latest` is not a version. It is the newest full release the image workflow has pushed.
+Install commands elsewhere in this file write the tag as `vX.Y.Z`. Substitute the release you want. `v1.1.5` is the Atlas tag for this tree. The full list of tags that are already published is on the [Releases page](https://github.com/NetworkNerd1337/NerdGram1337/releases). `:latest` is not a version. It is the newest full release the image workflow has pushed.
 
 **Docker, stay on one release.** Use the immutable tag `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z` in `docker run` and as the `image:` line in `compose.yaml`. `docker pull` of that tag gets that release again. Recreate the container on the same `nerdgram-data` volume when you change tags. The steps are [Update a Docker install](#update-a-docker-install). The workflow also pushes `sha-<commit>` for that build. Pin the `sha-` tag when you need that exact image rather than the version tag.
 

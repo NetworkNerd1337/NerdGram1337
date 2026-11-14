@@ -2,11 +2,17 @@
 
 Release notes for GitHub Releases. The heading for a release is `## X.Y.Z "Code name" - YYYY-MM-DD`. It has to match the root `package.json` version. `npm run version:check` requires the quoted code name to match the `codenames` map. The notes script also accepts `## X.Y.Z` and `## [X.Y.Z]`, with an optional code name and date. The `vX.Y.Z` tag is the version the update check reads. The GitHub Release title is `vX.Y.Z "Code name"`, from that tag and the map.
 
-## Unreleased
+## 1.1.5 "Atlas" - 2026-11-14
 
-### npm package
+Maintenance release on the Atlas line. The code name stays Atlas. This ships the work 1.1.0 left open: neighbor import, link repair, lint for more diagram types, data files that follow a generated diagram, and the npm package.
 
-From #43. The `nerdgram` command is published as the npm package `nerdgram1337`. The command name stays `nerdgram`. Install it with `npm install -g nerdgram1337`, or run `npx nerdgram1337 --help`. A `vX.Y.Z` tag publishes that package when the `NPM_TOKEN` repository secret is set, and refuses when the tag does not match `cli/package.json`. If the secret is missing, the release warns and the GitHub Release still goes out.
+### Diagrams from data
+
+Phase 2 of #36. **From data** accepts Cisco CDP (`show cdp neighbors detail` on IOS, IOS-XE, and NX-OS) and vendor-agnostic LLDP neighbor detail. LLDP is one parser over the standard TLVs, including Linux `lldpctl` text, keyvalue, and JSON. Links seen from both ends become one edge, interface names are normalized, and devices can be grouped by platform or capability. The raw output is stored next to the diagram (`.cdp` or `.lldp`) and **Refresh from data** parses it again. Sample output is in `docs/samples/neighbors/`.
+
+### Link repair
+
+From #44. A rename or move made outside the app (the file manager, `git mv`, or a GitHub sync pull) leaves `click` links on the old path. **Repair links**, on the dashboard warnings list and on a broken-link warning, previews every rewrite and saves them on confirmation. A match is one missing path and one new file from the same gap, by content hash, or by file name when the hash does not decide. Two equal matches are shown and left unchanged. Nothing is written on a preview. `GET /api/v1/link-repairs` and `nerdgram repair-links` preview. `POST /api/v1/link-repairs` with `{"dryRun":false,"confirm":true}` and `nerdgram repair-links --apply` write those saves, including revision history.
 
 ### Diagram checks
 
@@ -14,15 +20,11 @@ From #45. Class diagrams warn when the same class is defined again with a differ
 
 ### Data files follow the diagram
 
-From #46. Renaming or moving a diagram also moves the CSV, JSON, CDP, or LLDP file that sits next to it, and updates `nerdgram.source` (including an edges file). A data file stored somewhere else stays put, and refresh keeps reading that path. Duplicate asks whether to copy the data file onto the new diagram or keep sharing the original. Sharing does not change the original file. Delete asks whether to move the data file to the trash with the diagram or leave it in the workspace. Restore brings a trashed data file back beside the diagram. The same choices are on `/api/v1` and `nerdgram rename`, `move`, `duplicate`, and `delete`. GitHub sync copies the files that remain after the move. **Repair links** also updates `nerdgram.source` when a rename outside the app moved the data file with the diagram.
+From #46. Renaming, moving, copying, or deleting a generated diagram also handles the CSV, JSON, CDP, or LLDP file that sits next to it, and updates `nerdgram.source` (including an edges file). A data file stored somewhere else stays put, and refresh keeps reading that path. Duplicate asks whether to copy the data file onto the new diagram or keep sharing the original. Sharing does not change the original file. Delete asks whether to move the data file to the trash with the diagram or leave it in the workspace. Restore brings a trashed data file back beside the diagram. The same choices are on `/api/v1` and `nerdgram rename`, `move`, `duplicate`, and `delete`. GitHub sync copies the files that remain after the move. **Repair links** also updates `nerdgram.source` when a rename outside the app moved the data file with the diagram.
 
-### Link repair
+### npm package
 
-From #44. A rename or move made outside the app (the file manager, `git mv`, or a GitHub sync pull) leaves `click` links on the old path. **Repair links**, on the dashboard warnings list and on a broken-link warning, previews every rewrite and saves them on confirmation. A match is one missing path and one new file from the same gap, by content hash, or by file name when the hash does not decide. Two equal matches are shown and left unchanged. Nothing is written on a preview. `GET /api/v1/link-repairs` and `nerdgram repair-links` preview. `POST /api/v1/link-repairs` with `{"dryRun":false,"confirm":true}` and `nerdgram repair-links --apply` write those saves, including revision history.
-
-### Diagrams from data
-
-Phase 2 of #36. **From data** accepts Cisco CDP (`show cdp neighbors detail` on IOS, IOS-XE, and NX-OS) and LLDP neighbor detail from any vendor. LLDP is one parser over the standard TLVs, including Linux `lldpctl` text, keyvalue, and JSON. Links seen from both ends become one edge, interface names are normalized, and devices can be grouped by platform or capability. The raw output is stored next to the diagram (`.cdp` or `.lldp`) and **Refresh from data** parses it again. Sample output is in `docs/samples/neighbors/`.
+From #43. The CLI is installable from npm as the package `nerdgram1337`. The command name stays `nerdgram`. Install it with `npm install -g nerdgram1337`, or run `npx nerdgram1337 --help`. A `vX.Y.Z` tag publishes that package when the `NPM_TOKEN` repository secret is set, and refuses when the tag does not match `cli/package.json`. If the secret is missing, the release warns and the GitHub Release still goes out.
 
 ## 1.1.0 "Atlas" - 2026-11-13
 
