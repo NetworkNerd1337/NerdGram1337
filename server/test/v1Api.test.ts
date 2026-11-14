@@ -240,6 +240,12 @@ describe("automation API", () => {
       .send({ source: "flowchart LR\n  A[One] --> B[Two]\n" });
     expect(lintPosted.status).toBe(200);
     expect(lintPosted.body.diagnostics).toEqual([]);
+    const classLint = await request(server)
+      .post("/api/v1/lint")
+      .set(auth)
+      .send({ source: 'classDiagram\n  class Animal["Cat"]\n  class Animal["Dog"]\n' });
+    expect(classLint.status).toBe(200);
+    expect(classLint.body.diagnostics.some((item: { ruleId: string }) => item.ruleId === "duplicate-class")).toBe(true);
     const lintBroken = await request(server)
       .post("/api/v1/lint")
       .set(auth)
