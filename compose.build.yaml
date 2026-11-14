@@ -14,6 +14,6 @@ services:
     build:
       context: .
       args:
-        NERDGRAM_VERSION: "1.1.0"
+        NERDGRAM_VERSION: "1.1.5"
         NERDGRAM_CODENAME: "Atlas"
         NERDGRAM_COMMIT: ${NERDGRAM_COMMIT:-}

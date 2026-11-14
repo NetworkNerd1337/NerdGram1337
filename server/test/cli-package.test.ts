@@ -69,8 +69,8 @@ describe("cli package version", () => {
       expect(text).toContain("npm install -g nerdgram1337");
       expect(text).toContain("npx nerdgram1337 --help");
     }
-    const unreleased = changelog.split(/^## 1\./m)[0] ?? "";
-    expect(unreleased).toContain("npm install -g nerdgram1337");
-    expect(unreleased).toContain("npx nerdgram1337 --help");
+    const released = changelog.split(/^## 1\.1\.5 /m)[1]?.split(/^## /m)[0] ?? "";
+    expect(released).toContain("npm install -g nerdgram1337");
+    expect(released).toContain("npx nerdgram1337 --help");
   });
 });
