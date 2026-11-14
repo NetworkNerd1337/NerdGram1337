@@ -4,6 +4,10 @@ Release notes for GitHub Releases. The heading for a release is `## X.Y.Z "Code 
 
 ## Unreleased
 
+### Link repair
+
+From #44. A rename or move made outside the app (the file manager, `git mv`, or a GitHub sync pull) leaves `click` links on the old path. **Repair links**, on the dashboard warnings list and on a broken-link warning, previews every rewrite and saves them on confirmation. A match is one missing path and one new file from the same gap, by content hash, or by file name when the hash does not decide. Two equal matches are shown and left unchanged. Nothing is written on a preview. `GET /api/v1/link-repairs` and `nerdgram repair-links` preview. `POST /api/v1/link-repairs` with `{"dryRun":false,"confirm":true}` and `nerdgram repair-links --apply` write those saves, including revision history.
+
 ### Diagrams from data
 
 Phase 2 of #36. **From data** accepts Cisco CDP (`show cdp neighbors detail` on IOS, IOS-XE, and NX-OS) and LLDP neighbor detail from any vendor. LLDP is one parser over the standard TLVs, including Linux `lldpctl` text, keyvalue, and JSON. Links seen from both ends become one edge, interface names are normalized, and devices can be grouped by platform or capability. The raw output is stored next to the diagram (`.cdp` or `.lldp`) and **Refresh from data** parses it again. Sample output is in `docs/samples/neighbors/`.

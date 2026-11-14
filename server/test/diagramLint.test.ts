@@ -181,6 +181,7 @@ describe("click links to diagrams", () => {
     expect(hits).toHaveLength(1);
     expect(hits[0]?.subject).toBe("Missing.mmd");
     expect(hits[0]?.message).toMatch(/does not match/);
+    expect(hits[0]?.fixes.map((fix) => fix.id)).toEqual(["repair-links"]);
   });
 
   it("stays quiet for a known path, a web link, and when no workspace list was given", () => {
@@ -201,7 +202,9 @@ describe("click links to diagrams", () => {
     expect(hits).toHaveLength(1);
     expect(hits[0]?.message).toMatch(/does not match/);
     const escape = 'flowchart LR\n  A[Atlanta]\n  click A "../../secret.mmd"\n';
-    expect(byRule(escape, "broken-click", { diagramPaths: paths, sourcePath })[0]?.message).toMatch(/leaves the workspace/);
+    const escaped = byRule(escape, "broken-click", { diagramPaths: paths, sourcePath })[0];
+    expect(escaped?.message).toMatch(/leaves the workspace/);
+    expect(escaped?.fixes).toEqual([]);
   });
 });
 

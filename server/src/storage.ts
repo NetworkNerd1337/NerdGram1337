@@ -16,6 +16,7 @@ import { getMetaPath } from "./paths.js";
  * - `.meta/locks/p_<encoded-path>.json` — single-editor lock for one path
  * - `.meta/thumbs/p_<encoded-path>.json` — cached dashboard thumbnail SVG
  * - `.meta/search/index.json` — optional text-search cache; rebuilt from the diagrams if missing
+ * - `.meta/diagram-sightings.json` — path and content hash of diagrams already seen, used to repair click links after a rename outside the app
  *
  * Move, duplicate, and import (#9) should reuse `atomicWriteText`,
  * `evaluateWrite`, and `resolveAvailablePath` instead of calling

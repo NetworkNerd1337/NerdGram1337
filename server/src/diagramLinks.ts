@@ -352,6 +352,81 @@ export type LinkRewrite = {
   content: string;
 };
 
+export type LinkRepairMatch = "content" | "basename" | "ambiguous";
+
+/** A missing diagram and the file that may have replaced it. `to` is null when more than one file matches. */
+export type LinkRepairSuggestion = {
+  from: string;
+  to: string | null;
+  match: LinkRepairMatch;
+  candidates: string[];
+};
+
+export type LinkRepairEdit = {
+  line: number;
+  target: string;
+  next: string;
+};
+
+/** One diagram whose click targets would change. The file is not written until the repair is confirmed. */
+export type LinkRepairChange = {
+  path: string;
+  links: LinkRepairEdit[];
+};
+
+export type LinkRepairPlan = {
+  suggestions: LinkRepairSuggestion[];
+  changes: LinkRepairChange[];
+  applied: boolean;
+  saved: string[];
+};
+
+/**
+ * Rewrite click targets that still resolve to a path in `moves`.
+ * The moved file is already at `to`. Each map entry is applied to the
+ * original text, so two renames in one pass do not rewrite each other.
+ * An empty `to` is ignored. Callers leave ambiguous matches out of `moves`.
+ */
+export function planRepairRewrites(
+  files: readonly { path: string; content: string }[],
+  moves: readonly { from: string; to: string }[],
+): { path: string; content: string; links: LinkRepairEdit[] }[] {
+  const map = new Map<string, string>();
+  for (const move of moves) {
+    const from = normalizeWorkspacePath(move.from);
+    const to = normalizeWorkspacePath(move.to);
+    if (!from || !to || from === to) continue;
+    map.set(from, to);
+  }
+  if (map.size === 0) return [];
+
+  const rewrites: { path: string; content: string; links: LinkRepairEdit[] }[] = [];
+  for (const file of files) {
+    const filePath = normalizeWorkspacePath(file.path);
+    const edits: { from: number; to: number; insert: string }[] = [];
+    const links: LinkRepairEdit[] = [];
+    for (const click of extractClickLinks(file.content)) {
+      if (clickTargetKind(click.target) !== "diagram") continue;
+      const resolved = resolveDiagramTarget(click.target, filePath);
+      if (!resolved.ok) continue;
+      const nextPath = map.get(resolved.path);
+      if (!nextPath || nextPath === resolved.path) continue;
+      const insert = retargetClick(click.target, nextPath, filePath);
+      if (insert === click.target) continue;
+      edits.push({ from: click.from, to: click.to, insert });
+      links.push({ line: click.line, target: click.target, next: insert });
+    }
+    if (edits.length === 0) continue;
+    const ordered = edits.sort((a, b) => b.from - a.from);
+    let content = file.content;
+    for (const edit of ordered) {
+      content = content.slice(0, edit.from) + edit.insert + content.slice(edit.to);
+    }
+    if (content !== file.content) rewrites.push({ path: filePath, content, links });
+  }
+  return rewrites.sort((a, b) => a.path.localeCompare(b.path));
+}
+
 /**
  * New text for every diagram whose click targets must change so they still
  * resolve after `from` moves to `to`. Absolute `nerdgram:` links inside a

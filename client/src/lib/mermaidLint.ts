@@ -72,6 +72,10 @@ function codeMirrorAction(fix: LintFix): Action {
   return {
     name: fix.title,
     apply(view: EditorView) {
+      if (fix.id === "repair-links") {
+        window.dispatchEvent(new CustomEvent("nerdgram:repair-links"));
+        return;
+      }
       applyLintFix(view, fix);
     },
   };

@@ -7,6 +7,7 @@ import type { Express } from "express";
 import { createApp, type CreateAppOptions, type ListenPort } from "./app.js";
 import { bootBackgroundTasks, shutdownBackgroundTasks } from "./boot.js";
 import { ensureDataRoot } from "./paths.js";
+import { captureDiagramSightings } from "./fsStore.js";
 import { seedEmptyDataDir } from "./seed.js";
 import { closeRenderer } from "./renderDiagram.js";
 import { getVersionInfo } from "./updates/versionInfo.js";
@@ -101,6 +102,7 @@ export async function startServer(options: StartServerOptions = {}): Promise<Ser
   if (await seedEmptyDataDir()) {
     console.log("Seeded empty data directory with the sample diagrams.");
   }
+  await captureDiagramSightings();
 
   const servers: Server[] = [];
   let listenPort = port;

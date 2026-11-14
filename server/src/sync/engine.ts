@@ -2,7 +2,8 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { writeDataFile } from "../diagramDataFiles.js";
-import { deleteItem, readFile, writeFile } from "../fsStore.js";
+import { withoutSightingNotes } from "../diagramSightings.js";
+import { captureDiagramSightings, deleteItem, readFile, writeFile } from "../fsStore.js";
 import { assertWriteAllowed } from "../locks.js";
 import { ensureDataRoot, getDataRoot, getMetaPath, resolveSafePath } from "../paths.js";
 import { dropThumbnail } from "../thumbnails.js";
@@ -578,7 +579,11 @@ async function pullLocked(config: SyncConfig): Promise<void> {
     );
     return;
   }
-  await applyPlan(plan.actions);
+  await captureDiagramSightings();
+  await withoutSightingNotes(async () => {
+    await applyPlan(plan.actions);
+  });
+  await captureDiagramSightings();
   const after = await listUserFiles(ensureDataRoot());
   const same = mapsEqual(after, remoteFiles);
   const canFastForward =

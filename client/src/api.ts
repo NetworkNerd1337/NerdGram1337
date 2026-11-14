@@ -1,3 +1,4 @@
+import type { LinkRepairPlan } from "../../server/src/diagramLinks.ts";
 import type { LintDiagnostic } from "../../server/src/diagramLint.ts";
 import type {
   DiagramMeta,
@@ -117,6 +118,17 @@ export const api = {
     }>(`/api/diagram-links?path=${encodeURIComponent(path)}`),
   diagramLint: () =>
     request<{ checked: number; diagrams: { path: string; diagnostics: LintDiagnostic[] }[] }>("/api/diagram-lint"),
+  previewLinkRepairs: () => request<LinkRepairPlan>("/api/link-repairs"),
+  applyLinkRepairs: (body: { lockToken?: string | null; choices: { from: string; to: string }[] }) =>
+    request<LinkRepairPlan>("/api/link-repairs", {
+      method: "POST",
+      body: JSON.stringify({
+        dryRun: false,
+        confirm: true,
+        lockToken: body.lockToken ?? undefined,
+        choices: body.choices,
+      }),
+    }),
   search: (query: string, options?: { namesOnly?: boolean; signal?: AbortSignal }) => {
     const params = new URLSearchParams({ q: query });
     if (options?.namesOnly) params.set("names", "1");
