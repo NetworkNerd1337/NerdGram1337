@@ -44,7 +44,7 @@ export function ProblemsPanel({ diagnostics, pending = false, readOnly = false, 
                     <button
                       key={`${fix.id}-${fix.title}`}
                       type="button"
-                      disabled={readOnly && fix.edits.length > 0}
+                      disabled={readOnly && (fix.edits.length > 0 || fix.id === "repair-links")}
                       onClick={() => onFix(fix)}
                     >
                       {fix.title}

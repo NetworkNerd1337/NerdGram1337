@@ -7,6 +7,7 @@ import { ItemActions } from "../components/ItemActions";
 import { HighlightedText } from "../components/HighlightedText";
 import { MermaidThumbnail } from "../components/MermaidThumbnail";
 import { AffectedLinksDialog } from "../components/AffectedLinksDialog";
+import { RepairLinksDialog } from "../components/RepairLinksDialog";
 import { Modal } from "../components/Modal";
 import { MoveDialog } from "../components/MoveDialog";
 import { Sidebar } from "../components/Sidebar";
@@ -1171,9 +1172,10 @@ function WorkspaceProblems() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [items, setItems] = useState<{ path: string; line: number; severity: string; message: string }[] | null>(
-    null,
-  );
+  const [repairOpen, setRepairOpen] = useState(false);
+  const [items, setItems] = useState<
+    { path: string; line: number; severity: string; message: string; ruleId: string }[] | null
+  >(null);
 
   const load = () => {
     setLoading(true);
@@ -1187,6 +1189,7 @@ function WorkspaceProblems() {
               line: item.line,
               severity: item.severity,
               message: item.message,
+              ruleId: item.ruleId,
             })),
           ),
         );
@@ -1215,6 +1218,11 @@ function WorkspaceProblems() {
       </p>
       {open && loading ? <p>Checking diagrams…</p> : null}
       {error ? <p>{error}</p> : null}
+      {items?.some((item) => item.ruleId === "broken-click") ? (
+        <button type="button" className="btn" onClick={() => setRepairOpen(true)}>
+          Repair links
+        </button>
+      ) : null}
       {items && items.length === 0 ? <p>No warnings in the workspace.</p> : null}
       {items && items.length > 0 ? (
         <ul>
@@ -1227,6 +1235,15 @@ function WorkspaceProblems() {
             </li>
           ))}
         </ul>
+      ) : null}
+      {repairOpen ? (
+        <RepairLinksDialog
+          onClose={() => setRepairOpen(false)}
+          onApplied={() => {
+            setRepairOpen(false);
+            load();
+          }}
+        />
       ) : null}
     </details>
   );

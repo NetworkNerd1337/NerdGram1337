@@ -25,7 +25,7 @@ type Parsed = {
   flags: Map<string, string | boolean>;
 };
 
-const BOOL_FLAGS = new Set(["json", "server", "strict", "help", "h", "no-update-links"]);
+const BOOL_FLAGS = new Set(["json", "server", "strict", "help", "h", "no-update-links", "dry-run", "apply"]);
 
 const HELP = `nerdgram — automation client for NerdGram1337
 
@@ -37,6 +37,7 @@ Usage
   nerdgram put <path> <file>
   nerdgram export <folder> -o dir/
   nerdgram lint [path|file] [--strict]
+  nerdgram repair-links [--dry-run] [--apply]
   nerdgram generate --path Diagram.mmd --data data.csv
   nerdgram generate --path Diagram.mmd --data neighbors.lldp --format lldp --local-device edge-sw
   nerdgram refresh <path> [--data data.csv]
@@ -45,6 +46,9 @@ A local .mmd file is rendered and linted in this process. Anything else uses
 NERDGRAM_URL (default http://127.0.0.1:8787) and NERDGRAM_TOKEN.
 --url and --token override those. --json prints one JSON object.
 --server forces render to use the API. Exit status is 1 on errors.
+repair-links previews click repairs after a rename or move made outside the
+app. --dry-run is the default and writes nothing. --apply saves the previewed
+rewrites. An ambiguous match is listed and left unchanged.
 `;
 
 class CliError extends Error {
@@ -312,6 +316,45 @@ async function lintCommand(parsed: Parsed, io: Io): Promise<number> {
   return failed ? 1 : 0;
 }
 
+async function repairLinksCommand(parsed: Parsed, io: Io): Promise<void> {
+  const apply = parsed.flags.get("apply") === true && parsed.flags.get("dry-run") !== true;
+  const { base, token } = configOf(parsed.flags, io.env);
+  const result = apply
+    ? await callApi(base, requireToken(token), "POST", "/api/v1/link-repairs", { dryRun: false, confirm: true })
+    : await callApi(base, requireToken(token), "GET", "/api/v1/link-repairs");
+  const body = result.json as {
+    suggestions?: { from: string; to: string | null; match: string; candidates: string[] }[];
+    changes?: { path: string; links: { line: number; target: string; next: string }[] }[];
+    applied?: boolean;
+    saved?: string[];
+  };
+  const lines: string[] = [];
+  for (const change of body.changes ?? []) {
+    lines.push(change.path);
+    for (const link of change.links) lines.push(`  line ${link.line}: ${link.target} -> ${link.next}`);
+  }
+  const ambiguous = (body.suggestions ?? []).filter((item) => item.to == null || item.match === "ambiguous");
+  if (ambiguous.length > 0) {
+    lines.push("Ambiguous, not changed:");
+    for (const item of ambiguous) lines.push(`  ${item.from} matches ${item.candidates.join(", ")}`);
+  }
+  if (lines.length === 0) lines.push("No link repairs.");
+  else if (!apply) lines.push("Nothing was written. Run nerdgram repair-links --apply to update these files.");
+  else if ((body.saved ?? []).length > 0) lines.push(`Updated ${(body.saved ?? []).join(", ")}`);
+  else lines.push("No files needed a rewrite.");
+  writeOut(
+    io,
+    isJson(parsed.flags),
+    {
+      applied: body.applied === true,
+      saved: body.saved ?? [],
+      suggestions: body.suggestions ?? [],
+      changes: body.changes ?? [],
+    },
+    lines.join("\n"),
+  );
+}
+
 async function generateCommand(parsed: Parsed, io: Io): Promise<void> {
   const diagramPath = flagString(parsed.flags, "path") ?? parsed.positionals[0];
   const dataFile = flagString(parsed.flags, "data");
@@ -390,6 +433,9 @@ export async function main(argv: string[], io: Partial<Io> = {}): Promise<number
         return 0;
       case "lint":
         return await lintCommand(parsed, streams);
+      case "repair-links":
+        await repairLinksCommand(parsed, streams);
+        return 0;
       case "generate":
         await generateCommand(parsed, streams);
         return 0;

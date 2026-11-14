@@ -70,7 +70,7 @@ export type LintEdit = {
   insert: string;
 };
 
-export type LintFixId = "rename-duplicate" | "remove-classdef" | "create-class" | "jump-to-definition";
+export type LintFixId = "rename-duplicate" | "remove-classdef" | "create-class" | "jump-to-definition" | "repair-links";
 
 export type LintFix = {
   id: LintFixId;
@@ -474,6 +474,10 @@ function brokenClicks(model: Model, paths: readonly string[], sourcePath: string
       resolved.ok === false && resolved.reason === "escape"
         ? `The click link "${click.target}" leaves the workspace and does not match a diagram.`
         : `The click link "${click.target}" does not match a diagram in this workspace.`;
+    const fixes: LintFix[] = [];
+    if (resolved.ok) {
+      fixes.push({ id: "repair-links", title: "Repair links", edits: [] });
+    }
     diagnostics.push({
       ruleId: "broken-click",
       severity: "warning",
@@ -483,7 +487,7 @@ function brokenClicks(model: Model, paths: readonly string[], sourcePath: string
       to: click.to,
       line: click.line,
       column: click.column,
-      fixes: [],
+      fixes,
     });
   }
   return diagnostics;

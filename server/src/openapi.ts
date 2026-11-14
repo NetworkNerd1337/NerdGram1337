@@ -111,6 +111,22 @@ export const V1_ROUTES: readonly V1Route[] = [
   },
   {
     method: "get",
+    path: "/link-repairs",
+    scope: "read",
+    operationId: "previewLinkRepairs",
+    summary: "Preview click-link repairs after a diagram was renamed outside the app. Nothing is written.",
+    tag: "Diagrams",
+  },
+  {
+    method: "post",
+    path: "/link-repairs",
+    scope: "write",
+    operationId: "applyLinkRepairs",
+    summary: "Preview or apply click-link repairs. dryRun defaults to true, so nothing is written until confirm is true and dryRun is false.",
+    tag: "Diagrams",
+  },
+  {
+    method: "get",
     path: "/lint",
     scope: "read",
     operationId: "lintWorkspace",
@@ -259,6 +275,21 @@ function operationBody(operationId: string): Record<string, unknown> | undefined
         edgesText: { type: "string" },
         storeData: { type: "boolean" },
       }, ["text"]);
+    case "applyLinkRepairs":
+      return jsonBody("Link repair. Omit dryRun or set it true to preview. Writes require dryRun false and confirm true.", {
+        dryRun: { type: "boolean", description: "Defaults to true. Nothing is written while this is true." },
+        confirm: { type: "boolean", description: "Must be true, with dryRun false, before files change." },
+        lockToken: { type: "string", description: "Editor lock token when a diagram being saved is open in this window." },
+        choices: {
+          type: "array",
+          description: "from/to pairs the caller previewed. Omit to apply every unambiguous suggestion. Ambiguous matches are never chosen.",
+          items: {
+            type: "object",
+            properties: { from: { type: "string" }, to: { type: "string" } },
+            required: ["from", "to"],
+          },
+        },
+      }, []);
     case "refreshDiagram":
       return jsonBody("Refresh.", {
         path: { type: "string" },

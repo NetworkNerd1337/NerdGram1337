@@ -238,6 +238,13 @@ export function mountAutomationApi(app: Express, options: MountV1Options = {}): 
       }
       res.json({ path: folder, files: exported });
     }),
+    previewLinkRepairs: asyncHandler(async (_req, res) => {
+      res.json(await store.repairDiagramLinks({ dryRun: true, confirm: false }));
+    }),
+    applyLinkRepairs: asyncHandler(async (req, res) => {
+      if (!jsonObject(req, res)) return;
+      res.json(await store.repairDiagramLinks(store.repairOptionsFromBody(req.body)));
+    }),
     lintWorkspace: asyncHandler(async (req, res) => {
       const paths = await workspaceDiagramPaths();
       const requested = optionalString(req.query.path, "path");

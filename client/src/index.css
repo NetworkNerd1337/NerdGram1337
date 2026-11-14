@@ -1115,6 +1115,10 @@ a {
   font-weight: 600;
 }
 
+.workspace-problems > .btn {
+  margin-top: 0.45rem;
+}
+
 .workspace-problems p,
 .workspace-problems li span {
   color: var(--ink-soft);

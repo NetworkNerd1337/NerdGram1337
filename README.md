@@ -277,7 +277,7 @@ A move that would land in the item's current folder, or put a folder inside itse
 
 **Duplicate** copies a diagram or a whole folder. The first copy is `Name (copy).mmd` (or `Name (copy)` for a folder), then `Name (copy 2)`. It never overwrites an existing item. The copy is not favorited, it does not share the source's editor lock, and it starts with no revision history. Hidden files, including anything under `.meta`, are not copied.
 
-Renaming or moving a diagram asks first when other diagrams link to it, then updates those `click` targets and lists the files it changed. A relative link inside a diagram that moved is updated too, so it still points at the same file. See [Linked diagrams](#linked-diagrams).
+Renaming or moving a diagram asks first when other diagrams link to it, then updates those `click` targets and lists the files it changed. A relative link inside a diagram that moved is updated too, so it still points at the same file. A rename or move made outside the app does not. **Repair links** can fix those after you confirm a preview. See [Linked diagrams](#linked-diagrams).
 
 **Import** copies text you already have into the folder you are viewing, or into a folder you pick. Use **Import**, or drop `.mmd`, `.md`, and `.txt` files onto the dashboard or a folder. `.md` and `.txt` are stored as `.mmd`. Other file types are rejected. Each file can be up to 512 KB, with at most 25 files and 3 MB of text in one import. A dropped folder is not imported as a tree.
 
@@ -335,7 +335,7 @@ Description, notes, and tags live under `nerdgram:` because Mermaid has no field
 
 The code pane checks the diagram while you type. The check waits about **400 ms** after the last key so a large file does not lag. Mermaid's parser supplies the syntax error, including the line and column. The other checks are warnings. They do not block the preview or autosave. A warning is a gutter mark and a row in the problems list under the code. Click a row to jump to that line. `nerdgram lint` runs the same checks on a file, or on the workspace when you point it at a running server. A Mermaid syntax error is reported as an error, with the line and column, and the command exits non-zero. `POST /api/lint` and `POST /api/v1/lint` do the same for one diagram. `GET /api/diagram-lint` and `GET /api/v1/lint` run the checks on the workspace.
 
-The problems list can also offer a fix. **Rename** gives a duplicate id a new name. **Remove unused class** deletes a `classDef` nothing uses. **Create class** inserts a `classDef` for a name you already applied. **Jump to definition** moves the cursor to the first definition of a duplicate id. Each of those can be undone with Ctrl+Z (Cmd+Z on a Mac).
+The problems list can also offer a fix. **Rename** gives a duplicate id a new name. **Remove unused class** deletes a `classDef` nothing uses. **Create class** inserts a `classDef` for a name you already applied. **Jump to definition** moves the cursor to the first definition of a duplicate id. Each of those can be undone with Ctrl+Z (Cmd+Z on a Mac). **Repair links** on a broken diagram link opens a preview of the rewrites. Confirming it saves the diagrams. Nothing is written before that confirmation.
 
 Turn a warning off under **Diagram checks** on the settings page (`/settings#diagram-checks`). The sidebar links there on its own, next to GitHub sync and automation tokens. The switches are saved in this browser. A diagram Mermaid cannot parse is always marked.
 
@@ -349,7 +349,7 @@ Turn a warning off under **Diagram checks** on the settings page (`/settings#dia
 | Front matter | The YAML header cannot be parsed, or a theme, look, layout, curve, ELK placement, title, description, or tag list is not one the file format accepts. |
 | Broken diagram links | A `click` target that points at a workspace diagram (`nerdgram:`, `diagram:`, or a relative `.mmd` path) is missing, or the path leaves the workspace. Web links are not checked. |
 
-On the dashboard, open **Workspace problems** to list those warnings for every diagram. A thumbnail whose diagram cannot be drawn shows a **Parse error** badge. A header that cannot be parsed shows **Front matter**.
+On the dashboard, open **Workspace problems** to list those warnings for every diagram. When a warning is a broken diagram link, **Repair links** is on that list. A thumbnail whose diagram cannot be drawn shows a **Parse error** badge. A header that cannot be parsed shows **Front matter**.
 
 ### Linked diagrams
 
@@ -366,6 +366,8 @@ A path such as `./Rack.mmd` or `../WAN.mmd` is relative to the diagram that cont
 The sample pair is `WAN.mmd` and `Sites/Atlanta.mmd`. Click Atlanta on the overview to open the site. The trail along the top of the preview, and again in presentation, is the path you took, for example **WAN > Atlanta > Rack 3**, with **Back** and **Forward**. Presentation keeps that drill-down in the same full-screen view.
 
 **Link node to diagram...** in the command palette inserts the `click` line. On a `click` line, autocomplete offers the diagrams in the workspace. A missing target is a warning in the problems list. Clicking it shows that message on the current diagram instead of opening a blank page. **Diagram info** lists **Links to** and **Linked from**.
+
+Renaming or moving a diagram inside the app rewrites the `click` lines that point at it. A rename from the file manager, `git mv`, or a GitHub sync pull does not, so those links break. NerdGram remembers the path and content hash of each diagram it has seen, in `<data>/.meta/diagram-sightings.json`. **Repair links** compares that memory with the files now on disk. A path that disappeared and a new file that appeared in the same gap are a match when the content is the same, or, if the content is not, when the file name is the same and only one file fits. The dialog lists every rewrite. Confirming it saves those diagrams the same way an edit does, including revision history. Cancel, a dry run, or a preview writes nothing. If two files fit equally well, both are listed and neither is chosen. The same preview is `GET /api/link-repairs`, `GET /api/v1/link-repairs`, and `nerdgram repair-links`.
 
 Only `nerdgram:`, `diagram:`, and a relative `.mmd` path navigate inside the app. An `http` or `https` address opens in a new tab and does not keep a handle back to this window. `javascript:` and any other scheme are blocked. A path that would leave the data directory is blocked the same way as a file operation.
 
@@ -632,7 +634,7 @@ An empty custom directory is seeded once with the sample diagrams, including the
 
 `/api/v1` is for scripts, CI, and other tools. The browser UI keeps using `/api` and does not send a token. Create a token under **Automation tokens** on the settings page (`/settings`). The token is shown once. The server stores a SHA-256 hash in `<data>/.meta/api-tokens.json` (mode `0600`) and compares it in constant time. Revoke a token on that same page. A revoked token stops working immediately.
 
-A token is `read` or `read-write`. Read can list, search, fetch source, export, lint, and render. Read-write can also create, update, rename, move, trash, generate, and refresh. A read token that tries to write gets **403**. A missing, wrong, or revoked token gets **401**.
+A token is `read` or `read-write`. Read can list, search, fetch source, export, lint, render, and preview link repairs. Read-write can also create, update, rename, move, trash, generate, refresh, and apply link repairs. A read token that tries to write gets **403**. A missing, wrong, or revoked token gets **401**.
 
 The OpenAPI document is `GET /api/v1/openapi.json`. That one route does not require a token. Every other `/api/v1` route does. Host and Origin checks still apply, including on token routes. A foreign `Host` is **403**. A mutating call still needs `Content-Type: application/json`, and a foreign `Origin` is **403**. A token does not turn those checks off.
 
@@ -651,6 +653,8 @@ curl -fsS -X POST "http://127.0.0.1:8787/api/v1/render" \
 ```
 
 Rename and move update `click` links the same way the editor does after you confirm. Pass `"updateLinks": false` to refuse the change when another diagram links there (**409**, with the file list). Delete moves the item to the trash. An editor lock returns **423**. Paths stay inside the data directory.
+
+`GET /api/v1/link-repairs` previews repairs after a diagram was renamed or moved outside the app, including by a sync pull. Nothing is written. `POST /api/v1/link-repairs` writes only when the body is `{"dryRun":false,"confirm":true}`. Leave `dryRun` out, or set it true, and the response is the same preview. `choices` is the list of `from` and `to` paths you already previewed. Omit it to apply every suggestion that has one target. A suggestion with more than one target is never applied. A pair that is not in the current preview is **409**.
 
 Lint reuses the same checks as the editor:
 
@@ -704,6 +708,8 @@ nerdgram get Welcome.mmd -o Welcome.mmd
 nerdgram put Notes.mmd ./Notes.mmd
 nerdgram export Examples -o ./exported
 nerdgram lint Welcome.mmd
+nerdgram repair-links
+nerdgram repair-links --apply
 nerdgram generate --path Campus.mmd --data docs/samples/campus-links.csv
 nerdgram generate --path Core.mmd --data docs/samples/neighbors/cisco-ios-lldp.lldp --format lldp
 nerdgram refresh Campus.mmd
@@ -712,6 +718,8 @@ nerdgram render Welcome.mmd -o Welcome.png
 ```
 
 `render` of a `.mmd` file that exists on disk does not need a server. `lint` of a local file does not either. `--server` sends `render` to the API instead. `lint` exits `1` when a diagnostic is an error. `--strict` also exits `1` for warnings.
+
+`nerdgram repair-links` prints the preview and writes nothing. `--dry-run` is the same. `--apply` saves the rewrites. A read token can run the preview. `--apply` needs a read-write token.
 
 A CI job can render every diagram in the repo without a token, because that path is offline:
 

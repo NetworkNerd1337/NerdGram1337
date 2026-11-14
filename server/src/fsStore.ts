@@ -5,8 +5,19 @@ import {
   indexDiagramLinks,
   linksFor,
   planLinkRewrites,
+  planRepairRewrites,
   type DiagramLinkEnds,
+  type LinkRepairPlan,
+  type LinkRepairSuggestion,
 } from "./diagramLinks.js";
+import {
+  forgetDiagramSighting,
+  moveDiagramSighting,
+  noteDiagramSighting,
+  observeDiagramSightings,
+  setPendingRepairs,
+  type PendingRename,
+} from "./diagramSightings.js";
 import { rewriteFavoritePaths } from "./favorites.js";
 import { diagramMetaFrom, type DiagramMeta } from "./frontMatter.js";
 import { readRevision, relocateHistory, snapshotPrevious } from "./history.js";
@@ -243,6 +254,7 @@ export async function writeFile(
   }
 
   if (decision.action === "unchanged" && disk.exists) {
+    await noteDiagramSighting({ path: relative, hash: disk.hash });
     return {
       path: relative,
       mtimeMs: disk.mtimeMs,
@@ -263,6 +275,7 @@ export async function writeFile(
   const stat = await fs.stat(abs);
   const search = await import("./search.js");
   await search.rememberSearchEntry(relative, content, stat.mtimeMs, stat.size);
+  await noteDiagramSighting({ path: relative, hash: hashContent(content) });
   noteSync({ kind: "content", summary: `Update ${relative}` });
   return {
     path: relative,
@@ -378,6 +391,7 @@ export async function renameItem(
   await assertUnlocked(fromRel, fromStat.isDirectory());
   await fs.mkdir(path.dirname(toAbs), { recursive: true });
   await fs.rename(fromAbs, toAbs);
+  await moveDiagramSighting(fromRel, toRel, fromStat.isDirectory());
   await rewriteFavoritePaths(fromRel, toRel, fromStat.isDirectory());
   await relocateHistory(fromRel, toRel, fromStat.isDirectory());
   await relocateLocks(fromRel, toRel, fromStat.isDirectory());
@@ -479,17 +493,17 @@ export async function deleteItem(
   relativePath: string,
   options: { confirmLinks?: boolean } = {},
 ): Promise<void> {
+  const abs = resolveSafePath(relativePath);
+  let stat: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stat = await fs.stat(abs);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") throw httpFail(404, "Not found", "not_found");
+    throw err;
+  }
+  const rel = toRelativePath(abs);
   if (!options.confirmLinks) {
-    const abs = resolveSafePath(relativePath);
-    let stat: Awaited<ReturnType<typeof fs.stat>>;
-    try {
-      stat = await fs.stat(abs);
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException).code;
-      if (code === "ENOENT") throw httpFail(404, "Not found", "not_found");
-      throw err;
-    }
-    const rel = toRelativePath(abs);
     const inbound = inboundLinkFiles(indexDiagramLinks(await readDiagramSources()), rel, stat.isDirectory());
     if (inbound.length > 0) {
       throw httpFail(
@@ -501,7 +515,159 @@ export async function deleteItem(
     }
   }
   await moveToTrash(relativePath);
+  await forgetDiagramSighting(rel, stat.isDirectory());
   noteSync({ kind: "structural", summary: `Delete ${normalizeRelative(relativePath)}` });
+}
+
+async function readDiagramSourcesWithHash(): Promise<{ path: string; content: string; hash: string }[]> {
+  const files = flattenFiles(await buildTree());
+  const sources: { path: string; content: string; hash: string }[] = [];
+  for (const file of files) {
+    const content = await readFile(file.path);
+    sources.push({ path: content.path, content: content.content, hash: content.hash });
+  }
+  return sources;
+}
+
+/** Remember the diagrams on disk. A sync pull calls this before and after it applies the remote tree. */
+export async function captureDiagramSightings(): Promise<void> {
+  const files = await readDiagramSourcesWithHash();
+  await observeDiagramSightings(files.map((file) => ({ path: file.path, hash: file.hash })));
+}
+
+export type RepairOptions = {
+  /** Defaults to true. A preview writes nothing. */
+  dryRun?: boolean;
+  /** Writes only when this is true and dryRun is false. */
+  confirm?: boolean;
+  lockToken?: string | null;
+  /**
+   * Pairs the user confirmed. Omit to apply every unambiguous suggestion.
+   * A pair that is not in the current preview is rejected.
+   */
+  choices?: { from: string; to: string }[] | null;
+};
+
+export function repairOptionsFromBody(body: Record<string, unknown>): RepairOptions {
+  if (body.dryRun != null && typeof body.dryRun !== "boolean") {
+    throw httpFail(400, "dryRun must be a boolean", "invalid");
+  }
+  if (body.confirm != null && typeof body.confirm !== "boolean") {
+    throw httpFail(400, "confirm must be a boolean", "invalid");
+  }
+  if (body.lockToken != null && typeof body.lockToken !== "string") {
+    throw httpFail(400, "lockToken must be a string", "invalid");
+  }
+  let choices: RepairOptions["choices"] = null;
+  if (body.choices != null) {
+    if (!Array.isArray(body.choices)) throw httpFail(400, "choices must be a list", "invalid");
+    if (body.choices.length > 500) throw httpFail(400, "choices is too long", "invalid");
+    choices = body.choices.map((item) => {
+      if (!item || typeof item !== "object") throw httpFail(400, "choices must be a list of from and to", "invalid");
+      const record = item as { from?: unknown; to?: unknown };
+      if (typeof record.from !== "string" || typeof record.to !== "string" || !record.from.trim() || !record.to.trim()) {
+        throw httpFail(400, "choices must be a list of from and to", "invalid");
+      }
+      if (record.from.length > 500 || record.to.length > 500) {
+        throw httpFail(400, "choice path is too long", "invalid");
+      }
+      return { from: record.from, to: record.to };
+    });
+  }
+  return {
+    dryRun: body.dryRun !== false,
+    confirm: body.confirm === true,
+    lockToken: typeof body.lockToken === "string" ? body.lockToken : null,
+    choices,
+  };
+}
+
+function brokenDiagramTargets(files: readonly { path: string; content: string }[]): Set<string> {
+  const broken = new Set<string>();
+  for (const link of indexDiagramLinks(files)) {
+    if (link.broken && link.resolved) broken.add(link.resolved);
+  }
+  return broken;
+}
+
+function toSuggestions(pending: readonly PendingRename[]): LinkRepairSuggestion[] {
+  return pending
+    .map((item) => ({
+      from: item.from,
+      to: item.to,
+      match: item.match,
+      candidates: [...item.candidates],
+    }))
+    .sort((a, b) => a.from.localeCompare(b.from));
+}
+
+function selectRepairs(
+  choices: { from: string; to: string }[] | null | undefined,
+  applicable: readonly { from: string; to: string }[],
+): { from: string; to: string }[] {
+  const allowed = new Map(applicable.map((item) => [item.from, item.to]));
+  if (choices == null) return applicable.map((item) => ({ from: item.from, to: item.to }));
+  for (const choice of choices) {
+    const from = normalizeRelative(choice.from);
+    const to = normalizeRelative(choice.to);
+    if (allowed.get(from) !== to) {
+      throw httpFail(409, "Preview the repair again. That match is no longer available.", "stale");
+    }
+  }
+  return choices.map((choice) => ({
+    from: normalizeRelative(choice.from),
+    to: normalizeRelative(choice.to),
+  }));
+}
+
+/**
+ * Preview or apply click repairs for a rename that happened outside the app.
+ * Nothing is written unless `confirm` is true and `dryRun` is false. Ambiguous
+ * matches are returned and never chosen. Applied edits go through `writeFile`,
+ * so they keep revision history.
+ */
+export async function repairDiagramLinks(options: RepairOptions = {}): Promise<LinkRepairPlan> {
+  const dryRun = options.dryRun !== false;
+  const confirm = options.confirm === true;
+  const files = await readDiagramSourcesWithHash();
+  let pending = await observeDiagramSightings(files.map((file) => ({ path: file.path, hash: file.hash })));
+  const broken = brokenDiagramTargets(files);
+  pending = pending.filter((item) => broken.has(item.from));
+  await setPendingRepairs(pending);
+
+  const suggestions = toSuggestions(pending);
+  const applicable = suggestions.filter(
+    (item): item is LinkRepairSuggestion & { to: string } => item.to != null && item.match !== "ambiguous",
+  );
+  const preview = planRepairRewrites(
+    files,
+    applicable.map((item) => ({ from: item.from, to: item.to })),
+  );
+  const previewChanges = preview.map((item) => ({ path: item.path, links: item.links }));
+  if (dryRun || !confirm) {
+    return { suggestions, changes: previewChanges, applied: false, saved: [] };
+  }
+
+  const selected = selectRepairs(options.choices, applicable);
+  const rewrites = planRepairRewrites(files, selected);
+  const saved: string[] = [];
+  for (const rewrite of rewrites) {
+    const disk = files.find((file) => file.path === rewrite.path);
+    if (!disk || disk.content === rewrite.content) continue;
+    await writeFile(rewrite.path, rewrite.content, {
+      expectedHash: disk.hash,
+      lockToken: options.lockToken ?? null,
+    });
+    saved.push(rewrite.path);
+  }
+  const appliedFrom = new Set(selected.map((item) => item.from));
+  await setPendingRepairs(pending.filter((item) => !appliedFrom.has(item.from)));
+  return {
+    suggestions: suggestions.filter((item) => !appliedFrom.has(item.from)),
+    changes: rewrites.map((item) => ({ path: item.path, links: item.links })),
+    applied: true,
+    saved,
+  };
 }
 
 function noteSync(change: { kind: "content" | "structural"; summary: string }): void {

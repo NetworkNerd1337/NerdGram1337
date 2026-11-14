@@ -15,6 +15,7 @@ import { EditorLockBanner, TakeoverDialog } from "../components/EditorLockBanner
 import { HistoryDialog } from "../components/HistoryDialog";
 import { MermaidCodeEditor } from "../components/MermaidCodeEditor";
 import { ProblemsPanel } from "../components/ProblemsPanel";
+import { RepairLinksDialog } from "../components/RepairLinksDialog";
 import { PresentationView } from "../components/PresentationView";
 import { actionForClickTarget, clickTargetOnElement, openExternalLink } from "../lib/diagramClicks";
 import { drillForward, drillIndex, trailFromState, withCrumbTitle } from "../lib/drillTrail";
@@ -118,6 +119,7 @@ export function EditorPage() {
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const [conflict, setConflict] = useState<ConflictState | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [repairOpen, setRepairOpen] = useState(false);
   const [presenting, setPresenting] = useState(false);
   const [linkMessage, setLinkMessage] = useState<{ path: string; text: string } | null>(null);
   const [refresh, setRefresh] = useState<{
@@ -249,6 +251,12 @@ export function EditorPage() {
   }, []);
 
   useEffect(() => {
+    const onRepair = () => setRepairOpen(true);
+    window.addEventListener("nerdgram:repair-links", onRepair);
+    return () => window.removeEventListener("nerdgram:repair-links", onRepair);
+  }, []);
+
+  useEffect(() => {
     const epoch = nextEditorEpoch(filePath);
     let acquiredToken: string | null = null;
     skipNextSave.current = true;
@@ -263,6 +271,7 @@ export function EditorPage() {
     setTakeoverOpen(false);
     setCopyNote(null);
     setHistoryOpen(false);
+    setRepairOpen(false);
     setLoadError(null);
     setSaveState("idle");
     renderGen.current += 1;
@@ -1022,6 +1031,10 @@ export function EditorPage() {
               revealEditorRange(diagnostic.from, diagnostic.to);
             }}
             onFix={(fix) => {
+              if (fix.id === "repair-links") {
+                setRepairOpen(true);
+                return;
+              }
               const view = getEditorView();
               if (view) applyLintFix(view, fix);
             }}
@@ -1184,6 +1197,16 @@ export function EditorPage() {
           onApply={() => {
             setCode(refresh.mermaid);
             setRefresh(null);
+          }}
+        />
+      ) : null}
+      {repairOpen ? (
+        <RepairLinksDialog
+          lockToken={lockToken}
+          onClose={() => setRepairOpen(false)}
+          onApplied={(saved) => {
+            setRepairOpen(false);
+            if (saved.includes(filePath)) void reloadFromDisk();
           }}
         />
       ) : null}

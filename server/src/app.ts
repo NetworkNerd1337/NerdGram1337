@@ -382,6 +382,23 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
     }
   });
 
+  app.get("/api/link-repairs", async (_req, res) => {
+    try {
+      res.json(await store.repairDiagramLinks({ dryRun: true, confirm: false }));
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
+  app.post("/api/link-repairs", async (req, res) => {
+    try {
+      if (!jsonObject(req, res)) return;
+      res.json(await store.repairDiagramLinks(store.repairOptionsFromBody(req.body)));
+    } catch (err) {
+      sendError(res, err);
+    }
+  });
+
   app.get("/api/diagram-links", async (req, res) => {
     try {
       const itemPath = String(req.query.path || "");
