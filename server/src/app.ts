@@ -71,6 +71,14 @@ function optionalBoolean(value: unknown, name: string): boolean | undefined {
   return value;
 }
 
+function queryBoolean(value: unknown, name: string): boolean | undefined {
+  if (value == null || value === "") return undefined;
+  const text = Array.isArray(value) ? String(value[0]) : String(value);
+  if (text === "1" || text === "true") return true;
+  if (text === "0" || text === "false") return false;
+  throw httpFail(400, `${name} must be 0 or 1`, "invalid");
+}
+
 function readDiagramPaths(value: unknown): string[] | undefined {
   if (value == null) return undefined;
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
@@ -445,12 +453,14 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 
   app.post("/api/duplicate", async (req, res) => {
     try {
-      const itemPath = String(req.body?.path || "");
+      if (!jsonObject(req, res)) return;
+      const itemPath = String(req.body.path || "");
       if (!itemPath) {
         res.status(400).json({ error: "path is required", code: "invalid" });
         return;
       }
-      const result = await store.duplicateItem(itemPath);
+      const copyData = optionalBoolean(req.body.copyData, "copyData");
+      const result = await store.duplicateItem(itemPath, { copyData });
       res.status(201).json(result);
     } catch (err) {
       sendError(res, err);
@@ -546,13 +556,18 @@ export function createApp(options: CreateAppOptions = {}): express.Express {
 
   app.delete("/api/item", async (req, res) => {
     try {
-      const itemPath = String(req.query.path || req.body?.path || "");
+      const body =
+        req.body && typeof req.body === "object" && !Array.isArray(req.body)
+          ? (req.body as Record<string, unknown>)
+          : {};
+      const itemPath = String(req.query.path || body.path || "");
       if (!itemPath) {
         res.status(400).json({ error: "path is required" });
         return;
       }
-      const confirmLinks = req.query.confirmLinks === "1" || req.body?.confirmLinks === true;
-      await store.deleteItem(itemPath, { confirmLinks });
+      const confirmLinks = req.query.confirmLinks === "1" || body.confirmLinks === true;
+      const deleteData = queryBoolean(req.query.deleteData, "deleteData") ?? optionalBoolean(body.deleteData, "deleteData");
+      await store.deleteItem(itemPath, { confirmLinks, deleteData });
       res.status(204).send();
     } catch (err) {
       sendError(res, err);

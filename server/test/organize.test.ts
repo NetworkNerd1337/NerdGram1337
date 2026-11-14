@@ -173,7 +173,7 @@ describe("move, duplicate, and import", () => {
 
     const first = await request(app).post("/api/duplicate").set(json).send({ path: "Notes.mmd" });
     expect(first.status).toBe(201);
-    expect(first.body).toEqual({ path: "Notes (copy).mmd", type: "file" });
+    expect(first.body).toEqual({ path: "Notes (copy).mmd", type: "file", dataFiles: [] });
     expect(await fs.readFile(path.join(dir, "Notes (copy).mmd"), "utf8")).toBe("after\n");
     expect(await fs.readFile(path.join(dir, "Notes.mmd"), "utf8")).toBe("after\n");
 
@@ -210,7 +210,7 @@ describe("move, duplicate, and import", () => {
 
     const copied = await request(app).post("/api/duplicate").set(json).send({ path: "Lab" });
     expect(copied.status).toBe(201);
-    expect(copied.body).toEqual({ path: "Lab (copy)", type: "folder" });
+    expect(copied.body).toEqual({ path: "Lab (copy)", type: "folder", dataFiles: [] });
     expect(await fs.readFile(path.join(dir, "Lab (copy)", "Sub", "One.mmd"), "utf8")).toContain("A-->B");
     expect(await fs.readFile(path.join(dir, "Lab (copy)", "Two.mmd"), "utf8")).toContain("C-->D");
     await expect(fs.access(path.join(dir, "Lab (copy)", ".secret.mmd"))).rejects.toThrow();

@@ -163,19 +163,19 @@ export const api = {
       body: JSON.stringify({ path }),
     }),
   rename: (from: string, to: string, updateLinks = false) =>
-    request<{ path: string; updated?: string[] }>("/api/rename", {
+    request<{ path: string; updated?: string[]; dataFiles?: { from: string; to: string }[] }>("/api/rename", {
       method: "PATCH",
       body: JSON.stringify({ from, to, updateLinks }),
     }),
   move: (from: string, toFolder: string, updateLinks = false) =>
-    request<{ path: string; updated?: string[] }>("/api/move", {
+    request<{ path: string; updated?: string[]; dataFiles?: { from: string; to: string }[] }>("/api/move", {
       method: "POST",
       body: JSON.stringify({ from, toFolder, updateLinks }),
     }),
-  duplicate: (path: string) =>
-    request<{ path: string; type: "file" | "folder" }>("/api/duplicate", {
+  duplicate: (path: string, copyData?: boolean) =>
+    request<{ path: string; type: "file" | "folder"; dataFiles?: { from: string; to: string }[] }>("/api/duplicate", {
       method: "POST",
-      body: JSON.stringify({ path }),
+      body: JSON.stringify({ path, ...(copyData == null ? {} : { copyData }) }),
     }),
   previewGenerate: (body: {
     text: string;
@@ -269,9 +269,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ folder, files }),
     }),
-  delete: (path: string, confirmLinks = false) =>
+  delete: (path: string, confirmLinks = false, deleteData?: boolean) =>
     request<void>(
-      `/api/item?path=${encodeURIComponent(path)}${confirmLinks ? "&confirmLinks=1" : ""}`,
+      `/api/item?path=${encodeURIComponent(path)}${confirmLinks ? "&confirmLinks=1" : ""}${
+        deleteData == null ? "" : `&deleteData=${deleteData ? "1" : "0"}`
+      }`,
       { method: "DELETE" },
     ),
   favorites: () => request<{ favorites: string[] }>("/api/favorites"),

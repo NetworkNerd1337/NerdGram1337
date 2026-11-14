@@ -374,9 +374,18 @@ export type LinkRepairChange = {
   links: LinkRepairEdit[];
 };
 
+/** A data file that already moved with a diagram renamed outside the app. */
+export type DataFileRepair = {
+  diagram: string;
+  from: string;
+  to: string;
+};
+
 export type LinkRepairPlan = {
   suggestions: LinkRepairSuggestion[];
   changes: LinkRepairChange[];
+  /** Source paths to rewrite when the sibling data file moved with the diagram. */
+  dataFiles: DataFileRepair[];
   applied: boolean;
   saved: string[];
 };

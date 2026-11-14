@@ -205,6 +205,17 @@ export function mountAutomationApi(app: Express, options: MountV1Options = {}): 
       const result = await store.moveItem(from, toFolder, { updateLinks: updateLinksFlag(req.body.updateLinks) });
       res.json(result);
     }),
+    duplicateDiagram: asyncHandler(async (req, res) => {
+      if (!jsonObject(req, res)) return;
+      const itemPath = readPath(req.body.path);
+      if (req.body.copyData != null && typeof req.body.copyData !== "boolean") {
+        throw httpFail(400, "copyData must be a boolean", "invalid");
+      }
+      const result = await store.duplicateItem(itemPath, {
+        copyData: typeof req.body.copyData === "boolean" ? req.body.copyData : undefined,
+      });
+      res.status(201).json(result);
+    }),
     deleteDiagram: asyncHandler(async (req, res) => {
       if (req.body != null && (typeof req.body !== "object" || Array.isArray(req.body))) {
         res.status(400).json({ error: "JSON object required", code: "invalid" });
@@ -216,7 +227,13 @@ export function mountAutomationApi(app: Express, options: MountV1Options = {}): 
       if (req.body?.confirmLinks != null && typeof req.body.confirmLinks !== "boolean") {
         throw httpFail(400, "confirmLinks must be a boolean", "invalid");
       }
-      await store.deleteItem(itemPath, { confirmLinks });
+      if (req.body?.deleteData != null && typeof req.body.deleteData !== "boolean") {
+        throw httpFail(400, "deleteData must be a boolean", "invalid");
+      }
+      const deleteData = queryFlag(req.query.deleteData, "deleteData") ?? (
+        typeof req.body?.deleteData === "boolean" ? req.body.deleteData : undefined
+      );
+      await store.deleteItem(itemPath, { confirmLinks, deleteData });
       res.json({ path: itemPath, trashed: true });
     }),
     createFolder: asyncHandler(async (req, res) => {

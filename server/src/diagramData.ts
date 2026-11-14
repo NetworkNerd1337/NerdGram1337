@@ -575,6 +575,29 @@ export function readDataSource(source: string): DataSourceConfig | null {
   }
 }
 
+/**
+ * Point `nerdgram.source.file` and `edgesFile` at new paths.
+ * Other front matter, including the generated block, stays.
+ * A path that is omitted keeps the value already in the file.
+ */
+export function replaceDataSourcePaths(
+  source: string,
+  updates: { file?: string; edgesFile?: string },
+): string {
+  const current = readDataSource(source);
+  if (!current) return source;
+  const file = updates.file ?? current.file;
+  const edgesFile = updates.edgesFile ?? current.edgesFile;
+  if (file === current.file && edgesFile === current.edgesFile) return source;
+  if (!isSafeDataPath(file)) return source;
+  if (edgesFile && !isSafeDataPath(edgesFile)) return source;
+  const loaded = loadYaml(source);
+  if ("error" in loaded) return source;
+  loaded.doc.setIn(["nerdgram", "source", "file"], file);
+  if (edgesFile) loaded.doc.setIn(["nerdgram", "source", "edgesFile"], edgesFile);
+  return fence(loaded.doc, loaded.body, loaded.bom);
+}
+
 export function diffModels(before: GraphModel, after: GraphModel): GraphDiff {
   const previous = new Map(before.nodes.map((node) => [node.id, node]));
   const next = new Map(after.nodes.map((node) => [node.id, node]));
