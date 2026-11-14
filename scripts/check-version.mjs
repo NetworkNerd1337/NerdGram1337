@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findChangelogSection } from "./changelog-notes.mjs";
 import { currentCodename } from "./codenames.mjs";
@@ -7,9 +7,53 @@ import { currentCodename } from "./codenames.mjs";
 /** Releases named in README prose that are not the package.json pin. */
 const POLICY_VERSIONS = new Set(["1.0.5", "1.0.6", "2.0.0"]);
 
+export const CLI_PACKAGE_NAME = "nerdgram1337";
+
+export const VERSIONED_PACKAGES = ["package.json", "client/package.json", "server/package.json", "cli/package.json"];
+
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const files = ["package.json", "client/package.json", "server/package.json", "cli/package.json"];
-const versions = files.map((file) => {
+
+/**
+ * @param {{ file: string, version: string }[]} versions
+ */
+export function driftedVersions(versions) {
+  const expected = versions[0]?.version;
+  return versions.filter((item) => item.version !== expected);
+}
+
+/**
+ * The published CLI has to stay the unscoped package nerdgram1337, with the
+ * nerdgram command. version:sync copies the version. It does not rename it.
+ *
+ * @param {Record<string, any>} pkg
+ * @param {string} expectedVersion
+ * @returns {string | null}
+ */
+export function cliPackageError(pkg, expectedVersion) {
+  if (!pkg || typeof pkg !== "object") return "cli/package.json could not be read.";
+  if (pkg.name !== CLI_PACKAGE_NAME) {
+    return `cli/package.json name must be ${CLI_PACKAGE_NAME}. Found ${pkg.name ?? "(missing)"}.`;
+  }
+  if (pkg.private === true) return "cli/package.json is private, so npm will not publish it.";
+  const bin = pkg.bin && pkg.bin.nerdgram;
+  if (typeof bin !== "string" || bin.length === 0) {
+    return "cli/package.json must map the nerdgram command to a bin file.";
+  }
+  if (!pkg.publishConfig || pkg.publishConfig.access !== "public") {
+    return "cli/package.json publishConfig.access must be public.";
+  }
+  const files = Array.isArray(pkg.files) ? pkg.files : [];
+  if (!files.includes("bin") || !files.includes("dist")) {
+    return "cli/package.json files must include bin and dist so the registry tarball can run.";
+  }
+  if (pkg.version !== expectedVersion) {
+    return `cli/package.json version ${pkg.version ?? "(missing)"} does not match ${expectedVersion}. Run npm run version:sync from the project root.`;
+  }
+  return null;
+}
+
+function checkTree() {
+const versions = VERSIONED_PACKAGES.map((file) => {
   const json = JSON.parse(readFileSync(join(root, file), "utf8"));
   return { file, version: json.version };
 });
@@ -28,11 +72,23 @@ if (!named.ok) {
 }
 const codename = named.codename;
 
-const drifted = versions.filter((item) => item.version !== expected);
+const drifted = driftedVersions(versions);
 if (drifted.length > 0) {
   console.error("package.json versions differ. The root package.json version is the source of truth.");
   console.error("Run npm run version:sync from the project root.");
   for (const item of versions) console.error(`  ${item.file}: ${item.version}`);
+  process.exit(1);
+}
+
+const cliPkg = JSON.parse(readFileSync(join(root, "cli/package.json"), "utf8"));
+const cliError = cliPackageError(cliPkg, expected);
+if (cliError) {
+  console.error(cliError);
+  process.exit(1);
+}
+const cliLicensePath = join(root, "cli/LICENSE");
+if (!existsSync(cliLicensePath) || readFileSync(cliLicensePath, "utf8") !== readFileSync(join(root, "LICENSE"), "utf8")) {
+  console.error("cli/LICENSE must be a copy of the root LICENSE.");
   process.exit(1);
 }
 
@@ -118,8 +174,9 @@ assertReadmeVersions(readme, expected);
 assertReadmeLinks(readme, root);
 
 console.log(
-  `Version ${expected} "${codename}" matches in root, client, server, cli, Dockerfile, compose.yaml, compose.build.yaml, CHANGELOG.md, and README.md.`,
+  `Version ${expected} "${codename}" matches in root, client, server, cli (${CLI_PACKAGE_NAME}), Dockerfile, compose.yaml, compose.build.yaml, CHANGELOG.md, and README.md.`,
 );
+}
 
 /**
  * Install commands use a vX.Y.Z placeholder so a release does not have to edit
@@ -237,3 +294,6 @@ function githubSlugs(headings) {
   }
   return slugs;
 }
+
+const invoked = Boolean(process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url));
+if (invoked) checkTree();

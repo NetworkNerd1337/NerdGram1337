@@ -3,6 +3,9 @@
 # vX.Y.Z "Code name" from the codenames map. The body is the CHANGELOG section.
 # docker-publish.yml pushes ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z
 # from this same tag. Keep that image workflow on this version.
+# The npm job publishes cli/ as the public package nerdgram1337. The command
+# name stays nerdgram. Provenance is requested only here: GitHub Actions can
+# mint the id-token it needs. A missing NPM_TOKEN skips that publish.
 
 name: Release
 
@@ -54,3 +57,45 @@ jobs:
           # The body is the CHANGELOG section only. GitHub's generated
           # "What's Changed" list would be appended after it.
           generate_release_notes: false
+
+  # The CLI version has to match the tag or this job fails. A missing
+  # NPM_TOKEN does not fail the GitHub Release. Create the secret from an
+  # npm token that can publish nerdgram1337.
+  npm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - name: Refuse a tag that does not match the CLI version
+        run: |
+          node scripts/check-version.mjs
+          TAG="${GITHUB_REF_NAME}"
+          CLI_VERSION="$(node -p "require('./cli/package.json').version")"
+          ROOT_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "v$CLI_VERSION" ] || [ "$CLI_VERSION" != "$ROOT_VERSION" ]; then
+            echo "Refusing to publish nerdgram1337. Tag $TAG does not match cli/package.json $CLI_VERSION (root package.json $ROOT_VERSION)."
+            exit 1
+          fi
+
+      - name: Publish nerdgram1337 to npm
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NPM_TOKEN}" ]; then
+            echo "::warning::NPM_TOKEN is not set. Skipping npm publish of nerdgram1337. Add the NPM_TOKEN repository secret (an npm token that can publish nerdgram1337) and re-run this workflow. The GitHub Release is not affected."
+            exit 0
+          fi
+          npm ci
+          cd cli
+          printf '%s\n' 'registry=https://registry.npmjs.org' '//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}' > .npmrc
+          npm publish --provenance --access public
+          rm -f .npmrc

@@ -20,6 +20,7 @@ A short screen recording of the dashboard and editor is in [screenshots/nerdgram
 - [Configuration](#configuration)
 - [Automation API](#automation-api)
 - [Command-line tool](#command-line-tool)
+- [Install the CLI from npm](#install-the-cli-from-npm)
 - [Security model](#security-model)
 - [Data and backups](#data-and-backups)
 - [Upgrading](#upgrading)
@@ -686,7 +687,25 @@ The server still binds to `127.0.0.1` and `::1` when `HOST` is unset. A token do
 
 ## Command-line tool
 
-`nerdgram` is the client for that API. It is the `nerdgram` bin in `server/package.json`, and the `cli/` package (`name` is `nerdgram`) launches the same program from a checkout. The Docker image puts it on `PATH`.
+`nerdgram` is the client for that API. It talks to a NerdGram server on this machine, or on another machine you can reach. `lint` and `render` of a `.mmd` file that is already on disk do not need the server.
+
+### Install the CLI from npm
+
+The package name on npm is `nerdgram1337`. The command it installs is `nerdgram`. Node.js 20 or newer and npm 10 or newer are the same versions [the app uses](#nodejs).
+
+```bash
+npm install -g nerdgram1337
+```
+
+```bash
+npx nerdgram1337 --help
+```
+
+`npm install -g` puts `nerdgram` on your `PATH`. If the shell cannot find it, open a new terminal. npm warns when its global bin directory is not on `PATH`. `npx` downloads the package and runs the command without a global install. Use either one when the shell is not inside the Docker image and not a checkout of this repository. Point `NERDGRAM_URL` at the running app. The default is `http://127.0.0.1:8787`, which is right when the app is on the same computer.
+
+The package is public. The install also downloads Mermaid and Puppeteer's chrome-headless-shell, because offline `lint` and `render` use them. That shell is the large part of the install. The same kind of shell is what the server image uses for pictures. Commands that only call the API do not launch it.
+
+A checkout still runs the same program from the server build. The `nerdgram` bin in `server/package.json` points at `server/dist/cli.js`. The `cli/` directory is what gets published. Its `prepack` script bundles that program into `cli/dist` before `npm pack` or `npm publish`. The Docker image does not use the bundle. It puts `node /app/server/dist/cli.js` on `PATH` as `nerdgram`. The package readme that npm shows is [`cli/README.md`](cli/README.md). The same install and command list is in [`docs/cli.md`](docs/cli.md).
 
 From a checkout, after `npm run build`:
 
@@ -962,7 +981,7 @@ This is the maintainer path. It is not part of installing the app. v1.0.5, code 
 
 1. Set the root `package.json` `version` to `X.Y.Z`. The `codenames` map in that file names each major (`"1"` is Atlas, `"2"` is Meridian). The current major has to have an entry. A major with no code name fails the check.
 2. Run `npm run version:sync`. That copies the version into `client/package.json`, `server/package.json`, `cli/package.json`, the root version fields of the three lockfiles, the `ARG NERDGRAM_VERSION` lines in the Dockerfile, and the published image tag in `compose.yaml`. The local build args live in `compose.build.yaml`, tagged `nerdgram1337:local`. It also writes `ARG NERDGRAM_CODENAME` and the `NERDGRAM_CODENAME` build arg from the map. It does not rewrite this README. Install examples stay on the `vX.Y.Z` placeholder. `npm run version:check` still requires an image pin written out as `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z` with real numbers, or a `nerdgram1337@` example, to match `package.json`. The names v1.0.5, v1.0.6, and v2.0.0 are allowed in this section.
-3. Run `npm run version:check`. It fails when those files disagree, when the current major has no code name, when `CHANGELOG.md` has no section for this version, and when a link in this README does not resolve.
+3. Run `npm run version:check`. It fails when those files disagree, when the current major has no code name, when `CHANGELOG.md` has no section for this version, and when a link in this README does not resolve. It also fails when `cli/package.json` drifts from the root version, when that package is not the public package `nerdgram1337` with the `nerdgram` command, or when `cli/LICENSE` does not match [`LICENSE`](LICENSE).
 4. Add a `CHANGELOG.md` section headed `## X.Y.Z "Code name" - YYYY-MM-DD`. The quoted code name has to match the map. The section body is the GitHub Release notes. The notes script also accepts `## X.Y.Z` and `## [X.Y.Z]`, with an optional code name and date, but `version:check` requires the code name on the heading. The release title is not taken from the heading. It is `vX.Y.Z "Code name"` from the tag and the map.
 5. Commit and merge to `main`. Then, from `main`, tag the matching version and push the tag. `vX.Y.Z` is that version:
 
@@ -975,6 +994,7 @@ git push origin vX.Y.Z
 
 6. [`.github/workflows/release.yml`](.github/workflows/release.yml) publishes the GitHub Release when that tag is pushed. The title is `vX.Y.Z "Code name"`. The body is the changelog section. `node scripts/changelog-notes.mjs --title vX.Y.Z` prints the title. `node scripts/changelog-notes.mjs vX.Y.Z` prints the body.
 7. [`.github/workflows/docker-publish.yml`](.github/workflows/docker-publish.yml) pushes `ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z`, `:latest`, and a `sha-<commit>` tag for `linux/amd64` and `linux/arm64`. It runs only for that tag. Pull requests do not push. The image is labeled with `org.opencontainers.image.version` and `org.opencontainers.image.codename`. The workflow then tries to mark the GHCR package public. If that call fails, the job warns and stays green. Set **Public** once in the [package settings](https://github.com/users/NetworkNerd1337/packages/container/nerdgram1337/settings) if the package is still private. Anonymous pulls already work once it is public.
+8. [`.github/workflows/release.yml`](.github/workflows/release.yml) also publishes the npm package `nerdgram1337` from `cli/`. The tag has to match `cli/package.json`. The job refuses to publish when it does not. It uses the `NPM_TOKEN` repository secret and `npm publish --provenance`. Provenance needs the workflow's `id-token: write` permission, which that job sets. If `NPM_TOKEN` is not set, the job prints a warning and does not fail the GitHub Release. Create the secret from an npm token that can publish `nerdgram1337` for the npm user `networknerd1337`. The package is public (`publishConfig.access` is `public`). Pull requests do not publish.
 
 After the tag is pushed, check the release and the image:
 
@@ -982,6 +1002,7 @@ After the tag is pushed, check the release and the image:
 - `GET /api/version` on a build of that tag returns the same `version` and `codename`.
 - `docker pull ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z` succeeds. If the package is private, set it to **Public** once and pull again.
 - `docker image inspect ghcr.io/networknerd1337/nerdgram1337:vX.Y.Z` shows `org.opencontainers.image.version` and `org.opencontainers.image.codename` for that release. A new container's `/api/health` returns the same version and code name, and an empty volume has `/data/Welcome.mmd`.
+- `npm view nerdgram1337 version` prints that release once `NPM_TOKEN` is set. `npx nerdgram1337 --help` then prints the command list. If the secret was missing, the release log has a warning and this view does not show the new version yet.
 
 ## Troubleshooting
 
@@ -1046,11 +1067,11 @@ NerdGram1337/                  (or NerdGram1337-main/ from the ZIP)
 ├── Dockerfile                 Node 22 bookworm-slim image, uid 1001, HOST=0.0.0.0 inside
 ├── client/                    React + Vite UI
 ├── server/                    Express API
-├── cli/                       nerdgram command launcher
+├── cli/                       npm package nerdgram1337, command name nerdgram
 ├── diagrams/                  samples, including WAN and Sites/Atlanta
 ├── templates/                 six bundled starters
 ├── reference/                 offline Mermaid syntax pages
-├── scripts/                   version check, version sync, changelog notes, docker smoke
+├── scripts/                   version check, version sync, changelog notes, docker smoke, CLI pack smoke
 ├── docs/images/               README screenshots
 ├── screenshots/               earlier captures and the demo recording
 └── .github/workflows/         ci.yml, release.yml, docker-publish.yml
@@ -1066,13 +1087,13 @@ NerdGram1337/                  (or NerdGram1337-main/ from the ZIP)
 | `npm start` | Production server. |
 | `npm test` | Server Vitest, then client Vitest. |
 | `npm run lint` | Oxlint in `client/`. |
-| `npm run version:check` | Versions, Dockerfile, compose.yaml, and this README. |
+| `npm run version:check` | Versions, the `nerdgram1337` package name, Dockerfile, compose.yaml, and this README. |
 | `npm run version:sync` | Copy the root version into the client, server, cli, Dockerfile, compose.yaml, and compose.build.yaml. |
 | `npm run sync:reference` | Refresh the offline syntax mirror. |
 
 Server tests set `fileParallelism: false` in `server/vitest.config.ts` because they share `NERDGRAM_DATA_DIR`. Client tests set the same flag in `client/vite.config.ts`. Client lint is oxlint. `react/rules-of-hooks` is an error. The current tree also reports known warnings: `react(set-state-in-effect)` in the workspace, editor, settings, and reference pages, and `eslint(no-useless-escape)` in the Mermaid completion pattern. `react/only-export-components` is set to warn in `client/.oxlintrc.json`.
 
-CI (`.github/workflows/ci.yml`) has two jobs. **verify** checks out the repo, uses Node 20, runs `node scripts/check-version.mjs`, `npm ci` for the root, client, and server, then lint, build, and test. **docker** uses Node 22, runs the version check, builds the image with `push` left false, and runs `bash scripts/docker-smoke.sh`. That script starts the image on `127.0.0.1:8787` with a read-only root and `tmpfs` on `/tmp`, checks health, templates, the syntax reference, a JSON write, uid 1001, mode `0600` on a token file, the absence of a git binary, and that a diagram is still there after `docker stop` and `docker start`. A root-owned bind mount must fail. A bind mount owned by `1001:1001` must accept a write. The script removes only the containers, volume, and temp directories it created.
+CI (`.github/workflows/ci.yml`) has two jobs. **verify** checks out the repo, uses Node 20, runs `node scripts/check-version.mjs`, `npm ci` for the root, client, and server, then lint, build, and test. It then runs `bash scripts/pack-cli-smoke.sh`, which packs `cli/` with `npm pack --dry-run`, installs that tarball in a clean directory, and runs `nerdgram --help` and `npx` from the tarball. **docker** uses Node 22, runs the version check, builds the image with `push` left false, and runs `bash scripts/docker-smoke.sh`. That script starts the image on `127.0.0.1:8787` with a read-only root and `tmpfs` on `/tmp`, checks health, templates, the syntax reference, a JSON write, uid 1001, mode `0600` on a token file, the absence of a git binary, and that a diagram is still there after `docker stop` and `docker start`. A root-owned bind mount must fail. A bind mount owned by `1001:1001` must accept a write. The script removes only the containers, volume, and temp directories it created.
 
 ## License
 

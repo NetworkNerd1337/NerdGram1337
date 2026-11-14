@@ -1,4 +1,6 @@
 node_modules/
+.npmrc
+*.tgz
 dist/
 .cache/
 server/.cache/

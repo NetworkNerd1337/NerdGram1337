@@ -19,6 +19,7 @@
     "sync:reference": "npm run sync:reference --prefix server"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "esbuild": "^0.28.0"
   }
 }

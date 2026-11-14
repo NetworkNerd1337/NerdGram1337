@@ -61,6 +61,12 @@ describe("docker packaging", () => {
     expect(publish).toContain("NERDGRAM_CODENAME=${{ env.codename }}");
     expect(release).toContain("changelog-notes.mjs --title");
     expect(release).toContain("name: ${{ steps.notes.outputs.title }}");
+    expect(release).toContain("id-token: write");
+    expect(release).toContain("NPM_TOKEN");
+    expect(release).toContain("--provenance");
+    expect(release).toContain("cli/package.json");
+    expect(release).toContain("Skipping npm publish of nerdgram1337");
+    expect(ci).toContain("scripts/pack-cli-smoke.sh");
     expect(publish).toContain('tags:\n      - "v*.*.*"');
     expect(release).toContain('tags:\n      - "v*.*.*"');
     expect(ci).toContain("scripts/docker-smoke.sh");
