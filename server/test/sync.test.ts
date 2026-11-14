@@ -541,22 +541,22 @@ describe("GitHub sync", () => {
   it("batches edits into one commit that names the path, and picks up an external edit", async () => {
     remote = await startGitHttp();
     const bare = remote.bare;
-    const remoteUrl = remote.url;
     await fs.writeFile(path.join(dir, "Notes.mmd"), "flowchart LR\n  A-->B\n");
-    process.env.NERDGRAM_SYNC_IDLE_MS = "300";
     const connected = await connect();
     expect(connected.status).toBe(200);
     expect(await logMessages(bare)).toEqual(["Initial import of NerdGram diagrams"]);
 
     const first = await save(app, "Notes.mmd", "flowchart LR\n  A-->C\n");
     expect(first.status).toBe(200);
-    await delay(40);
     const second = await save(app, "Notes.mmd", "flowchart LR\n  A-->D\n");
     expect(second.status).toBe(200);
-    await delay(80);
+    // Saves wait for an idle gap, so two edits are still one unpushed change.
     expect(await logMessages(bare)).toHaveLength(1);
-    await waitFor(async () => (await logMessages(bare)).length === 2);
+    const batched = await request(app).post("/api/sync/now").set(json).send({});
+    expect(batched.status).toBe(200);
+    expect(batched.body.error).toBeNull();
     const messages = await logMessages(bare);
+    expect(messages).toHaveLength(2);
     expect(messages[0]).toBe("Update Notes.mmd");
     expect(await blobAt(bare, "Notes.mmd")).toContain("A-->D");
 
